@@ -12,19 +12,15 @@
  * interrupts and returns to context rather than running a fixed script.
  */
 import { StateGraph, START, END, MemorySaver } from '@langchain/langgraph';
-import { DemoState, type DemoStateT, type RetrievedChunk, type Position } from './state.js';
+import { DemoState, type DemoStateT, type Position } from './state.js';
 import { getLlm } from './llm.js';
-import { getEmbeddingProvider } from './embeddings.js';
-import { db, toVector } from './db.js';
+import { db } from './db.js';
 import { PoVinDriver, type DemoNode } from './driver.js';
 import { record } from './cost.js';
 import { updateSessionStatus } from './session.js';
 import { recordDiscovery } from './discovery.js';
 import { setActiveSpeaker, getActiveStakeholder, addOpenItem } from './stakeholders.js';
-
-const CONFIDENCE_THRESHOLD = 0.6;
-const RELEVANCE_MAX_DISTANCE = 0.65; // empirically calibrated to voyage-3 (in-scope ~0.42–0.47)
-const MAX_VERIFY_AGE_DAYS = 180;
+import { retrieveAndGate } from './retrieval.js';
 const EXPLAIN_TRACE_WINDOW = 16; // bound the cross-turn trace fed to explain (it grows unbounded)
 
 // ── whoSpeaks (multi-stakeholder, P2.3 / Gap F) — resolve the active speaker ───
@@ -65,41 +61,11 @@ async function interpret(state: DemoStateT): Promise<Partial<DemoStateT>> {
 // ── retrieve (confidence + validation + staleness + relevance gate) ───────────
 async function retrieve(state: DemoStateT): Promise<Partial<DemoStateT>> {
   const query = state.interpretation?.intent ?? state.utterance;
-  const [vec] = await getEmbeddingProvider().embed([query]);
-  const params: unknown[] = [toVector(vec)];
-  const conds = ['kc.embedding IS NOT NULL'];
-  if (state.productId) {
-    params.push(state.productId);
-    conds.push(`kb.product_id = $${params.length}`);
-  }
-  const { rows } = await db().query<RetrievedChunk>(
-    `SELECT kc.content, kc.category, kc.confidence, kc.source,
-            kc.last_verified::text AS last_verified, kc.validation_status,
-            pv.version_label AS product_version, (kc.embedding <=> $1) AS distance
-       FROM knowledge_chunks kc
-       JOIN knowledge_bases kb ON kb.id = kc.knowledge_base_id
-       LEFT JOIN product_versions pv ON pv.id = kc.product_version_id
-       WHERE ${conds.join(' AND ')}
-       ORDER BY kc.embedding <=> $1 LIMIT 4`,
-    params,
-  );
-  const top = rows[0];
-  const ageDays = top?.last_verified != null ? Math.floor((Date.now() - Date.parse(top.last_verified)) / 86_400_000) : null;
-  const lowConfidence = !top || top.confidence < CONFIDENCE_THRESHOLD;
-  const untrusted = !top || top.validation_status !== 'validated';
-  const timeStale = ageDays == null || ageDays > MAX_VERIFY_AGE_DAYS;
-  const irrelevant = !top || top.distance == null || top.distance > RELEVANCE_MAX_DISTANCE;
-  const gated = lowConfidence || untrusted || timeStale || irrelevant;
-  const reason = !top ? 'no knowledge'
-    : lowConfidence ? `low confidence (${top.confidence})`
-    : untrusted ? `not validated (${top.validation_status})`
-    : timeStale ? `stale (verified ${ageDays ?? '?'}d ago)`
-    : irrelevant ? `not relevant (distance ${top.distance?.toFixed(3) ?? 'n/a'})`
-    : 'ok';
+  const r = await retrieveAndGate(query, state.productId);
   return {
-    retrieved: rows,
-    gated,
-    trace: [`retrieve: ${rows.length} chunks; top confidence=${top?.confidence ?? 'n/a'} status=${top?.validation_status ?? 'n/a'} age=${ageDays ?? 'n/a'}d distance=${top?.distance?.toFixed(3) ?? 'n/a'} → ${gated ? `GATED (${reason})` : 'answer'}`],
+    retrieved: r.rows,
+    gated: r.gated,
+    trace: [`retrieve: ${r.rows.length} chunks; top confidence=${r.top?.confidence ?? 'n/a'} status=${r.top?.validation_status ?? 'n/a'} age=${r.ageDays ?? 'n/a'}d distance=${r.top?.distance?.toFixed(3) ?? 'n/a'} → ${r.gated ? `GATED (${r.reason})` : 'answer'}`],
   };
 }
 

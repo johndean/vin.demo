@@ -103,6 +103,22 @@ if (!bypExists.rowCount) {
   console.log('  = DemoGraph node "bypassed" already present');
 }
 
+// Expected intents for coverage scoring (P2.4) — deliberately a mix the seeded KB
+// does (delegation/bypassed/routing/stages) and does NOT (invoice matching, pricing)
+// cover, so coverage reports a real gap rather than a vacuous 100%.
+const EXPECTED_INTENTS = [
+  'how does approval delegation work',
+  'where do delegated or bypassed approvals appear',
+  'how are approval routing rules configured',
+  'how does a purchase request move through approval stages',
+  'how does invoice three-way matching work',
+  'what are the subscription pricing tiers',
+];
+for (const intent of EXPECTED_INTENTS) {
+  await upsert('expected_intents', { product_id: productId, intent }, { product_id: productId, intent });
+}
+console.log(`  = ${EXPECTED_INTENTS.length} expected intents present (coverage)`);
+
 console.log(`\nSeed complete. Set this in .env so the loop scopes retrieval to PO.vin:`);
 console.log(`  PO_VIN_PRODUCT_ID=${productId}\n`);
 process.exit(0);
