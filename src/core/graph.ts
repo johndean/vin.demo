@@ -1,7 +1,8 @@
 /**
  * The single LangGraph loop (one loop, not many agents — plan §4), multi-turn.
  *
- *   interpret ─▶ router ─┬─▶ explain ───────────────▶ END   ("why did you show that?")
+ *   interpret ─▶ router ─┬─▶ govern  ───────────────▶ END   (pause / stop / resume the session)
+ *                        ├─▶ explain ───────────────▶ END   ("why did you show that?")
  *                        ├─▶ resume  ───────────────▶ END   (pop stack, return to context)
  *                        └─▶ retrieve ─(gated?)─┬END
  *                                               └▶ navigate ▶ END  (answer + drive UI)
@@ -17,10 +18,12 @@ import { getEmbeddingProvider } from './embeddings.js';
 import { db, toVector } from './db.js';
 import { PoVinDriver, type DemoNode } from './driver.js';
 import { record } from './cost.js';
+import { updateSessionStatus } from './session.js';
 
 const CONFIDENCE_THRESHOLD = 0.6;
 const RELEVANCE_MAX_DISTANCE = 0.65; // empirically calibrated to voyage-3 (in-scope ~0.42–0.47)
 const MAX_VERIFY_AGE_DAYS = 180;
+const EXPLAIN_TRACE_WINDOW = 16; // bound the cross-turn trace fed to explain (it grows unbounded)
 
 // ── interpret ────────────────────────────────────────────────────────────────
 async function interpret(state: DemoStateT): Promise<Partial<DemoStateT>> {
@@ -126,6 +129,16 @@ async function navigate(state: DemoStateT): Promise<Partial<DemoStateT>> {
   if (!state.productId) return { trace: ['navigate: skipped (no productId)'] };
   const intent = state.interpretation?.intent ?? state.utterance;
   const d = await driveTo(state, intent);
+  if (!d.navigation.ok) {
+    // Recovery (P2.1): a step that didn't complete must NOT move the breadcrumb to a
+    // place we never reached — stay anchored to the last good position so a later
+    // "take me back" returns somewhere real.
+    return {
+      navigation: d.navigation,
+      blockedMutations: d.blockedMutations,
+      trace: [...d.traceLines, 'navigate: step did not complete — breadcrumb left at last good position'],
+    };
+  }
   // A pivot to a different intent pushes the current position so we can return.
   const pivot = !!state.currentPosition && state.currentPosition.intent !== intent;
   const contextStack = pivot ? [...state.contextStack, state.currentPosition as Position] : state.contextStack;
@@ -148,7 +161,7 @@ async function explain(state: DemoStateT): Promise<Partial<DemoStateT>> {
     priorIntent: pos.intent,
     answer: pos.answer ?? '',
     navUrl: pos.url,
-    trace: state.trace,
+    trace: state.trace.slice(-EXPLAIN_TRACE_WINDOW),
   });
   return { explanation: why, trace: ['explain: justified the last action from the decision trace'] };
 }
@@ -168,8 +181,45 @@ async function resume(state: DemoStateT): Promise<Partial<DemoStateT>> {
   };
 }
 
+// ── govern (pause / stop / resume — recovery & interrupt control) ─────────────
+async function govern(state: DemoStateT): Promise<Partial<DemoStateT>> {
+  const control = state.interpretation?.control ?? null;
+  const status = state.sessionStatus;
+  let next = status;
+  let message: string;
+  if (status === 'stopped') {
+    message = 'This demo was stopped — start a new session to continue.';
+  } else if (control === 'stop') {
+    next = 'stopped';
+    message = 'Stopped. Nothing further will run on this session.';
+  } else if (control === 'pause') {
+    next = 'paused';
+    message = 'Paused — say “continue” when you’re ready, or “stop” to end.';
+  } else if (control === 'continue') {
+    // Only reached while held (paused) — continue-while-active is a no-op handled in the router.
+    next = 'active';
+    message = 'Resuming where we left off.';
+  } else {
+    // routed here only because we’re paused and got a non-control utterance
+    message = 'We’re paused. Say “continue” to resume, or “stop” to end.';
+  }
+  if (next !== status && state.sessionId) {
+    try { await updateSessionStatus(state.sessionId, next); } catch { /* status is best-effort; state still governs the loop */ }
+  }
+  return { sessionStatus: next, explanation: message, trace: [`govern: control=${control ?? 'none'} status ${status}→${next}`] };
+}
+
 // ── routing ──────────────────────────────────────────────────────────────────
-function routeFromInterpret(s: DemoStateT): 'explain' | 'resume' | 'retrieve' {
+function routeFromInterpret(s: DemoStateT): 'govern' | 'explain' | 'resume' | 'retrieve' {
+  const control = s.interpretation?.control;
+  const held = s.sessionStatus === 'paused' || s.sessionStatus === 'stopped';
+  // Govern when there's a transition to make (pause/stop) or we're held and need a way
+  // out. A "continue" while already active is a NO-OP — fall through so the rest of the
+  // utterance (a question, "why?", "take me back") still runs and the turn isn't eaten.
+  // (Limitation: a "continue + take me back" said WHILE paused un-pauses but does not
+  // also pop the breadcrumb in the same turn — say "take me back" on the next turn.)
+  if (control === 'pause' || control === 'stop') return 'govern';
+  if (held) return 'govern';
   if (s.interpretation?.isMetaExplain) return 'explain';
   if (s.interpretation?.isResume) return 'resume';
   return 'retrieve';
@@ -182,11 +232,13 @@ export function buildGraph() {
     .addNode('navigate', navigate)
     .addNode('explain', explain)
     .addNode('resume', resume)
+    .addNode('govern', govern)
     .addEdge(START, 'interpret')
-    .addConditionalEdges('interpret', routeFromInterpret, { explain: 'explain', resume: 'resume', retrieve: 'retrieve' })
+    .addConditionalEdges('interpret', routeFromInterpret, { govern: 'govern', explain: 'explain', resume: 'resume', retrieve: 'retrieve' })
     .addConditionalEdges('retrieve', (s: DemoStateT) => (s.gated ? END : 'navigate'), { navigate: 'navigate', [END]: END })
     .addEdge('navigate', END)
     .addEdge('explain', END)
     .addEdge('resume', END)
+    .addEdge('govern', END)
     .compile({ checkpointer: new MemorySaver() });
 }

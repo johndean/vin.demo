@@ -23,14 +23,14 @@ const out = await graph.invoke(
   { configurable: { thread_id: `cli-${Date.now()}` } },
 );
 
-if (out.explanation) console.log(`\nVIN Demo (why): ${out.explanation}`);
+if (out.explanation) console.log(`\nVIN Demo${out.interpretation?.isMetaExplain ? ' (why)' : ''}: ${out.explanation}`);
 
 console.log(`\nStakeholder: "${utterance}"`);
-console.log(`Interpretation: kind=${out.interpretation?.kind} intent="${out.interpretation?.intent}"`);
+console.log(`Interpretation: kind=${out.interpretation?.kind} intent="${out.interpretation?.intent}" control=${out.interpretation?.control ?? 'none'}`);
+const top = out.retrieved?.[0];
 if (out.gated) {
   console.log("VIN Demo: I'm not certain about that — let me show you the source rather than guess.");
-} else {
-  const top = out.retrieved[0];
+} else if (top) {
   const dist = top.distance == null ? 'n/a' : top.distance.toFixed(3);
   console.log(`Top knowledge (${top.category}, distance ${dist}):`);
   console.log(`  ${top.content}`);
@@ -42,7 +42,7 @@ if (out.navigation) {
   if (out.blockedMutations.length) {
     console.log(`⛔ ${out.mode} guard blocked ${out.blockedMutations.length} mutating action(s): ${out.blockedMutations.join(', ')}`);
   }
-} else if (!out.gated) {
+} else if (!out.gated && top) {
   console.log('\nNavigation: skipped (no productId or DemoGraph node configured).');
 }
 console.log('\nTrace:');

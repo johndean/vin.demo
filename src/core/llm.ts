@@ -19,6 +19,7 @@ export interface Interpretation {
   kind: UtteranceKind;
   isMetaExplain: boolean; // asking the agent to justify its OWN last action ("why did you show that?")
   isResume: boolean;      // asking to go back to where we were before a detour
+  control: 'pause' | 'stop' | 'continue' | null; // governance over the SESSION (pause/stop/resume)
   reasoning: string;
 }
 
@@ -53,7 +54,9 @@ class ClaudeProvider implements LlmProvider {
         'retrieval query (what to look up in the product knowledge base). Be literal; do not invent scope. ' +
         'Set isMetaExplain=true when the stakeholder asks the agent to justify or explain its OWN last action ' +
         '(e.g. "why did you show me that?", "what was that screen?"). Set isResume=true when they ask to go ' +
-        'back to where you were before a detour (e.g. "ok, back to what we were doing", "return to that").',
+        'back to where you were before a detour (e.g. "ok, back to what we were doing", "return to that"). ' +
+        'Set control to "pause" when they ask to pause/hold the demo, "stop" to end it, "continue" to resume ' +
+        'after a pause; otherwise "none". control governs the SESSION; isResume governs returning to a topic.',
       messages: [{ role: 'user', content: utterance }],
       output_config: {
         format: {
@@ -65,9 +68,10 @@ class ClaudeProvider implements LlmProvider {
               kind: { type: 'string', enum: ['question', 'clarification', 'objection', 'curiosity', 'business_objective'] },
               isMetaExplain: { type: 'boolean' },
               isResume: { type: 'boolean' },
+              control: { type: 'string', enum: ['pause', 'stop', 'continue', 'none'] },
               reasoning: { type: 'string' },
             },
-            required: ['intent', 'kind', 'isMetaExplain', 'isResume', 'reasoning'],
+            required: ['intent', 'kind', 'isMetaExplain', 'isResume', 'control', 'reasoning'],
             additionalProperties: false,
           },
         },
@@ -87,11 +91,14 @@ class ClaudeProvider implements LlmProvider {
     if (typeof parsed.intent !== 'string' || !parsed.kind || !kinds.includes(parsed.kind)) {
       throw new Error(`interpret: invalid interpretation: ${JSON.stringify(parsed)}`);
     }
+    const rawControl = (parsed as { control?: string }).control;
+    const control = rawControl === 'pause' || rawControl === 'stop' || rawControl === 'continue' ? rawControl : null;
     return {
       intent: parsed.intent,
       kind: parsed.kind,
       isMetaExplain: !!parsed.isMetaExplain,
       isResume: !!parsed.isResume,
+      control,
       reasoning: parsed.reasoning ?? '',
     };
   }

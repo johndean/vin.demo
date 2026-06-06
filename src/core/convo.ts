@@ -22,6 +22,8 @@ const thread = { configurable: { thread_id: `convo-${Date.now()}` } };
 const turns = [
   'How does approval delegation work?',
   'Wait — why did you show me that screen?',
+  "Hold on — let's pause for a moment.", // P2.1: interrupt governance (pause)
+  'Okay, continue.',                      // P2.1: resume the session
   'Got it. Now show me the bypassed / delegated approvals.',
   'Okay, take me back to where we were.',
 ];
@@ -30,7 +32,7 @@ for (const utterance of turns) {
   console.log(`\n══ Stakeholder: "${utterance}"`);
   const out = await graph.invoke({ utterance, productId, sessionId: session.id, role, mode }, thread);
 
-  if (out.explanation) console.log(`VIN Demo (why): ${out.explanation}`);
+  if (out.explanation) console.log(`VIN Demo${out.interpretation?.isMetaExplain ? ' (why)' : ''}: ${out.explanation}`);
   else if (out.gated) console.log(`VIN Demo: I'm not certain about that — let me show you the source rather than guess.`);
   else if (!out.interpretation?.isResume && out.retrieved?.[0]) console.log(`VIN Demo: ${out.retrieved[0].content.slice(0, 150)}…`);
   if (out.interpretation?.isResume) console.log('VIN Demo: Sure — coming back to where we were.');

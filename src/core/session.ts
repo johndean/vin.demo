@@ -41,3 +41,16 @@ export async function createDemoSession(productId: string, mode: ExecutionMode):
   );
   return { id: res.rows[0].id, productId, mode };
 }
+
+/**
+ * Persist the session's lifecycle status on the entity model — recovery/interrupt
+ * governance (P2.1). This records lifecycle for audit/analytics; cross-process *resume*
+ * (seeding graph state back from this row in a new process) is deferred to P2 server-mode,
+ * where the in-memory checkpointer is replaced too.
+ */
+export async function updateSessionStatus(
+  sessionId: string,
+  status: 'active' | 'paused' | 'stopped' | 'done',
+): Promise<void> {
+  await db().query(`UPDATE demo_sessions SET status = $2 WHERE id = $1`, [sessionId, status]);
+}
