@@ -1,0 +1,66 @@
+{
+  "name": "defensive.software",
+  "version": "v1",
+  "environment": { "connectionTarget": "https://defensive.software", "isProduction": true, "resetMechanism": "manual" },
+  "adapter": {
+    "baseUrl": "https://defensive.software",
+    "credsEnvPrefix": "DEFENSIVE",
+    "loginPath": "",
+    "loginTriggerSelector": "button:has-text(\"Sign In\"), a:has-text(\"Sign In\")",
+    "emailSelector": "#username",
+    "passwordSelector": "#password",
+    "submitSelector": "#kc-login",
+    "loginSuccessUrlIncludes": "defensive.software/os"
+  },
+  "knowledge": [
+    {
+      "category": "overview",
+      "content": "defensive.software is a real-time threat-defense operations console. Operators monitor active operations, entity coverage, and defense effectiveness from a single dashboard, and drill into intelligence on detected bad actors, coordinated threats, and campaigns.",
+      "confidence": 0.8,
+      "source": "defensive.software (recon 2026-06-07)",
+      "lastVerified": "2026-06-07",
+      "validationStatus": "validated"
+    },
+    {
+      "category": "navigation",
+      "content": "The console is organized into sections: SITUATION (Command Center, Live Activity, Telemetry Feed, Content Theft, Content Scans, Defense Posture), INTELLIGENCE (Entities, Coordinated Threats, Campaign Intelligence), plus Operations, Enforcement, Capabilities, Governance, and Administration.",
+      "confidence": 0.8,
+      "source": "defensive.software (recon 2026-06-07)",
+      "lastVerified": "2026-06-07",
+      "validationStatus": "validated"
+    },
+    {
+      "category": "situation",
+      "content": "The Command Center is the default landing screen. It surfaces the current threat level, active operations count, approvals queue, coverage, total entities tracked, and overall defense effectiveness, with a live feed of detected, defending, and contained entities.",
+      "confidence": 0.75,
+      "source": "defensive.software (recon 2026-06-07)",
+      "lastVerified": "2026-06-07",
+      "validationStatus": "validated"
+    }
+  ],
+  "demoGraph": [
+    {
+      "intentLabel": "command center",
+      "screenRoute": null,
+      "locatorStrategies": [
+        { "how": "text", "value": "text=\"{label}\"" },
+        { "how": "css", "value": ".card-item-label:has-text(\"{label}\"), a:has-text(\"{label}\"), button:has-text(\"{label}\")" }
+      ],
+      "personaLabels": { "default": "Command Center" }
+    },
+    {
+      "intentLabel": "live activity",
+      "screenRoute": null,
+      "locatorStrategies": [
+        { "how": "text", "value": "text=\"{label}\"" },
+        { "how": "css", "value": ".card-item-label:has-text(\"{label}\"), a:has-text(\"{label}\"), button:has-text(\"{label}\")" }
+      ],
+      "personaLabels": { "default": "Live Activity" }
+    }
+  ],
+  "expectedIntents": [
+    "how does threat defense work",
+    "show me live activity",
+    "what is the command center"
+  ]
+}

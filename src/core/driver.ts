@@ -43,6 +43,7 @@ export interface ProductWebConfig {
   baseUrl: string;
   credsEnvPrefix: string;            // 'PO_VIN' → PO_VIN_<ROLE>_USER/PASS
   loginPath: string;                 // '/login', or '' when the base redirects to login
+  loginTriggerSelector?: string;     // click this first to REACH the login form (OAuth/OIDC redirect behind a "Sign In" button — e.g. defensive.software → Keycloak)
   emailSelector: string;
   passwordSelector: string;
   submitSelector: string;
@@ -93,6 +94,12 @@ export class WebAdapter implements InteractionAdapter {
     }
     const attempt = async (): Promise<boolean> => {
       await this.page.goto(this.cfg.baseUrl + this.cfg.loginPath, { waitUntil: 'domcontentloaded', timeout: 30000 });
+      if (this.cfg.loginTriggerSelector) {
+        // Login is behind a button that redirects to a hosted form (OAuth/OIDC, e.g. Keycloak) —
+        // we can't navigate a static URL because it carries a per-session PKCE challenge. Click, then wait for the form.
+        await this.page.locator(this.cfg.loginTriggerSelector).first().click({ timeout: 10000 }).catch(() => {});
+        await this.page.locator(this.cfg.emailSelector).first().waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
+      }
       await this.page.locator(this.cfg.emailSelector).first().fill(user);
       await this.page.locator(this.cfg.passwordSelector).first().fill(pass);
       await this.page.locator(this.cfg.submitSelector).first().click();
@@ -131,7 +138,14 @@ export class WebAdapter implements InteractionAdapter {
       loc.getAttribute('href').catch(() => null),
       loc.getAttribute('class').catch(() => null),
     ]);
-    const inNav = /sidebar|(^|[\s_-])nav([\s_-]|$)/i.test(className || '');
+    // Nav context: the element's OWN class, OR membership in a navigation landmark/sidebar.
+    // SPA sidebars render nav items as <div>/<span> (no anchor/role), which would otherwise
+    // fail closed to `mutating`; a confirmed mutating verb still blocks first (classifier step 1).
+    const inNavClass = /sidebar|(^|[\s_-])nav([\s_-]|$)/i.test(className || '');
+    const inNavAncestor = await loc
+      .evaluate((e) => !!(e.closest && e.closest('nav, aside, [role="navigation"], [class*="sidebar" i], [class*="side-nav" i]')))
+      .catch(() => false);
+    const inNav = inNavClass || inNavAncestor;
     return { tag, type, role, ariaLabel, title, text: (text || '').trim().slice(0, 80), href, className, inNav };
   }
 
