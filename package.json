@@ -1,0 +1,20 @@
+{
+  "name": "vindemo-spike",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Phase 0 throwaway spike: prove VIN Demo's read-only core loop against po.vin",
+  "scripts": {
+    "recon": "tsx src/spike/recon.ts",
+    "demo": "tsx src/spike/scenario.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "playwright": "^1.48.0"
+  }
+}

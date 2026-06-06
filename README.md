@@ -6,7 +6,7 @@ An **Autonomous AI Solution Consultant** that demonstrates software products to 
 
 ## Status
 
-**Phase 0 — not yet started.** First task is to stand up a demo environment (seed data + reset script), then prove the core loop on one web app, web-only, in read-only mode. See [docs/plans/](docs/plans/).
+**Phase 0 — core loop proven (GO).** The read-only loop runs end-to-end against PO.vin: cited answer → self-healing navigation → demonstrate approval delegation → never fires a mutating action. See [docs/phase-0-findings.md](docs/phase-0-findings.md). Spike code in [src/spike/](src/spike/) (`npm run recon`, `npm run demo`). Next: wire Claude for intent/explanation (needs `ANTHROPIC_API_KEY`).
 
 ## Operating rules (the two that override everything)
 
