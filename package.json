@@ -15,6 +15,7 @@
     "seed:ce": "tsx src/core/seed-ce.ts",
     "seed:mc": "tsx src/core/seed-modelcontract.ts",
     "onboard": "tsx src/core/onboard.ts",
+    "onboard:wizard": "tsx src/core/onboard-wizard.ts",
     "walkthrough": "tsx src/core/walkthrough.ts",
     "lifecycle": "tsx src/core/lifecycle-demo.ts",
     "loop": "tsx src/core/run.ts",
@@ -22,6 +23,7 @@
     "eval:phase1": "tsx src/core/eval-phase1.ts",
     "eval:phase2": "tsx src/core/eval-phase2.ts",
     "eval:phase3": "tsx src/core/eval-phase3.ts",
+    "eval:phase4": "tsx src/core/eval-phase4.ts",
     "coverage": "tsx src/core/coverage.ts"
   },
   "devDependencies": {

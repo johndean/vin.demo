@@ -6,6 +6,7 @@
  * The existing loop then demos it. Idempotent.   Run: npm run onboard <manifest.json>
  */
 import { readFile } from 'node:fs/promises';
+import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { db, toVector } from './db.js';
 import { getEmbeddingProvider } from './embeddings.js';
@@ -99,12 +100,14 @@ export async function onboard(m: Manifest): Promise<string> {
   return productId;
 }
 
-// CLI entry.
-const path = process.argv[2];
-if (!path) throw new Error('usage: npm run onboard <manifest.json>');
-const manifest: Manifest = JSON.parse(await readFile(path, 'utf8'));
-console.log(`\nOnboarding "${manifest.name}" from ${path} …`);
-const pid = await onboard(manifest);
-console.log(`\n✅ ${manifest.name} onboarded from manifest (no code). PRODUCT_ID=${pid}`);
-console.log(`   adapter_config: ${manifest.adapter ? 'set on environment (config-as-data)' : '(none — code-registry fallback)'}\n`);
-process.exit(0);
+// CLI entry — only when run directly (not when imported by the wizard / eval:phase4).
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const path = process.argv[2];
+  if (!path) throw new Error('usage: npm run onboard <manifest.json>');
+  const manifest: Manifest = JSON.parse(await readFile(path, 'utf8'));
+  console.log(`\nOnboarding "${manifest.name}" from ${path} …`);
+  const pid = await onboard(manifest);
+  console.log(`\n✅ ${manifest.name} onboarded from manifest (no code). PRODUCT_ID=${pid}`);
+  console.log(`   adapter_config: ${manifest.adapter ? 'set on environment (config-as-data)' : '(none — code-registry fallback)'}\n`);
+  process.exit(0);
+}
