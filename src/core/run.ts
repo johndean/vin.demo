@@ -18,6 +18,13 @@ if (out.gated) {
   console.log(`  ${top.content}`);
   console.log(`  ↳ source: ${top.source} · confidence: ${top.confidence} · version: ${top.product_version} · ${top.validation_status}`);
 }
+if (out.navigation) {
+  console.log(`\nNavigated (${out.mode}, as ${out.role}): ${out.navigation.ok ? out.navigation.url : 'FAILED'}` +
+    (out.navigation.healedVia ? `  [self-heal: ${out.navigation.healedVia}]` : '  [primary selector ok]'));
+  if (out.blockedMutations.length) {
+    console.log(`⛔ Read-only guard blocked ${out.blockedMutations.length} mutating action(s): ${out.blockedMutations.join(', ')}`);
+  }
+}
 console.log('\nTrace:');
 for (const t of out.trace) console.log(`  • ${t}`);
 console.log();

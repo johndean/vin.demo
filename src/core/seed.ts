@@ -59,6 +59,29 @@ if (!exists.rowCount) {
   console.log('  = approval-delegation chunk already present');
 }
 
+// DemoGraph: the navigator's intent-targets (persona-aware labels + ordered
+// locator strategies). The first strategy is intentionally stale to exercise self-heal.
+const graphId = await upsert('demo_graphs', { product_id: productId, name: 'PO.vin demo' }, { product_id: productId, name: 'PO.vin demo' });
+const nodeExists = await db().query('SELECT 1 FROM demo_graph_nodes WHERE demo_graph_id = $1 AND intent_label = $2', [graphId, 'approvals queue']);
+if (!nodeExists.rowCount) {
+  await db().query(
+    `INSERT INTO demo_graph_nodes (demo_graph_id, intent_label, screen_route, locator_strategies, persona_labels)
+     VALUES ($1, 'approvals queue', NULL, $2, $3)`,
+    [
+      graphId,
+      JSON.stringify([
+        { how: 'stale-css', value: '#sidebar-approval-queue-v1' },
+        { how: 'css', value: 'button:has-text("{label}")' },
+        { how: 'text', value: 'text={label}' },
+      ]),
+      JSON.stringify({ manager: 'Review Queue', owner: 'Approval Queue', admin: 'Manager Queue', default: 'Approval Queue' }),
+    ],
+  );
+  console.log('  + seeded DemoGraph node "approvals queue"');
+} else {
+  console.log('  = DemoGraph node already present');
+}
+
 console.log(`\nSeed complete. Set this in .env so the loop scopes retrieval to PO.vin:`);
 console.log(`  PO_VIN_PRODUCT_ID=${productId}\n`);
 process.exit(0);

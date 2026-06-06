@@ -8,8 +8,8 @@
 - [x] Increment 1 **live** on Railway/pgvector + Voyage (`npm run migrate | seed | loop`): in-scope answers cited, off-topic/stale/unvalidated/irrelevant all gate.
 - [x] **Adversarial review applied** (13 confirmed findings): 4-gate trust check (confidence · validation-status · time-staleness · relevance + null-distance), robust LLM structured-output parsing (refusal/empty/malformed), embedding dim guard, transactional+idempotent migration runner with `schema_migrations`, ivfflat dropped for exact scan, UNIQUE indexes (`0002`).
   - **Deferred (tracked, not bugs blocking):** (a) finding [4] strict-TLS-with-CA for the Railway Postgres proxy — using `rejectUnauthorized:false` for the demo DB; revisit before any non-demo data lands. (b) finding [9] tighten relevance threshold to ~0.35 — **rejected**: measured in-scope distances are 0.38–0.47, so 0.35 would gate real in-scope questions; keeping the empirically-calibrated 0.65, recalibrate with a labeled set as the KB grows.
-- [ ] Increment 2 — navigate node (DemoGraph-driven self-heal + action classifier).
-- [ ] Increment 3 — explain + recover/interrupt; tracing + cost events.
+- [x] **Increment 2 — navigate node (live).** DemoGraph-driven, persona-aware (`persona_labels`), self-healing across ordered locator strategies, with the production **action classifier** (`src/core/safety.ts`, element/intent-aware) enforcing execution mode. Verified live: self-heals stale selector → `/queue/manager`, opens a PO, read-only blocks 7 mutating actions (incl. "Escalate to Executive" the spike's regex missed). New: `src/core/driver.ts` (PO.vin adapter), DemoGraph seeded.
+- [ ] Increment 3 — router + context-stack + interrupt/resume (mid-flight pivot) + explain ("why?") + tracing + cost events.
 
 ## The single LangGraph loop (one loop, not many agents — §4)
 Nodes, each thin:

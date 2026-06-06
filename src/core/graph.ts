@@ -7,6 +7,7 @@ import { DemoState, type DemoStateT, type RetrievedChunk } from './state.js';
 import { getLlm } from './llm.js';
 import { getEmbeddingProvider } from './embeddings.js';
 import { db, toVector } from './db.js';
+import { PoVinDriver, type DemoNode } from './driver.js';
 
 const CONFIDENCE_THRESHOLD = 0.6;   // trust: chunk's own validated confidence
 // Relevance: cosine distance of the best match. Empirically calibrated to live
@@ -81,12 +82,52 @@ async function retrieve(state: DemoStateT): Promise<Partial<DemoStateT>> {
   };
 }
 
+/** navigate — drive the real UI to the intent's DemoGraph node (self-heal),
+ *  open a PO, and prove the action classifier blocks mutations under the mode.
+ *  Skipped when the answer was gated (nothing trustworthy to show). */
+async function navigate(state: DemoStateT): Promise<Partial<DemoStateT>> {
+  if (!state.productId) return { trace: ['navigate: skipped (no productId)'] };
+  const { rows } = await db().query<DemoNode>(
+    `SELECT n.intent_label, n.screen_route, n.locator_strategies, n.persona_labels
+       FROM demo_graph_nodes n JOIN demo_graphs g ON g.id = n.demo_graph_id
+      WHERE g.product_id = $1 LIMIT 1`,
+    [state.productId],
+  );
+  const node = rows[0];
+  if (!node) return { trace: ['navigate: no DemoGraph node for product'] };
+
+  const driver = new PoVinDriver(state.mode);
+  try {
+    await driver.open(state.role);
+    const nav = await driver.gotoNode(node, state.role);
+    const opened = nav.ok ? await driver.openFirstPo() : false;
+    const scan = opened ? await driver.scanActions() : [];
+    const blockedMutations = scan.filter((s) => s.cls === 'mutating' && !s.permitted).map((s) => s.label);
+    return {
+      navigation: nav,
+      actionScan: scan,
+      blockedMutations,
+      trace: [
+        `navigate: "${node.intent_label}" as ${state.role} → ${nav.ok ? nav.url : 'FAILED'}` +
+          (nav.healedVia ? ` [self-heal via ${nav.healedVia}]` : ' [primary ok]'),
+        `navigate: mode=${state.mode}; PO ${opened ? 'opened' : 'not opened'}; ` +
+          `${blockedMutations.length} mutating action(s) blocked by classifier`,
+      ],
+    };
+  } finally {
+    await driver.close();
+  }
+}
+
 export function buildGraph() {
   return new StateGraph(DemoState)
     .addNode('interpret', interpret)
     .addNode('retrieve', retrieve)
+    .addNode('navigate', navigate)
     .addEdge(START, 'interpret')
     .addEdge('interpret', 'retrieve')
-    .addEdge('retrieve', END)
+    // Gate decides: if we can't trust an answer, don't drive the UI.
+    .addConditionalEdges('retrieve', (s: DemoStateT) => (s.gated ? END : 'navigate'), { navigate: 'navigate', [END]: END })
+    .addEdge('navigate', END)
     .compile();
 }
