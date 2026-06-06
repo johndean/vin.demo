@@ -35,7 +35,10 @@ const HREF_DANGER =
 // Positive READ signals.
 const READ_VERB = /\b(view|opens?|details?|back|home|dashboard|overview|preview|read|expand|collapse|show|list)\b/i;
 const NAV_LABEL = /(queue|registry|vendors?|reports?|dashboard|inventory|assets?|locations?|home|overview|workflow map|bypassed|approvals?|delegation|clarifications?|departments?|analytics|audit log|controls?|configuration)$/i;
-const NON_DESTRUCTIVE = /\b(filter|search|sort|tab|refresh|toggle)\b/i;
+// Non-destructive interactive controls — incl. multi-step WIZARD navigation (next/back/
+// continue/step), which advances a form without committing. A commit verb (submit/create/
+// generate/sign/finalize…) is caught by MUTATING above, so it still blocks even in `safe`.
+const NON_DESTRUCTIVE = /\b(filter|search|sort|tab|refresh|toggle|next|back|previous|prev|continue|skip|step)\b/i;
 const HELP_LEADING = /^\s*(how|why|what|where|when|can i)\b/i;
 const AUTH_NAV = /\b(sign[\s_-]?out|log[\s_-]?out|logout|sign[\s_-]?in)\b/i;
 

@@ -34,6 +34,8 @@ export interface ActionScan {
   confident: boolean; // false = blocked by fail-closed default, not a confirmed mutation
   reason: string;
 }
+export interface WalkthroughStep { n: number; heading: string; action: string; }
+export interface WalkthroughResult { steps: WalkthroughStep[]; stopped: string; committed: boolean; }
 
 /** Everything that varies per product. The machinery in WebAdapter is shared. */
 export interface ProductWebConfig {
@@ -46,6 +48,7 @@ export interface ProductWebConfig {
   loginSuccessUrlIncludes?: string;  // success when the URL contains this (SPA dashboards)
   loginSuccessSelector?: string;     // …or when this element renders
   postLoginPath?: string;            // after auth, navigate here (when the auth-redirect target is a blank shell — e.g. ce.vin)
+  noAuth?: boolean;                  // public surface (e.g. an embeddable widget) — open() skips login entirely
   recordRowSelector?: string;        // omit → screen-level product (no "open a record" step)
   recordRowFilterText?: RegExp;
   recordReadySelector?: string;
@@ -58,6 +61,8 @@ export interface InteractionAdapter {
   gotoNode(node: DemoNode, role: string): Promise<NavResult>;
   openRecord(): Promise<boolean>; // open a detail record if the product has one; else no-op → true
   scanActions(): Promise<ActionScan[]>;
+  /** Step through a multi-step wizard in `safe` mode, never firing a commit (P3.4c). */
+  walkthrough?(maxSteps: number): Promise<WalkthroughResult>;
   close(): Promise<void>;
 }
 
@@ -79,6 +84,12 @@ export class WebAdapter implements InteractionAdapter {
     this.browser = await chromium.launch({ headless: true });
     const ctx = await this.browser.newContext({ viewport: { width: 1440, height: 900 } });
     this.page = await ctx.newPage();
+    if (this.cfg.noAuth) {
+      // Public surface (e.g. a no-login embed widget) — just land on it; no credentials.
+      await this.page.goto(this.cfg.baseUrl + this.cfg.loginPath, { waitUntil: 'networkidle', timeout: 30000 }).catch(() => {});
+      await this.page.waitForTimeout(2500);
+      return;
+    }
     const attempt = async (): Promise<boolean> => {
       await this.page.goto(this.cfg.baseUrl + this.cfg.loginPath, { waitUntil: 'domcontentloaded', timeout: 30000 });
       await this.page.locator(this.cfg.emailSelector).first().fill(user);
@@ -187,6 +198,40 @@ export class WebAdapter implements InteractionAdapter {
     return out;
   }
 
+  /** Step through a multi-step wizard, narrating each step. The hard guarantee: only
+   *  advance via a control the mode PERMITS — a commit (Generate/Submit/Create/Sign…)
+   *  classifies as mutating and is never clicked. Never fabricates free-text input. */
+  async walkthrough(maxSteps: number): Promise<WalkthroughResult> {
+    const steps: WalkthroughStep[] = [];
+    const FWD = 'button:has-text("Next"), button:has-text("Continue"), button:has-text("Generate"), button:has-text("Create"), button:has-text("Submit"), button:has-text("Finish"), button:has-text("Sign")';
+    for (let n = 1; n <= maxSteps; n++) {
+      const heading = (await this.page.locator('h1, h2').first().innerText().catch(() => '')).trim().replace(/\s+/g, ' ').slice(0, 80);
+      // The real advance button — exclude the "Next missing" jump-to-field chip.
+      const fwd = this.page.locator(FWD).filter({ hasNotText: /missing/i }).first();
+      if (!(await fwd.count().catch(() => 0))) { steps.push({ n, heading, action: 'no forward control' }); return { steps, stopped: 'no forward control', committed: false }; }
+      const cand = await this.candidate(fwd, 'button');
+      const { cls } = classifyAction(cand);
+      if (!permits(cls, this.mode).permitted) {
+        // SAFETY: advancing here would fire a commit — stop, never click it.
+        steps.push({ n, heading, action: `STOP — "${cand.text}" is ${cls}, blocked in ${this.mode}` });
+        return { steps, stopped: `reached commit "${cand.text}" (${cls}); not firing in ${this.mode} mode`, committed: false };
+      }
+      // If Next is gated on a required choice, pick the first unselected option (form-fill, safe).
+      if (await fwd.isDisabled().catch(() => false)) {
+        const opt = this.page.locator('input[type="radio"]:not(:checked), [role="radio"][aria-checked="false"]').first();
+        if (await opt.count().catch(() => 0)) { await opt.click().catch(() => {}); await this.page.waitForTimeout(400); }
+      }
+      if (await fwd.isDisabled().catch(() => false)) {
+        steps.push({ n, heading, action: "Next disabled — step needs input the demo won't fabricate; pausing" });
+        return { steps, stopped: `step ${n} needs input the demo won't fabricate — paused`, committed: false };
+      }
+      await fwd.click().catch(() => {});
+      await this.page.waitForTimeout(1300);
+      steps.push({ n, heading, action: `advanced via "${cand.text}"` });
+    }
+    return { steps, stopped: `walked ${maxSteps} steps (cap)`, committed: false };
+  }
+
   async screenshot(file: string): Promise<void> {
     await this.page.screenshot({ path: file, fullPage: true }).catch(() => {});
   }
@@ -240,6 +285,13 @@ const CONFIGS: Record<string, ProductWebConfig> = {
     postLoginPath: '/#/dashboard', // /sign-in redirect target is a blank Vue shell; the app is here
     loginSuccessUrlIncludes: '#/dashboard',
     // screen-level: the course-review walkthrough proves read-only at the needs-review/sessions screens
+  },
+  'modelcontract.software': {
+    baseUrl: process.env.MODELCONTRACT_WIDGET_URL ?? 'https://modelcontract.software/embed/wizard?role=employer&environment=vet',
+    credsEnvPrefix: 'MODELCONTRACT',
+    loginPath: '',
+    emailSelector: '', passwordSelector: '', submitSelector: '', // unused — noAuth
+    noAuth: true, // public no-login VIN Foundation model-employment-agreement wizard; driven via walkthrough() in `safe` mode
   },
 };
 

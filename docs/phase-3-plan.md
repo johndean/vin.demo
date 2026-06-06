@@ -15,7 +15,10 @@ Per-increment rhythm unchanged: build → live → adversarial review → eval g
   - **Done.** Live read-only navigation works through the P3.1 contract: logs into the real expense.vin, navigates to the Manager Approvals screen, blocks mutating actions (screen-level — queue empty by design). **P3.3 complete.**
 - [x] **P3.4 — Onboard real product #3 — rounds.vin (by hand).** A medical content **production pipeline** — a different domain from the approval apps, the real contract test.
   - **Done.** Reconned read-only; knowledge corroborated by the Rounds API spec; onboarded (`npm run seed:rounds`) with **one new WebAdapter config entry** (hash SPA, `/signin` login, `<a href>` nav) and **no new adapter code**. Live read-only nav works (logs in, navigates the pipeline dashboard, blocks mutations); coverage 4/5. **The single contract now drives 3 real products** (po.vin approvals · expense.vin reimbursement · rounds.vin pipeline) → the **P4 self-service trigger** ("adapter contract stable across 3 manually onboarded products") is now in reach.
-  - **ce.vin (#4) queued** — a different stack (custom auth); needs a login-selector discovery pass before onboarding.
+  - **Extended onboarding (beyond the planned 3):**
+    - **ce.vin (#4)** — token auth + blank-shell redirect, handled by the new `postLoginPath`; live read-only, coverage 4/5.
+    - **modelcontract.software (#5)** — a public, no-login VIN Foundation model-employment-agreement **wizard**: the project's first NON-navigate modality, demoed via a **`safe`-mode walkthrough** (`npm run walkthrough`) that steps through choice screens (Next = non-destructive), **honestly pauses at free-text it won't fabricate**, and **never fires the commit** (Generate/Submit stays `mutating`, blocked even in `safe`). Adapter additions: `noAuth`, `walkthrough()`; classifier: wizard-nav → `non_destructive`. `eval:phase1` still 8/8.
+  - **The single contract now spans 5 real products and 2 modalities** (navigate-and-read + safe-mode walkthrough): po.vin · expense.vin · rounds.vin · ce.vin · modelcontract.software.
 - [ ] **P3.5 — Validate + `eval:phase3`.** Assert the contract holds across 3 products (the loop runs read-only on each), a version bump degrades a stale answer, and onboarding is config-not-code wherever the contract allows.
 
 ## What I need from you to onboard each real product (P3.3 / P3.4)
