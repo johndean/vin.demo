@@ -1,0 +1,35 @@
+{
+  "name": "expense.vin",
+  "version": "v1 · Flowint SSOT",
+  "environment": { "connectionTarget": "https://www.expense.vin", "isProduction": true, "resetMechanism": "manual" },
+  "adapter": {
+    "baseUrl": "https://www.expense.vin",
+    "credsEnvPrefix": "EXPENSE_VIN",
+    "loginPath": "",
+    "emailSelector": "input[type=\"email\"], #email, input[name=\"email\"]",
+    "passwordSelector": "input[type=\"password\"], #password",
+    "submitSelector": "button[type=\"submit\"], button:has-text(\"Sign in\"), button:has-text(\"Log in\")",
+    "loginSuccessUrlIncludes": "/#/dashboard"
+  },
+  "knowledge": [
+    { "category": "docs", "content": "In VIN Expense Reimbursement, an employee submits an expense report; their manager approves; the finance/accounting team checks and codes it; then it is queued and paid — \"Reimbursed\" means the money is on its way. You are notified at each step.", "confidence": 0.8, "source": "expense.vin help center", "lastVerified": "2026-06-06", "validationStatus": "validated" },
+    { "category": "docs", "content": "A manager's Approvals queue shows reports submitted by their team and anyone whose approvals are delegated to them, split into \"Awaiting your approval\", \"In clarification\", and \"Approved this cycle\".", "confidence": 0.8, "source": "expense.vin help center", "lastVerified": "2026-06-06", "validationStatus": "validated" },
+    { "category": "docs", "content": "Delegation lets a manager hand their approval authority to another user so expense reports are not blocked when they are unavailable.", "confidence": 0.8, "source": "expense.vin help center", "lastVerified": "2026-06-06", "validationStatus": "validated" },
+    { "category": "docs", "content": "A flag marks an expense report that needs attention, such as a policy exception, before it can proceed.", "confidence": 0.8, "source": "expense.vin help center", "lastVerified": "2026-06-06", "validationStatus": "validated" }
+  ],
+  "demoGraph": [
+    { "intentLabel": "approvals queue", "screenRoute": null,
+      "locatorStrategies": [ { "how": "css", "value": "a:has-text(\"{label}\"), button:has-text(\"{label}\")" }, { "how": "text", "value": "text={label}" } ],
+      "personaLabels": { "manager": "Approvals", "accounting": "Approvals", "admin": "Approvals", "default": "Approvals" } },
+    { "intentLabel": "delegation settings", "screenRoute": null,
+      "locatorStrategies": [ { "how": "css", "value": "a:has-text(\"{label}\"), button:has-text(\"{label}\")" }, { "how": "text", "value": "text={label}" } ],
+      "personaLabels": { "manager": "Delegation", "admin": "Delegation", "default": "Delegation" } }
+  ],
+  "expectedIntents": [
+    "how do I approve an expense report",
+    "what is waiting for me to approve",
+    "how does expense approval delegation work",
+    "what is a flag on an expense report",
+    "how do I configure spend policies and categories"
+  ]
+}

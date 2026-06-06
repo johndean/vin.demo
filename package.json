@@ -14,6 +14,7 @@
     "seed:rounds": "tsx src/core/seed-rounds.ts",
     "seed:ce": "tsx src/core/seed-ce.ts",
     "seed:mc": "tsx src/core/seed-modelcontract.ts",
+    "onboard": "tsx src/core/onboard.ts",
     "walkthrough": "tsx src/core/walkthrough.ts",
     "lifecycle": "tsx src/core/lifecycle-demo.ts",
     "loop": "tsx src/core/run.ts",
