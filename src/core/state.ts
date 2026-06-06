@@ -6,6 +6,13 @@ import type { Interpretation } from './llm.js';
 import type { NavResult, ActionScan } from './driver.js';
 import type { ExecutionMode } from './safety.js';
 
+/** A place in the demo we can return to after a detour (mid-flight pivot support). */
+export interface Position {
+  intent: string;
+  url: string;
+  answer: string | null;
+}
+
 export interface RetrievedChunk {
   content: string;
   category: string;
@@ -36,6 +43,11 @@ export const DemoState = Annotation.Root({
   navigation: Annotation<NavResult | null>({ reducer: (_, b) => b, default: () => null }),
   actionScan: Annotation<ActionScan[]>({ reducer: (_, b) => b, default: () => [] }),
   blockedMutations: Annotation<string[]>({ reducer: (_, b) => b, default: () => [] }),
+
+  // multi-turn: where we are, the breadcrumb stack for return-to-context, and explain output
+  currentPosition: Annotation<Position | null>({ reducer: (_, b) => b, default: () => null }),
+  contextStack: Annotation<Position[]>({ reducer: (_, b) => b, default: () => [] }),
+  explanation: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
 
   // Trace — appends, so "why did you show this?" can replay the loop's decisions.
   trace: Annotation<string[]>({ reducer: (a, b) => a.concat(b), default: () => [] }),

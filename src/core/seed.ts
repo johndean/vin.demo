@@ -79,7 +79,28 @@ if (!nodeExists.rowCount) {
   );
   console.log('  + seeded DemoGraph node "approvals queue"');
 } else {
-  console.log('  = DemoGraph node already present');
+  console.log('  = DemoGraph node "approvals queue" already present');
+}
+
+// Second node so a mid-flight pivot has a real target (Owner/Admin see "Bypassed").
+const bypExists = await db().query('SELECT 1 FROM demo_graph_nodes WHERE demo_graph_id = $1 AND intent_label = $2', [graphId, 'bypassed (delegated approvals)']);
+if (!bypExists.rowCount) {
+  await db().query(
+    `INSERT INTO demo_graph_nodes (demo_graph_id, intent_label, screen_route, locator_strategies, persona_labels)
+     VALUES ($1, 'bypassed (delegated approvals)', NULL, $2, $3)`,
+    [
+      graphId,
+      JSON.stringify([
+        { how: 'stale-css', value: '.legacy-bypassed-link' },
+        { how: 'css', value: 'button:has-text("{label}")' },
+        { how: 'text', value: 'text={label}' },
+      ]),
+      JSON.stringify({ default: 'Bypassed', admin: 'Bypassed', owner: 'Bypassed' }),
+    ],
+  );
+  console.log('  + seeded DemoGraph node "bypassed (delegated approvals)"');
+} else {
+  console.log('  = DemoGraph node "bypassed" already present');
 }
 
 console.log(`\nSeed complete. Set this in .env so the loop scopes retrieval to PO.vin:`);

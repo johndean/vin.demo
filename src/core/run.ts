@@ -18,13 +18,12 @@ if (productId) {
 }
 
 const graph = buildGraph();
-const out = await graph.invoke({
-  utterance,
-  productId,
-  sessionId,
-  role: process.env.PO_VIN_ROLE ?? 'admin',
-  mode,
-});
+const out = await graph.invoke(
+  { utterance, productId, sessionId, role: process.env.PO_VIN_ROLE ?? 'admin', mode },
+  { configurable: { thread_id: `cli-${Date.now()}` } },
+);
+
+if (out.explanation) console.log(`\nVIN Demo (why): ${out.explanation}`);
 
 console.log(`\nStakeholder: "${utterance}"`);
 console.log(`Interpretation: kind=${out.interpretation?.kind} intent="${out.interpretation?.intent}"`);

@@ -10,7 +10,8 @@
     "eval": "tsx src/spike/eval.ts",
     "migrate": "tsx src/core/migrate.ts",
     "seed": "tsx src/core/seed.ts",
-    "loop": "tsx src/core/run.ts"
+    "loop": "tsx src/core/run.ts",
+    "convo": "tsx src/core/convo.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

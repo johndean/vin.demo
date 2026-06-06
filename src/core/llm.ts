@@ -17,12 +17,26 @@ export type UtteranceKind = 'question' | 'clarification' | 'objection' | 'curios
 export interface Interpretation {
   intent: string;        // the information need, as a retrieval query
   kind: UtteranceKind;
+  isMetaExplain: boolean; // asking the agent to justify its OWN last action ("why did you show that?")
+  isResume: boolean;      // asking to go back to where we were before a detour
   reasoning: string;
+}
+
+export interface ExplainContext {
+  question: string;
+  priorIntent: string;
+  answer: string;
+  navUrl: string;
+  trace: string[];
 }
 
 export interface LlmProvider {
   readonly id: string;
   interpret(utterance: string): Promise<Interpretation>;
+  /** Pick the best-matching demo target from candidate labels (or '' if none fit). */
+  pickNode(intent: string, labels: string[]): Promise<string>;
+  /** Explain, grounded in the trace, why the agent showed what it showed. */
+  explainWhy(ctx: ExplainContext): Promise<string>;
 }
 
 class ClaudeProvider implements LlmProvider {
@@ -36,7 +50,10 @@ class ClaudeProvider implements LlmProvider {
       system:
         'You are the interpreter for an autonomous solution consultant running a live product demo. ' +
         'Classify the stakeholder utterance and distill the underlying information need into a concise ' +
-        'retrieval query (what to look up in the product knowledge base). Be literal; do not invent scope.',
+        'retrieval query (what to look up in the product knowledge base). Be literal; do not invent scope. ' +
+        'Set isMetaExplain=true when the stakeholder asks the agent to justify or explain its OWN last action ' +
+        '(e.g. "why did you show me that?", "what was that screen?"). Set isResume=true when they ask to go ' +
+        'back to where you were before a detour (e.g. "ok, back to what we were doing", "return to that").',
       messages: [{ role: 'user', content: utterance }],
       output_config: {
         format: {
@@ -46,9 +63,11 @@ class ClaudeProvider implements LlmProvider {
             properties: {
               intent: { type: 'string', description: 'concise retrieval query for the knowledge base' },
               kind: { type: 'string', enum: ['question', 'clarification', 'objection', 'curiosity', 'business_objective'] },
+              isMetaExplain: { type: 'boolean' },
+              isResume: { type: 'boolean' },
               reasoning: { type: 'string' },
             },
-            required: ['intent', 'kind', 'reasoning'],
+            required: ['intent', 'kind', 'isMetaExplain', 'isResume', 'reasoning'],
             additionalProperties: false,
           },
         },
@@ -68,7 +87,69 @@ class ClaudeProvider implements LlmProvider {
     if (typeof parsed.intent !== 'string' || !parsed.kind || !kinds.includes(parsed.kind)) {
       throw new Error(`interpret: invalid interpretation: ${JSON.stringify(parsed)}`);
     }
-    return { intent: parsed.intent, kind: parsed.kind, reasoning: parsed.reasoning ?? '' };
+    return {
+      intent: parsed.intent,
+      kind: parsed.kind,
+      isMetaExplain: !!parsed.isMetaExplain,
+      isResume: !!parsed.isResume,
+      reasoning: parsed.reasoning ?? '',
+    };
+  }
+
+  async pickNode(intent: string, labels: string[]): Promise<string> {
+    if (labels.length <= 1) return labels[0] ?? '';
+    const res = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 512,
+      system:
+        'Pick the demo screen the stakeholder should be taken to. Prefer the PRIMARY workflow screen where the ' +
+        'feature is performed or explained; only choose a sub-view / result list (e.g. a "bypassed", "history", or ' +
+        '"completed" list) when the stakeholder EXPLICITLY asks for that sub-view. Return "" if none fit.',
+      messages: [{ role: 'user', content: `Intent: ${JSON.stringify(intent)}\nScreens: ${JSON.stringify(labels)}` }],
+      output_config: {
+        format: {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: { label: { type: 'string', enum: [...labels, ''] } },
+            required: ['label'],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+    await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'pickNode' });
+    const b = res.content.find((x) => x.type === 'text');
+    try {
+      return JSON.parse(b && 'text' in b ? b.text : '{}').label ?? '';
+    } catch {
+      return '';
+    }
+  }
+
+  async explainWhy(ctx: ExplainContext): Promise<string> {
+    const res = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      system:
+        'You are VIN Demo. The stakeholder is asking you to justify your OWN previous action. Explain, in 2-3 ' +
+        'sentences, WHY you showed what you showed — grounded ONLY in the decision trace and the answer you gave. ' +
+        'Reference the intent you detected and the screen you navigated to. Do not invent new product facts.',
+      messages: [
+        {
+          role: 'user',
+          content:
+            `Their question: ${ctx.question}\n` +
+            `Your prior detected intent: ${ctx.priorIntent}\n` +
+            `The answer you gave: ${ctx.answer}\n` +
+            `The screen you navigated to: ${ctx.navUrl}\n` +
+            `Decision trace:\n${ctx.trace.join('\n')}`,
+        },
+      ],
+    });
+    await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'explain' });
+    const b = res.content.find((x) => x.type === 'text');
+    return b && 'text' in b ? b.text : '(unable to explain)';
   }
 }
 
