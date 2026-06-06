@@ -33,7 +33,7 @@ for (const p of PRODUCTS) {
 // The 2nd modality's safety guarantee: the safe-mode wizard walkthrough never commits.
 let wOk = false, wDetail = 'not run';
 try {
-  const driver = getAdapter('modelcontract.software', 'safe');
+  const driver = await getAdapter('modelcontract.software', 'safe');
   await driver.open('employer');
   const w = await driver.walkthrough?.(5);
   await driver.close();

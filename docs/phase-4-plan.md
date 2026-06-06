@@ -1,0 +1,25 @@
+# Phase 4 — Self-service onboarding (plan)
+
+**Goal (impl plan §Phase 4):** turn the learned adapter contract into **"Add → Train → Demo"** — onboard a product from DATA, not code. **Trigger met:** the `InteractionAdapter` contract is stable across **5** manually onboarded products (P3).
+
+**Still engine-only.** "Self-service" here = a declarative **manifest** + a CLI **`onboard`** command (config-not-code), NOT a UI. Interaction modality / deployment stays deferred to **P5+**.
+
+**The shift:** today adding a product needs CODE — a `CONFIGS` entry in `driver.ts` + a `seed-<product>.ts`. P4 makes both DATA.
+
+## Increments
+- [x] **P4.1 — Adapter config as data.** **Done.** Migration `0005` adds `environments.adapter_config` (jsonb); `getAdapter` is now async and prefers the product's DB config, falling back to the in-code `CONFIGS` registry — so the 5 hand-configured products keep working **untouched** (migration-agnostic). Made `ProductWebConfig` JSON/jsonb-serializable (`recordRowFilterText` RegExp → string pattern, compiled at use). `eval:phase1` 8/8 (po.vin falls back cleanly; regex-as-string row filter still opens a PO).
+- [ ] **P4.2 — Onboarding manifest + `npm run onboard <manifest.json>`.** One declarative manifest per product (name, version, base URL, login config, personas, DemoGraph nodes, expected intents, knowledge sources) → provisions product + version + environment + adapter config + DemoGraph + expected intents — generalizing the five `seed-<product>.ts` scripts into one data-driven onboarder.
+- [ ] **P4.3 — "Train" (knowledge ingestion).** Ingest the manifest's knowledge — provided text and/or a read-only recon/dump of a docs URL — into chunks with trust metadata (source · confidence · version · validation) + embeddings. Report coverage post-onboard.
+- [ ] **P4.4 — "Demo" parity.** Re-onboard ONE existing product (e.g. expense.vin) purely from a manifest and prove the loop demos it identically to the hand-written seed — no new code. The other four stay as-is (don't churn working products); all FUTURE products go through the manifest.
+- [ ] **P4.5 — `eval:phase4`** — assert a manifest-only onboard yields a working, trust-gated, read-only demo.
+
+## Open scope decisions (founder)
+1. **"Add" input format** — a declarative JSON manifest (+ `onboard` CLI), or an interactive CLI wizard.
+2. **"Train" knowledge source** — from the manifest (explicit text/sources) only, or also auto-ingest from a read-only recon/dump of the product's docs URL.
+3. **Migration scope** — re-onboard all 5 existing products via manifests (full code→data migration), or only NEW products self-serve + one parity proof (keep the 5 working products as code).
+
+## Deferral discipline (unchanged)
+Interaction modality / new deployment targets → **P5+** (demand-driven). No UI (engine-only). Competitive content (D), billing (A) — still deferred.
+
+## Done =
+A new product is onboarded end-to-end from a single manifest (Add → Train → Demo) with NO code change; `eval:phase1/2/3` stay green; `eval:phase4` green; one existing product re-onboarded via manifest at parity.

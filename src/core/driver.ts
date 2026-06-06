@@ -9,6 +9,7 @@
 import { chromium, type Browser, type Page, type Locator } from 'playwright';
 import { config as loadEnv } from 'dotenv';
 import { classifyAction, permits, type ExecutionMode, type ActionClass } from './safety.js';
+import { db } from './db.js';
 
 loadEnv();
 
@@ -50,7 +51,7 @@ export interface ProductWebConfig {
   postLoginPath?: string;            // after auth, navigate here (when the auth-redirect target is a blank shell — e.g. ce.vin)
   noAuth?: boolean;                  // public surface (e.g. an embeddable widget) — open() skips login entirely
   recordRowSelector?: string;        // omit → screen-level product (no "open a record" step)
-  recordRowFilterText?: RegExp;
+  recordRowFilterText?: string;      // regex SOURCE (string, so config is JSON/jsonb-serializable — P4.1)
   recordReadySelector?: string;
   recordUrlIncludes?: string;
 }
@@ -164,7 +165,7 @@ export class WebAdapter implements InteractionAdapter {
   async openRecord(): Promise<boolean> {
     if (!this.cfg.recordRowSelector) return true;
     let row = this.page.locator(this.cfg.recordRowSelector);
-    if (this.cfg.recordRowFilterText) row = row.filter({ hasText: this.cfg.recordRowFilterText });
+    if (this.cfg.recordRowFilterText) row = row.filter({ hasText: new RegExp(this.cfg.recordRowFilterText, 'i') });
     const first = row.first();
     await first.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
     if (!(await first.count().catch(() => 0))) return false;
@@ -254,7 +255,7 @@ const CONFIGS: Record<string, ProductWebConfig> = {
     submitSelector: 'button[type="submit"]',
     loginSuccessSelector: 'button:has-text("New Purchase Request")',
     recordRowSelector: 'tbody tr',
-    recordRowFilterText: /PO-|REQ-|\$/,
+    recordRowFilterText: 'PO-|REQ-|\\$',
     recordReadySelector: 'button:has-text("Delegate"), button:has-text("Approve")',
     recordUrlIncludes: '/po/',
   },
@@ -298,8 +299,20 @@ const CONFIGS: Record<string, ProductWebConfig> = {
   },
 };
 
-export function getAdapter(productName: string, mode: ExecutionMode): InteractionAdapter {
-  const cfg = CONFIGS[(productName || '').toLowerCase()];
-  if (!cfg) throw new Error(`No interaction adapter registered for product "${productName}"`);
+export async function getAdapter(productName: string, mode: ExecutionMode): Promise<InteractionAdapter> {
+  const key = (productName || '').toLowerCase();
+  // Config-as-data (P4.1): prefer the product's environment.adapter_config (set by self-service
+  // onboarding); fall back to the code registry so the originally hand-configured products keep working.
+  let cfg: ProductWebConfig | undefined;
+  try {
+    const { rows } = await db().query<{ adapter_config: ProductWebConfig | null }>(
+      `SELECT e.adapter_config FROM environments e JOIN products p ON p.id = e.product_id
+        WHERE lower(p.name) = $1 AND e.adapter_config IS NOT NULL ORDER BY e.created_at LIMIT 1`,
+      [key],
+    );
+    if (rows[0]?.adapter_config) cfg = rows[0].adapter_config;
+  } catch { /* DB unreachable → fall back to the code registry */ }
+  cfg = cfg ?? CONFIGS[key];
+  if (!cfg) throw new Error(`No interaction adapter (DB config or code registry) for product "${productName}"`);
   return new WebAdapter(cfg, mode);
 }

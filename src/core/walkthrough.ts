@@ -25,7 +25,7 @@ console.log(`VIN Demo: ${r.gated ? "I'm not certain — let me show you the sour
 console.log(`  ↳ source: ${r.top?.source} · confidence: ${r.top?.confidence} · ${r.top?.validation_status}`);
 
 // Walk the wizard in SAFE mode — steps through, never commits.
-const driver = getAdapter('modelcontract.software', 'safe');
+const driver = await getAdapter('modelcontract.software', 'safe');
 await driver.open('employer');
 const w = await driver.walkthrough?.(6);
 await driver.close();

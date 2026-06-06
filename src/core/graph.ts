@@ -86,7 +86,7 @@ async function driveTo(state: DemoStateT, intent: string): Promise<DriveOutcome>
   const chosen = (await getLlm().pickNode(intent, labels)) || labels[0];
   const node = rows.find((r) => r.intent_label === chosen) ?? rows[0];
 
-  const driver = getAdapter(rows[0].product_name, state.mode);
+  const driver = await getAdapter(rows[0].product_name, state.mode);
   try {
     await driver.open(state.role);
     const nav = await driver.gotoNode(node, state.role);
