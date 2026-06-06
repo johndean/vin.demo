@@ -15,6 +15,7 @@
     "seed:ce": "tsx src/core/seed-ce.ts",
     "seed:mc": "tsx src/core/seed-modelcontract.ts",
     "walkthrough": "tsx src/core/walkthrough.ts",
+    "lifecycle": "tsx src/core/lifecycle-demo.ts",
     "loop": "tsx src/core/run.ts",
     "convo": "tsx src/core/convo.ts",
     "eval:phase1": "tsx src/core/eval-phase1.ts",

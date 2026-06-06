@@ -21,6 +21,7 @@ export interface RetrievedChunk {
   source: string;
   last_verified: string | null;
   product_version: string | null;
+  product_version_status: string | null; // active | deprecated | retired (Gap B lifecycle)
   validation_status: string;
   distance: number; // cosine distance (lower = closer)
 }

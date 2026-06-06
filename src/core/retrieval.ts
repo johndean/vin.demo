@@ -31,7 +31,8 @@ export async function gateForVector(vec: number[], productId: string | null): Pr
   const { rows } = await db().query<RetrievedChunk>(
     `SELECT kc.content, kc.category, kc.confidence, kc.source,
             kc.last_verified::text AS last_verified, kc.validation_status,
-            pv.version_label AS product_version, (kc.embedding <=> $1) AS distance
+            pv.version_label AS product_version, pv.status AS product_version_status,
+            (kc.embedding <=> $1) AS distance
        FROM knowledge_chunks kc
        JOIN knowledge_bases kb ON kb.id = kc.knowledge_base_id
        LEFT JOIN product_versions pv ON pv.id = kc.product_version_id
@@ -44,12 +45,15 @@ export async function gateForVector(vec: number[], productId: string | null): Pr
   const lowConfidence = !top || top.confidence < CONFIDENCE_THRESHOLD;
   const untrusted = !top || top.validation_status !== 'validated';
   const timeStale = ageDays == null || ageDays > MAX_VERIFY_AGE_DAYS;
+  // Gap B (lifecycle): knowledge tied to a superseded (deprecated/retired) product version degrades.
+  const versionStale = !!top && top.product_version_status != null && top.product_version_status !== 'active';
   const irrelevant = !top || top.distance == null || top.distance > RELEVANCE_MAX_DISTANCE;
-  const gated = lowConfidence || untrusted || timeStale || irrelevant;
+  const gated = lowConfidence || untrusted || timeStale || versionStale || irrelevant;
   const reason = !top ? 'no knowledge'
     : lowConfidence ? `low confidence (${top.confidence})`
     : untrusted ? `not validated (${top.validation_status})`
     : timeStale ? `stale (verified ${ageDays ?? '?'}d ago)`
+    : versionStale ? `superseded product version (${top.product_version_status}) — show the current version`
     : irrelevant ? `not relevant (distance ${top.distance?.toFixed(3) ?? 'n/a'})`
     : 'ok';
   return { rows, top, gated, reason, ageDays };
