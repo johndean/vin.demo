@@ -31,7 +31,7 @@ class ClaudeProvider implements LlmProvider {
   async interpret(utterance: string): Promise<Interpretation> {
     const res = await this.client.messages.create({
       model: MODEL,
-      max_tokens: 1024,
+      max_tokens: 2048, // headroom so the JSON object (incl. reasoning) can't truncate
       system:
         'You are the interpreter for an autonomous solution consultant running a live product demo. ' +
         'Classify the stakeholder utterance and distill the underlying information need into a concise ' +
@@ -53,8 +53,20 @@ class ClaudeProvider implements LlmProvider {
         },
       },
     });
+    if (res.stop_reason === 'refusal') throw new Error('interpret: model refused the utterance');
     const block = res.content.find((b) => b.type === 'text');
-    return JSON.parse(block && 'text' in block ? block.text : '{}');
+    if (!block || !('text' in block)) throw new Error(`interpret: no text block (stop_reason=${res.stop_reason})`);
+    let parsed: Partial<Interpretation>;
+    try {
+      parsed = JSON.parse(block.text);
+    } catch {
+      throw new Error(`interpret: structured output was not valid JSON: ${block.text.slice(0, 200)}`);
+    }
+    const kinds: UtteranceKind[] = ['question', 'clarification', 'objection', 'curiosity', 'business_objective'];
+    if (typeof parsed.intent !== 'string' || !parsed.kind || !kinds.includes(parsed.kind)) {
+      throw new Error(`interpret: invalid interpretation: ${JSON.stringify(parsed)}`);
+    }
+    return { intent: parsed.intent, kind: parsed.kind, reasoning: parsed.reasoning ?? '' };
   }
 }
 

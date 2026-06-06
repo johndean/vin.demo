@@ -9,10 +9,13 @@ import { getEmbeddingProvider } from './embeddings.js';
 import { db, toVector } from './db.js';
 
 const CONFIDENCE_THRESHOLD = 0.6;   // trust: chunk's own validated confidence
-const RELEVANCE_MAX_DISTANCE = 0.65; // relevance: cosine distance of the best match
-// Both gates matter: a high-confidence chunk that's semantically far from the
-// question is the wrong answer, and answering it would be "confidently demoing
-// the wrong thing". Gate on either failing.
+// Relevance: cosine distance of the best match. Empirically calibrated to live
+// voyage-3 data (in-scope ~0.42–0.47, off-topic ~0.77+). Recalibrate against a
+// labeled set as the KB grows; do NOT lower below the measured in-scope band.
+const RELEVANCE_MAX_DISTANCE = 0.65;
+const MAX_VERIFY_AGE_DAYS = 180;    // time-staleness: knowledge rots even when labeled "validated"
+// All four gates matter — answering past any of them is "confidently demoing the
+// wrong / stale / unvalidated thing", which the trust model exists to prevent.
 
 /** interpret — utterance → intent + kind (intent-driven, never script-driven). */
 async function interpret(state: DemoStateT): Promise<Partial<DemoStateT>> {
@@ -29,11 +32,13 @@ async function retrieve(state: DemoStateT): Promise<Partial<DemoStateT>> {
   const query = state.interpretation?.intent ?? state.utterance;
   const [vec] = await getEmbeddingProvider().embed([query]);
   const params: unknown[] = [toVector(vec)];
-  let where = '';
+  // Exclude un-embedded chunks so a NULL distance can never become the top row.
+  const conds = ['kc.embedding IS NOT NULL'];
   if (state.productId) {
     params.push(state.productId);
-    where = `WHERE kb.product_id = $${params.length}`;
+    conds.push(`kb.product_id = $${params.length}`);
   }
+  const where = 'WHERE ' + conds.join(' AND ');
   const { rows } = await db().query<RetrievedChunk>(
     `SELECT kc.content, kc.category, kc.confidence, kc.source,
             kc.last_verified::text AS last_verified, kc.validation_status,
@@ -48,17 +53,29 @@ async function retrieve(state: DemoStateT): Promise<Partial<DemoStateT>> {
     params,
   );
   const top = rows[0];
+  const ageDays =
+    top?.last_verified != null ? Math.floor((Date.now() - Date.parse(top.last_verified)) / 86_400_000) : null;
   const lowConfidence = !top || top.confidence < CONFIDENCE_THRESHOLD;
-  const stale = top?.validation_status === 'stale';
-  const irrelevant = !top || top.distance > RELEVANCE_MAX_DISTANCE;
-  const gated = lowConfidence || stale || irrelevant;
-  const reason = !top ? 'no knowledge' : lowConfidence ? 'low confidence' : stale ? 'stale' : irrelevant ? 'not relevant' : 'ok';
+  // Untrusted = anything not explicitly validated (covers both 'unverified' default and 'stale').
+  const untrusted = !top || top.validation_status !== 'validated';
+  // Time-stale even if labeled validated, or never time-stamped.
+  const timeStale = ageDays == null || ageDays > MAX_VERIFY_AGE_DAYS;
+  // Irrelevant, or a NULL distance slipping through.
+  const irrelevant = !top || top.distance == null || top.distance > RELEVANCE_MAX_DISTANCE;
+  const gated = lowConfidence || untrusted || timeStale || irrelevant;
+  const reason = !top
+    ? 'no knowledge'
+    : lowConfidence ? `low confidence (${top.confidence})`
+    : untrusted ? `not validated (${top.validation_status})`
+    : timeStale ? `stale (verified ${ageDays ?? '?'}d ago)`
+    : irrelevant ? `not relevant (distance ${top.distance?.toFixed(3) ?? 'n/a'})`
+    : 'ok';
   return {
     retrieved: rows,
     gated,
     trace: [
       `retrieve: ${rows.length} chunks; top confidence=${top?.confidence ?? 'n/a'} ` +
-        `status=${top?.validation_status ?? 'n/a'} distance=${top?.distance?.toFixed(3) ?? 'n/a'} ` +
+        `status=${top?.validation_status ?? 'n/a'} age=${ageDays ?? 'n/a'}d distance=${top?.distance?.toFixed(3) ?? 'n/a'} ` +
         `→ ${gated ? `GATED (${reason}) — say "I'm not certain"` : 'answer'}`,
     ],
   };

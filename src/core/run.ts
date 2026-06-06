@@ -13,7 +13,8 @@ if (out.gated) {
   console.log("VIN Demo: I'm not certain about that — let me show you the source rather than guess.");
 } else {
   const top = out.retrieved[0];
-  console.log(`Top knowledge (${top.category}, distance ${top.distance.toFixed(3)}):`);
+  const dist = top.distance == null ? 'n/a' : top.distance.toFixed(3);
+  console.log(`Top knowledge (${top.category}, distance ${dist}):`);
   console.log(`  ${top.content}`);
   console.log(`  ↳ source: ${top.source} · confidence: ${top.confidence} · version: ${top.product_version} · ${top.validation_status}`);
 }

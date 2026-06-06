@@ -5,7 +5,9 @@
 ## Status
 - [x] Entity model schema (`db/migrations/0001_entity_model.sql`) — spine + trust metadata.
 - [x] **Increment 1 code** (`src/core/`): pluggable embedding provider (Voyage default; Gemini/Vertex registered swaps), pg DB layer, LangGraph loop with **interpret → retrieve** nodes (confidence/staleness gate), idempotent PO.vin seed, migration runner. Type-clean. Scripts: `npm run migrate | seed | loop`.
-- [ ] Increment 1 **live eval** — pending `DATABASE_URL` (Railway) + `VOYAGE_API_KEY`: apply migration, seed PO.vin, run `npm run loop`.
+- [x] Increment 1 **live** on Railway/pgvector + Voyage (`npm run migrate | seed | loop`): in-scope answers cited, off-topic/stale/unvalidated/irrelevant all gate.
+- [x] **Adversarial review applied** (13 confirmed findings): 4-gate trust check (confidence · validation-status · time-staleness · relevance + null-distance), robust LLM structured-output parsing (refusal/empty/malformed), embedding dim guard, transactional+idempotent migration runner with `schema_migrations`, ivfflat dropped for exact scan, UNIQUE indexes (`0002`).
+  - **Deferred (tracked, not bugs blocking):** (a) finding [4] strict-TLS-with-CA for the Railway Postgres proxy — using `rejectUnauthorized:false` for the demo DB; revisit before any non-demo data lands. (b) finding [9] tighten relevance threshold to ~0.35 — **rejected**: measured in-scope distances are 0.38–0.47, so 0.35 would gate real in-scope questions; keeping the empirically-calibrated 0.65, recalibrate with a labeled set as the KB grows.
 - [ ] Increment 2 — navigate node (DemoGraph-driven self-heal + action classifier).
 - [ ] Increment 3 — explain + recover/interrupt; tracing + cost events.
 

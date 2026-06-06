@@ -9,21 +9,21 @@ CREATE EXTENSION IF NOT EXISTS vector;     -- pgvector (default retrieval; Pinec
 CREATE EXTENSION IF NOT EXISTS pgcrypto;   -- gen_random_uuid()
 
 -- ── Tenancy spine ────────────────────────────────────────────────────────────
-CREATE TABLE organizations (              -- the vendor running demos (your customer)
+CREATE TABLE IF NOT EXISTS organizations (              -- the vendor running demos (your customer)
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name        text NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now()
   -- DEFERRED: billing/metering hangs here (Gap A) — trigger: pricing validated + first paying customer
 );
 
-CREATE TABLE workspaces (
+CREATE TABLE IF NOT EXISTS workspaces (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   org_id      uuid NOT NULL REFERENCES organizations(id) ON DELETE CASCADE,
   name        text NOT NULL,
   created_at  timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id  uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   email         text NOT NULL,
@@ -33,14 +33,14 @@ CREATE TABLE users (
 );
 
 -- ── Product & knowledge ──────────────────────────────────────────────────────
-CREATE TABLE products (                    -- a product VIN Demo can demonstrate (e.g. PO.vin)
+CREATE TABLE IF NOT EXISTS products (                    -- a product VIN Demo can demonstrate (e.g. PO.vin)
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id  uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   name          text NOT NULL,
   created_at    timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE product_versions (            -- Gap B: present as a field; lifecycle ENGINE deferred
+CREATE TABLE IF NOT EXISTS product_versions (            -- Gap B: present as a field; lifecycle ENGINE deferred
   id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id     uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   version_label  text NOT NULL,            -- e.g. "v2 · Flowint SSOT"
@@ -50,7 +50,7 @@ CREATE TABLE product_versions (            -- Gap B: present as a field; lifecyc
   UNIQUE (product_id, version_label)
 );
 
-CREATE TABLE knowledge_bases (
+CREATE TABLE IF NOT EXISTS knowledge_bases (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id  uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   name        text NOT NULL
@@ -58,7 +58,7 @@ CREATE TABLE knowledge_bases (
 
 -- Gap C (trust metadata) + Gap D (typed categories incl. competitor_positioning),
 -- baked in from day one — cheap field-level seam, brutal to retrofit.
-CREATE TABLE knowledge_chunks (
+CREATE TABLE IF NOT EXISTS knowledge_chunks (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   knowledge_base_id   uuid NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
   product_version_id  uuid REFERENCES product_versions(id) ON DELETE SET NULL,
@@ -73,18 +73,18 @@ CREATE TABLE knowledge_chunks (
   validation_status   text NOT NULL DEFAULT 'unverified', -- validated|unverified|stale
   created_at          timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX knowledge_chunks_kb_idx ON knowledge_chunks (knowledge_base_id);
--- ANN index (cosine). Tune lists/ef per data size; placeholder for Phase 1.
-CREATE INDEX knowledge_chunks_embedding_idx ON knowledge_chunks
-  USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+CREATE INDEX IF NOT EXISTS knowledge_chunks_kb_idx ON knowledge_chunks (knowledge_base_id);
+-- No ANN index at Phase 1 scale: exact (sequential) cosine scan over a handful
+-- of chunks is correct and fast, and avoids ivfflat's empty-cell failure mode on
+-- a near-empty table. Add HNSW (no list/probe tuning) once the KB grows.
 
 -- DemoGraph: intent-targets the navigator heals to (Phase 0 finding #4).
-CREATE TABLE demo_graphs (
+CREATE TABLE IF NOT EXISTS demo_graphs (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id  uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   name        text NOT NULL
 );
-CREATE TABLE demo_graph_nodes (
+CREATE TABLE IF NOT EXISTS demo_graph_nodes (
   id                 uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   demo_graph_id      uuid NOT NULL REFERENCES demo_graphs(id) ON DELETE CASCADE,
   intent_label       text NOT NULL,        -- e.g. "approvals queue"
@@ -94,7 +94,7 @@ CREATE TABLE demo_graph_nodes (
 );
 
 -- Gap H: demo environment is a modeled entity; default routing is NEVER production.
-CREATE TABLE environments (
+CREATE TABLE IF NOT EXISTS environments (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   product_id       uuid NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   name             text NOT NULL,
@@ -106,7 +106,7 @@ CREATE TABLE environments (
   created_at       timestamptz NOT NULL DEFAULT now()
 );
 
-CREATE TABLE personas (                     -- delegated specialist definitions
+CREATE TABLE IF NOT EXISTS personas (                     -- delegated specialist definitions
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id  uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   name          text NOT NULL,
@@ -114,14 +114,14 @@ CREATE TABLE personas (                     -- delegated specialist definitions
 );
 
 -- ── Customer → demo session → stakeholders ───────────────────────────────────
-CREATE TABLE customers (                    -- the prospect being demoed to
+CREATE TABLE IF NOT EXISTS customers (                    -- the prospect being demoed to
   id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id  uuid NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   name          text NOT NULL
 );
 
 -- Gap G: execution mode is a first-class, default-deny control on the session.
-CREATE TABLE demo_sessions (
+CREATE TABLE IF NOT EXISTS demo_sessions (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   customer_id         uuid NOT NULL REFERENCES customers(id) ON DELETE CASCADE,
   product_version_id  uuid REFERENCES product_versions(id) ON DELETE SET NULL,
@@ -134,7 +134,7 @@ CREATE TABLE demo_sessions (
 );
 
 -- Gap F: stakeholders are a COLLECTION, not a singular — per-stakeholder tracking.
-CREATE TABLE stakeholders (
+CREATE TABLE IF NOT EXISTS stakeholders (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   demo_session_id  uuid NOT NULL REFERENCES demo_sessions(id) ON DELETE CASCADE,
   name             text,
@@ -145,7 +145,7 @@ CREATE TABLE stakeholders (
 );
 
 -- Gap E: discovery FIELDS now (pain-point/buying-signal); active behavior deferred to P2.
-CREATE TABLE session_discovery (
+CREATE TABLE IF NOT EXISTS session_discovery (
   demo_session_id  uuid PRIMARY KEY REFERENCES demo_sessions(id) ON DELETE CASCADE,
   pain_points      jsonb NOT NULL DEFAULT '[]',
   buying_signals   jsonb NOT NULL DEFAULT '[]',
@@ -153,7 +153,7 @@ CREATE TABLE session_discovery (
 );
 
 -- Gap J: per-demo cost events tagged to the session, queryable from day one.
-CREATE TABLE cost_events (
+CREATE TABLE IF NOT EXISTS cost_events (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   demo_session_id  uuid NOT NULL REFERENCES demo_sessions(id) ON DELETE CASCADE,
   type             text NOT NULL,           -- llm|embeddings|storage|compute|navigation
@@ -162,4 +162,4 @@ CREATE TABLE cost_events (
   meta             jsonb NOT NULL DEFAULT '{}',
   occurred_at      timestamptz NOT NULL DEFAULT now()
 );
-CREATE INDEX cost_events_session_idx ON cost_events (demo_session_id);
+CREATE INDEX IF NOT EXISTS cost_events_session_idx ON cost_events (demo_session_id);

@@ -25,7 +25,13 @@ class VoyageProvider implements EmbeddingProvider {
     for (let attempt = 0; ; attempt++) {
       try {
         const res = await this.client.embed({ input: texts, model: 'voyage-3' });
-        return (res.data ?? []).map((d) => d.embedding as number[]);
+        const vecs = (res.data ?? []).map((d) => d.embedding as number[]);
+        for (const v of vecs) {
+          if (v.length !== this.dim) {
+            throw new Error(`Embedding dim mismatch: provider returned ${v.length}, schema column is ${this.dim}. Run a dim migration before switching providers.`);
+          }
+        }
+        return vecs;
       } catch (e: any) {
         if (e?.statusCode === 429 && attempt < delays.length) {
           console.error(`  (Voyage rate-limited; retrying in ${delays[attempt] / 1000}s — add a payment method to lift the 3 RPM free limit)`);
