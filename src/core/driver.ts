@@ -45,6 +45,7 @@ export interface ProductWebConfig {
   submitSelector: string;
   loginSuccessUrlIncludes?: string;  // success when the URL contains this (SPA dashboards)
   loginSuccessSelector?: string;     // …or when this element renders
+  postLoginPath?: string;            // after auth, navigate here (when the auth-redirect target is a blank shell — e.g. ce.vin)
   recordRowSelector?: string;        // omit → screen-level product (no "open a record" step)
   recordRowFilterText?: RegExp;
   recordReadySelector?: string;
@@ -85,6 +86,11 @@ export class WebAdapter implements InteractionAdapter {
       await this.page.locator(this.cfg.submitSelector).first().click();
       await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
       await this.page.waitForTimeout(2500);
+      if (this.cfg.postLoginPath) {
+        // Auth succeeded but its redirect target is a blank shell — go to the real app home.
+        await this.page.goto(this.cfg.baseUrl + this.cfg.postLoginPath, { waitUntil: 'networkidle', timeout: 15000 }).catch(() => {});
+        await this.page.waitForTimeout(1500);
+      }
       if (this.cfg.loginSuccessUrlIncludes) return this.page.url().includes(this.cfg.loginSuccessUrlIncludes);
       if (/\/login\b/.test(this.page.url())) return false;
       if (this.cfg.loginSuccessSelector) {
@@ -223,6 +229,17 @@ const CONFIGS: Record<string, ProductWebConfig> = {
     submitSelector: 'button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")',
     loginSuccessUrlIncludes: '#/dashboard',
     // screen-level: the pipeline walkthrough proves read-only at the dashboard/sessions screens
+  },
+  'ce.vin': {
+    baseUrl: process.env.CE_VIN_URL ?? 'https://ce.vin',
+    credsEnvPrefix: 'CE_VIN',
+    loginPath: '/sign-in',
+    emailSelector: '#login-email, input[type="email"]',
+    passwordSelector: '#login-pw, input[type="password"]',
+    submitSelector: 'button:has-text("Authenticate"), button[type="submit"]',
+    postLoginPath: '/#/dashboard', // /sign-in redirect target is a blank Vue shell; the app is here
+    loginSuccessUrlIncludes: '#/dashboard',
+    // screen-level: the course-review walkthrough proves read-only at the needs-review/sessions screens
   },
 };
 

@@ -12,6 +12,7 @@
     "seed": "tsx src/core/seed.ts",
     "seed:expense": "tsx src/core/seed-expense.ts",
     "seed:rounds": "tsx src/core/seed-rounds.ts",
+    "seed:ce": "tsx src/core/seed-ce.ts",
     "loop": "tsx src/core/run.ts",
     "convo": "tsx src/core/convo.ts",
     "eval:phase1": "tsx src/core/eval-phase1.ts",
