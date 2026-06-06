@@ -65,6 +65,10 @@ export interface InteractionAdapter {
   scanActions(): Promise<ActionScan[]>;
   /** Step through a multi-step wizard in `safe` mode, never firing a commit (P3.4c). */
   walkthrough?(maxSteps: number): Promise<WalkthroughResult>;
+  /** Render an on-screen caption of what VIN Demo says (SHOW_DEMO watch mode only). */
+  narrate?(text: string, meta?: string): Promise<void>;
+  /** Capture a still of the current screen (watch mode artifact). */
+  screenshot?(file: string, fullPage?: boolean): Promise<void>;
   close(): Promise<void>;
 }
 
@@ -83,8 +87,14 @@ export class WebAdapter implements InteractionAdapter {
 
   async open(role: string): Promise<void> {
     const { user, pass } = creds(this.cfg.credsEnvPrefix, role);
-    this.browser = await chromium.launch({ headless: true });
-    const ctx = await this.browser.newContext({ viewport: { width: 1440, height: 900 } });
+    // SHOW_DEMO opens a VISIBLE browser the founder can watch (slowMo paces each step so it's
+    // followable). RECORD_DEMO saves a replayable MP4. Both default OFF → headless (evals unaffected).
+    const show = !!process.env.SHOW_DEMO;
+    this.browser = await chromium.launch({ headless: !show, slowMo: show ? Number(process.env.DEMO_SLOWMO ?? 500) : 0 });
+    const ctx = await this.browser.newContext({
+      viewport: { width: 1440, height: 900 },
+      ...(process.env.RECORD_DEMO ? { recordVideo: { dir: 'tmp/demo-videos', size: { width: 1440, height: 900 } } } : {}),
+    });
     this.page = await ctx.newPage();
     if (this.cfg.noAuth) {
       // Public surface (e.g. a no-login embed widget) — just land on it; no credentials.
@@ -250,11 +260,34 @@ export class WebAdapter implements InteractionAdapter {
     return { steps, stopped: `walked ${maxSteps} steps (cap)`, committed: false };
   }
 
-  async screenshot(file: string): Promise<void> {
-    await this.page.screenshot({ path: file, fullPage: true }).catch(() => {});
+  async screenshot(file: string, fullPage = true): Promise<void> {
+    await this.page.screenshot({ path: file, fullPage }).catch(() => {});
   }
   async close(): Promise<void> {
+    // In live-watch mode (SHOW_DEMO without RECORD_DEMO), leave the window open so the founder
+    // can look around — the runner waits for Enter, then process exit tears it down. When
+    // RECORD_DEMO is set we DO close, so Playwright flushes the video to disk.
+    if (process.env.SHOW_DEMO && !process.env.RECORD_DEMO) return;
     await this.browser?.close();
+  }
+
+  /** Render what VIN Demo "says" as an on-screen caption over the real product (SHOW_DEMO only),
+   *  so the watched window is a self-contained demo — product + consultant + trust metadata — not
+   *  a silently-driven browser. No-op headless. */
+  async narrate(text: string, meta = ''): Promise<void> {
+    if (!process.env.SHOW_DEMO || !this.page) return;
+    const esc = (s: string) => s.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c] as string));
+    const body = esc(text), sub = esc(meta);
+    await this.page.evaluate(({ body, sub }) => {
+      let bar = document.getElementById('vin-demo-narration');
+      if (!bar) {
+        bar = document.createElement('div');
+        bar.id = 'vin-demo-narration';
+        bar.setAttribute('style', 'position:fixed;left:0;right:0;bottom:0;z-index:2147483647;background:rgba(10,12,20,.93);color:#fff;font:15px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;padding:14px 22px;border-top:3px solid #4f8cff;box-shadow:0 -6px 28px rgba(0,0,0,.45)');
+        document.body.appendChild(bar);
+      }
+      bar.innerHTML = '<div style="font-weight:700;color:#7fb0ff;letter-spacing:.04em;margin-bottom:3px">VIN&nbsp;DEMO</div><div>' + body + '</div>' + (sub ? '<div style="opacity:.62;font-size:12px;margin-top:5px">' + sub + '</div>' : '');
+    }, { body, sub }).catch(() => {});
   }
 }
 

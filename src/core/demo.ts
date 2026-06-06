@@ -53,4 +53,11 @@ for (const text of turns) {
 
 const c = await sessionCost(session.id);
 console.log(`\nDemo cost (${turns.length} turn${turns.length > 1 ? 's' : ''}): $${c.totalUsd.toFixed(6)} · ${c.totalTokens} tokens`);
+
+// Watch mode: the browser window is left open (see WebAdapter.close) so you can look around the
+// real product. Hold the process here until you press Enter, then exit (which closes the window).
+if (process.env.SHOW_DEMO && !process.env.RECORD_DEMO) {
+  console.log('\n▸ Browser window left open so you can look around. Press Enter here to close it.');
+  await new Promise<void>((resolve) => { process.stdin.resume(); process.stdin.once('data', () => resolve()); });
+}
 process.exit(0);

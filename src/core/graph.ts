@@ -95,6 +95,18 @@ async function driveTo(state: DemoStateT, intent: string): Promise<DriveOutcome>
     const scan = opened ? await driver.scanActions() : [];
     const confirmed = scan.filter((s) => s.cls === 'mutating' && s.confident && !s.permitted).map((s) => s.label);
     const defensive = scan.filter((s) => s.cls === 'mutating' && !s.confident && !s.permitted).length;
+    // Watch mode: caption the real screen with what VIN Demo says + its trust metadata + the
+    // read-only safety result, so a human watching sees a demo, not a silently-driven browser.
+    if (nav.ok) {
+      const top = state.retrieved?.[0];
+      const said = top?.content ?? `Here's the ${node.intent_label} screen.`;
+      const meta = [
+        top && `source: ${top.source} · confidence ${top.confidence} · ${top.product_version ?? ''} · ${top.validation_status ?? ''}`,
+        `mode: ${state.mode} — ${confirmed.length ? `blocked ${confirmed.join(', ')}` : 'no mutating action fired'}`,
+      ].filter(Boolean).join('     |     ');
+      await driver.narrate?.(said, meta).catch(() => {});
+      await driver.screenshot?.(`tmp/demo-shots/${node.intent_label.replace(/\W+/g, '-')}.png`, false).catch(() => {});
+    }
     return {
       navigation: nav,
       blockedMutations: confirmed,
