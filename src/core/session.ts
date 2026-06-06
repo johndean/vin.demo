@@ -18,17 +18,14 @@ export async function createDemoSession(productId: string, mode: ExecutionMode):
   const workspaceId = ws.rows[0]?.workspace_id;
   if (!workspaceId) throw new Error(`No product ${productId}`);
 
-  // Demo prospect (idempotent via the UNIQUE index from migration 0002).
+  // Demo prospect — atomic get-or-create, backed by the UNIQUE (workspace_id, name)
+  // index from migration 0003 (which the prior ON CONFLICT silently lacked).
   const cust = await db().query<{ id: string }>(
     `INSERT INTO customers (workspace_id, name) VALUES ($1, 'Demo Prospect')
-       ON CONFLICT (workspace_id, name) DO UPDATE SET name = EXCLUDED.name RETURNING id`,
+       ON CONFLICT (workspace_id, name) DO UPDATE SET name = EXCLUDED.name
+     RETURNING id`,
     [workspaceId],
-  ).catch(async () => {
-    // customers has no UNIQUE in 0002; fall back to select-or-insert.
-    const found = await db().query<{ id: string }>('SELECT id FROM customers WHERE workspace_id=$1 AND name=$2', [workspaceId, 'Demo Prospect']);
-    if (found.rows[0]) return found;
-    return db().query<{ id: string }>('INSERT INTO customers (workspace_id, name) VALUES ($1, $2) RETURNING id', [workspaceId, 'Demo Prospect']);
-  });
+  );
   const customerId = cust.rows[0].id;
 
   const ver = await db().query<{ id: string }>(

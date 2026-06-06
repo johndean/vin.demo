@@ -148,8 +148,12 @@ class ClaudeProvider implements LlmProvider {
       ],
     });
     await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'explain' });
+    // Guard like interpret(): never let a refusal / empty response pass through as a
+    // confident-sounding justification. Be honest instead of inventing one.
+    if (res.stop_reason === 'refusal') return "I'd rather not guess at a justification — I can show you the source again instead.";
     const b = res.content.find((x) => x.type === 'text');
-    return b && 'text' in b ? b.text : '(unable to explain)';
+    const text = b && 'text' in b ? b.text.trim() : '';
+    return text || "I can't reconstruct why from the trace — let me show you the source again instead.";
   }
 }
 

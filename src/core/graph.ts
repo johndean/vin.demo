@@ -25,10 +25,16 @@ const MAX_VERIFY_AGE_DAYS = 180;
 // ── interpret ────────────────────────────────────────────────────────────────
 async function interpret(state: DemoStateT): Promise<Partial<DemoStateT>> {
   const i = await getLlm().interpret(state.utterance);
+  // Reset per-turn outputs so a turn that doesn't navigate (explain / gated / resume)
+  // can't surface the PRIOR turn's screen, blocked actions, chunks, or "why". The
+  // breadcrumb (currentPosition / contextStack) deliberately persists across turns.
   return {
     interpretation: i,
-    explanation: null, // reset per-turn so a prior "why" doesn't bleed into later turns
+    explanation: null,
     gated: false,
+    navigation: null,
+    blockedMutations: [],
+    retrieved: [],
     trace: [`interpret: kind=${i.kind}${i.isMetaExplain ? ' [meta-explain]' : ''}${i.isResume ? ' [resume]' : ''} intent="${i.intent}"`],
   };
 }
