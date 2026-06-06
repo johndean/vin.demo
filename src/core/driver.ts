@@ -214,6 +214,16 @@ const CONFIGS: Record<string, ProductWebConfig> = {
     loginSuccessUrlIncludes: '/#/dashboard',
     // screen-level: no record to open (the demo proves read-only at the queue screen)
   },
+  'rounds.vin': {
+    baseUrl: process.env.ROUNDS_VIN_URL ?? 'https://rounds.vin',
+    credsEnvPrefix: 'ROUNDS_VIN',
+    loginPath: '/signin',
+    emailSelector: 'input[type="email"], input[name="email"], input[name="username"], input[type="text"]',
+    passwordSelector: 'input[type="password"], #password',
+    submitSelector: 'button[type="submit"], button:has-text("Sign in"), button:has-text("Log in")',
+    loginSuccessUrlIncludes: '#/dashboard',
+    // screen-level: the pipeline walkthrough proves read-only at the dashboard/sessions screens
+  },
 };
 
 export function getAdapter(productName: string, mode: ExecutionMode): InteractionAdapter {
