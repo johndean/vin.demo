@@ -1,65 +1,81 @@
 /**
- * Agent safety model (Gap G) — element/intent-aware action classification +
- * default-deny execution-mode policy. Upgrades the Phase 0 spike's text-only
- * regex guard: classification uses the element's tag/type/role/class/context,
- * not just its label, so navigation ("Bypassed", a sidebar item) is correctly
- * read while an action ("Delegate to teammate") is correctly mutating.
+ * Agent safety model (Gap G) — FAIL-CLOSED action classification + default-deny
+ * execution-mode policy. The product's hardest guarantee is "never fire a
+ * mutating action in a demo", so the classifier defaults UNKNOWN interactive
+ * elements to `mutating` (blocked) and grants `read`/`non_destructive` only on
+ * positive evidence. Classification considers all accessible-name sources, the
+ * href, the element role/container — not just visible text.
+ *
+ * (Replaces the earlier allowlist that failed OPEN; see increment-2 review.)
  */
 export type ExecutionMode = 'read-only' | 'safe' | 'approval' | 'execution';
 export type ActionClass = 'read' | 'non_destructive' | 'mutating';
 
-/** What we can observe about a candidate element before deciding to click it. */
 export interface ActionCandidate {
-  tag: string;            // 'a' | 'button' | ...
-  type?: string | null;   // input/button type, e.g. 'submit'
+  tag: string;            // 'a' | 'button' | 'tr' | 'input' | ...
+  type?: string | null;
   role?: string | null;
   ariaLabel?: string | null;
+  title?: string | null;
   text?: string | null;
   href?: string | null;
   className?: string | null;
-  inNav?: boolean;        // inside a <nav>/sidebar container
+  inNav?: boolean;
 }
 
-const MUTATING = /\b(submit|approve|reject|deny|delete|remove|pay|save|create|send|post|confirm|issue|cancel|void|archive|delegate|escalate|hold|reassign|override)\b/i;
-const NON_DESTRUCTIVE = /\b(filter|search|sort|expand|collapse|show|view|toggle|tab|refresh|details|open)\b/i;
-const HELP = /^\s*(how|why|what|where|when|can i)\b|\?\s*$/i;
+// State-changing verbs/stems — broad, inflection-tolerant, NOT strictly \b-anchored.
+const MUTATING =
+  /(submit|approv|reject|den(y|ied|ies)|delet|remov|\bpay\b|paid|saved?|saving|creat|\bsend\b|\bsent\b|\bpost\b|confirm|cancel|void|archiv|delegat|escalat|\bhold\b|reassign|overrid|authoriz|sign[\s_-]?off|finaliz|releas|publish|\bfund|disburse|trigger|activat|deactivat|suspend|terminat|refund|transfer|allocat|dispatch|\brun\b|execut|commit|push\b)/i;
+// Dangerous GET endpoints (a link is not proof of safety — GET can mutate).
+const HREF_DANGER =
+  /\/(approve|delete|remove|authoriz|release|pay|submit|cancel|reject|delegate|post|save|create|confirm|issue|void|archive|hold|escalate|reassign|override|sign|finaliz|publish|fund|execute|run|trigger|activate|deactivate|suspend|terminate|refund|transfer)(s|d|ing)?\b|[?&]action=/i;
+// Positive READ signals.
+const READ_VERB = /\b(view|opens?|details?|back|home|dashboard|overview|preview|read|expand|collapse|show|list)\b/i;
+const NAV_LABEL = /(queue|registry|vendors?|reports?|dashboard|inventory|assets?|locations?|home|overview|workflow map|bypassed)$/i;
+const NON_DESTRUCTIVE = /\b(filter|search|sort|tab|refresh|toggle)\b/i;
+const HELP_LEADING = /^\s*(how|why|what|where|when|can i)\b/i;
+const AUTH_NAV = /\b(sign[\s_-]?out|log[\s_-]?out|logout|sign[\s_-]?in)\b/i;
 
 export interface Classification {
   cls: ActionClass;
   reason: string;
+  /** true = positive evidence for this class; false = fail-closed default (unknown,
+   *  blocked for safety but NOT a confirmed mutation — don't report it as one). */
+  confident: boolean;
 }
 
-/** Classify a candidate action by its element semantics, not just its label. */
+/** All accessible-name sources, so an aria-label can't hide a dangerous control. */
+function names(el: ActionCandidate): string[] {
+  return [el.text, el.ariaLabel, el.title].map((s) => (s || '').trim()).filter(Boolean);
+}
+
 export function classifyAction(el: ActionCandidate): Classification {
-  const label = (el.text || el.ariaLabel || '').trim();
+  const ns = names(el);
+  const joined = ns.join(' • ');
 
-  // Help-panel questions are not actions.
-  if (HELP.test(label)) return { cls: 'read', reason: 'help/question text' };
+  // 1) DANGEROUS first — any name source OR the href. Mutation always wins.
+  if (ns.some((n) => MUTATING.test(n))) return { cls: 'mutating', reason: `mutating verb in "${joined}"`, confident: true };
+  if (el.href && HREF_DANGER.test(el.href)) return { cls: 'mutating', reason: `mutating href "${el.href}"`, confident: true };
 
-  // True navigation: anchors with a route, sidebar/nav items, link/menuitem roles.
-  const isNav =
-    (el.tag === 'a' && !!el.href) ||
-    el.role === 'link' ||
-    el.role === 'menuitem' ||
-    el.inNav === true ||
-    /sidebar|nav-|menu-item/i.test(el.className || '');
-  if (isNav && !MUTATING.test(label)) return { cls: 'read', reason: 'navigation element' };
+  // 2) Positive READ evidence (only reached once we know nothing dangerous matched).
+  const safeRoute = !!el.href && (el.href.startsWith('/') || el.href.startsWith('#')) && !HREF_DANGER.test(el.href);
+  const navContainer = el.inNav === true || el.role === 'link' || el.role === 'menuitem' || el.role === 'tab' || el.tag === 'tr' || el.role === 'row';
+  if (navContainer) return { cls: 'read', reason: 'navigation container/role', confident: true };
+  if (safeRoute) return { cls: 'read', reason: `safe route "${el.href}"`, confident: true };
+  if (AUTH_NAV.test(joined)) return { cls: 'read', reason: 'auth navigation', confident: true };
+  if (READ_VERB.test(joined) || NAV_LABEL.test(joined)) return { cls: 'read', reason: `read/nav label "${joined}"`, confident: true };
+  if (HELP_LEADING.test(joined)) return { cls: 'read', reason: 'leading-interrogative help text', confident: true };
 
-  // Mutating: a form submit, or an action label containing a state-changing verb.
-  if (el.type === 'submit' && MUTATING.test(label)) return { cls: 'mutating', reason: `submit + verb "${label}"` };
-  if (MUTATING.test(label)) return { cls: 'mutating', reason: `mutating verb in "${label}"` };
+  // 3) Known non-destructive interactive controls.
+  if (NON_DESTRUCTIVE.test(joined)) return { cls: 'non_destructive', reason: `non-destructive "${joined}"`, confident: true };
 
-  // Non-destructive interactive controls.
-  if (NON_DESTRUCTIVE.test(label)) return { cls: 'non_destructive', reason: `non-destructive control "${label}"` };
-
-  // A bare submit with no verb (e.g. a search box submit) is non-destructive.
-  if (el.type === 'submit') return { cls: 'non_destructive', reason: 'generic submit' };
-
-  // Default: an unrecognised button is treated as non-destructive (safe-side: it
-  // still won't fire in read-only mode); pure text/links default to read.
-  return el.tag === 'button'
-    ? { cls: 'non_destructive', reason: 'unclassified button' }
-    : { cls: 'read', reason: 'default read' };
+  // 4) FAIL CLOSED — unknown interactive element (incl. empty/icon-only) is blocked
+  //    for safety, but flagged NOT confident: it's a defensive hold, not a confirmed mutation.
+  return {
+    cls: 'mutating',
+    reason: ns.length ? `unrecognized control "${joined}" (fail-closed)` : 'no accessible name (fail-closed)',
+    confident: false,
+  };
 }
 
 export interface Permission {
@@ -68,7 +84,7 @@ export interface Permission {
   reason: string;
 }
 
-/** Default-deny policy: each mode permits its class and everything below it. */
+/** Default-deny policy: each mode permits its class and everything safer. */
 export function permits(cls: ActionClass, mode: ExecutionMode): Permission {
   const deny = (reason: string): Permission => ({ permitted: false, requiresApproval: false, reason });
   switch (mode) {

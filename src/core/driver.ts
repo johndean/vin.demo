@@ -32,6 +32,7 @@ export interface ActionScan {
   label: string;
   cls: ActionClass;
   permitted: boolean;
+  confident: boolean; // false = blocked by fail-closed default, not a confirmed mutation
   reason: string;
 }
 
@@ -62,7 +63,14 @@ export class PoVinDriver {
       await resp;
       await this.page.waitForLoadState('networkidle', { timeout: 15000 }).catch(() => {});
       await this.page.waitForTimeout(2500);
-      return !this.page.url().includes('/login');
+      if (this.page.url().includes('/login')) return false;
+      // Positive signal: the authenticated dashboard actually rendered.
+      return this.page
+        .locator('button:has-text("New Purchase Request")')
+        .first()
+        .waitFor({ state: 'visible', timeout: 8000 })
+        .then(() => true)
+        .catch(() => false);
     };
     if (!(await attempt()) && !(await attempt())) throw new Error(`PO.vin login failed for role ${role}`);
   }
@@ -79,16 +87,17 @@ export class PoVinDriver {
   /** Read the attributes the classifier needs via Playwright getters (no DOM
    *  eval — avoids the esbuild __name issue and string-expression ambiguity). */
   private async candidate(loc: Locator, tag = 'button') {
-    const [text, type, role, ariaLabel, href, className] = await Promise.all([
+    const [text, type, role, ariaLabel, title, href, className] = await Promise.all([
       loc.innerText().catch(() => ''),
       loc.getAttribute('type').catch(() => null),
       loc.getAttribute('role').catch(() => null),
       loc.getAttribute('aria-label').catch(() => null),
+      loc.getAttribute('title').catch(() => null),
       loc.getAttribute('href').catch(() => null),
       loc.getAttribute('class').catch(() => null),
     ]);
     const inNav = /sidebar|(^|[\s_-])nav([\s_-]|$)/i.test(className || '');
-    return { tag, type, role, ariaLabel, text: (text || '').trim().slice(0, 80), href, className, inNav };
+    return { tag, type, role, ariaLabel, title, text: (text || '').trim().slice(0, 80), href, className, inNav };
   }
 
   /** Navigate to a DemoGraph node, healing across its ordered locator strategies. */
@@ -100,8 +109,8 @@ export class PoVinDriver {
       const loc = this.build(s, label).first();
       if (!(await loc.count().catch(() => 0)) || !(await loc.isVisible().catch(() => false))) continue;
       // Enforce the execution mode even for navigation (it should classify as read).
-      const cand = await this.candidate(loc);
-      const { cls } = cand ? classifyAction(cand) : { cls: 'read' as ActionClass };
+      const isAnchor = !!(await loc.getAttribute('href').catch(() => null));
+      const { cls } = classifyAction(await this.candidate(loc, isAnchor ? 'a' : 'button'));
       const perm = permits(cls, this.mode);
       if (!perm.permitted) return { ok: false, healedVia: `BLOCKED (${cls})`, url: this.page.url() };
       await loc.click().catch(() => {});
@@ -109,8 +118,10 @@ export class PoVinDriver {
       await this.page.waitForTimeout(800);
       return { ok: true, healedVia: i === 0 ? null : `${s.how}:"${s.value}"`, url: this.page.url() };
     }
-    // Final recovery: direct route navigation.
+    // Final recovery: direct route navigation — still classify the route itself.
     if (node.screen_route) {
+      const { cls } = classifyAction({ tag: 'a', href: node.screen_route, text: node.intent_label });
+      if (!permits(cls, this.mode).permitted) return { ok: false, healedVia: `BLOCKED route (${cls})`, url: this.page.url() };
       await this.page.goto(URL + node.screen_route, { waitUntil: 'networkidle', timeout: 15000 }).catch(() => {});
       healedVia = `route:${node.screen_route}`;
       return { ok: this.page.url().includes(node.screen_route), healedVia, url: this.page.url() };
@@ -123,6 +134,9 @@ export class PoVinDriver {
     const row = this.page.locator('tbody tr').filter({ hasText: /PO-|REQ-|\$/ }).first();
     await row.waitFor({ state: 'visible', timeout: 15000 }).catch(() => {});
     if (!(await row.count().catch(() => 0))) return false;
+    // Opening a detail row is navigation (read); classify before clicking anyway.
+    const { cls } = classifyAction(await this.candidate(row, 'tr'));
+    if (!permits(cls, this.mode).permitted) return false;
     await row.click().catch(() => {});
     await this.page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
     await this.page.waitForTimeout(1200);
@@ -132,18 +146,23 @@ export class PoVinDriver {
     return this.page.url().includes('/po/');
   }
 
-  /** Classify every action-like button on the current page and apply the mode policy. */
+  /** Classify every action-like element on the page and apply the mode policy.
+   *  Scans buttons, links, submit/button inputs, and ARIA buttons/menuitems. */
   async scanActions(): Promise<ActionScan[]> {
-    const els = await this.page.locator('button').all();
+    const CAP = 250;
+    const els = await this.page
+      .locator('button, a[href], input[type="submit"], input[type="button"], [role="button"], [role="menuitem"]')
+      .all();
+    if (els.length > CAP) console.error(`  (scanActions: ${els.length} candidates, scanning first ${CAP})`);
     const out: ActionScan[] = [];
-    for (const el of els.slice(0, 60)) {
-      const cand = await this.candidate(el);
-      if (!cand) continue;
-      const label = (cand.text || cand.ariaLabel || '').trim();
-      if (!label) continue;
-      const { cls, reason } = classifyAction(cand);
+    for (const el of els.slice(0, CAP)) {
+      const isAnchor = !!(await el.getAttribute('href').catch(() => null));
+      const cand = await this.candidate(el, isAnchor ? 'a' : 'button');
+      const label = (cand.text || cand.ariaLabel || cand.title || '').trim();
+      if (!label && cand.tag !== 'a') continue; // skip truly empty non-links
+      const { cls, reason, confident } = classifyAction(cand);
       const perm = permits(cls, this.mode);
-      out.push({ label, cls, permitted: perm.permitted, reason });
+      out.push({ label: label || `[${cand.tag}]`, cls, permitted: perm.permitted, confident, reason });
     }
     return out;
   }

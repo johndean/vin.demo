@@ -102,17 +102,30 @@ async function navigate(state: DemoStateT): Promise<Partial<DemoStateT>> {
     const nav = await driver.gotoNode(node, state.role);
     const opened = nav.ok ? await driver.openFirstPo() : false;
     const scan = opened ? await driver.scanActions() : [];
-    const blockedMutations = scan.filter((s) => s.cls === 'mutating' && !s.permitted).map((s) => s.label);
+    // Confirmed mutations (matched a verb / dangerous href) are the headline;
+    // fail-closed "unknown" controls are held defensively but not claimed as mutations.
+    const confirmed = scan.filter((s) => s.cls === 'mutating' && s.confident && !s.permitted).map((s) => s.label);
+    const defensive = scan.filter((s) => s.cls === 'mutating' && !s.confident && !s.permitted).length;
     return {
       navigation: nav,
       actionScan: scan,
-      blockedMutations,
+      blockedMutations: confirmed,
       trace: [
         `navigate: "${node.intent_label}" as ${state.role} → ${nav.ok ? nav.url : 'FAILED'}` +
           (nav.healedVia ? ` [self-heal via ${nav.healedVia}]` : ' [primary ok]'),
         `navigate: mode=${state.mode}; PO ${opened ? 'opened' : 'not opened'}; ` +
-          `${blockedMutations.length} mutating action(s) blocked by classifier`,
+          (scan.length === 0
+            ? 'no action panel scanned'
+            : `blocked ${confirmed.length} confirmed mutating` +
+              (defensive ? ` (+${defensive} unknown controls held by default-deny)` : '') +
+              ` of ${scan.length} scanned`),
       ],
+    };
+  } catch (e: any) {
+    // Don't crash the whole loop — report an honest failed navigation.
+    return {
+      navigation: { ok: false, healedVia: null, url: '' },
+      trace: [`navigate: ERROR — ${e?.message ?? e}`],
     };
   } finally {
     await driver.close();

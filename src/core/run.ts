@@ -1,11 +1,17 @@
 /** Run the loop for a single utterance. Increment 1: interpret → retrieve.
  *  Usage: npm run loop -- "How does approval delegation work?" */
 import { buildGraph } from './graph.js';
+import type { ExecutionMode } from './safety.js';
 
 const utterance = process.argv.slice(2).join(' ') || 'How does approval delegation work?';
 
 const graph = buildGraph();
-const out = await graph.invoke({ utterance, productId: process.env.PO_VIN_PRODUCT_ID ?? null });
+const out = await graph.invoke({
+  utterance,
+  productId: process.env.PO_VIN_PRODUCT_ID ?? null,
+  role: process.env.PO_VIN_ROLE ?? 'admin',
+  mode: (process.env.PO_VIN_MODE as ExecutionMode) ?? 'read-only',
+});
 
 console.log(`\nStakeholder: "${utterance}"`);
 console.log(`Interpretation: kind=${out.interpretation?.kind} intent="${out.interpretation?.intent}"`);
@@ -22,8 +28,10 @@ if (out.navigation) {
   console.log(`\nNavigated (${out.mode}, as ${out.role}): ${out.navigation.ok ? out.navigation.url : 'FAILED'}` +
     (out.navigation.healedVia ? `  [self-heal: ${out.navigation.healedVia}]` : '  [primary selector ok]'));
   if (out.blockedMutations.length) {
-    console.log(`⛔ Read-only guard blocked ${out.blockedMutations.length} mutating action(s): ${out.blockedMutations.join(', ')}`);
+    console.log(`⛔ ${out.mode} guard blocked ${out.blockedMutations.length} mutating action(s): ${out.blockedMutations.join(', ')}`);
   }
+} else if (!out.gated) {
+  console.log('\nNavigation: skipped (no productId or DemoGraph node configured).');
 }
 console.log('\nTrace:');
 for (const t of out.trace) console.log(`  • ${t}`);
