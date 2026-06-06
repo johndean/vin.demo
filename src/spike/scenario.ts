@@ -4,13 +4,14 @@
  *   intent → cited answer (trust metadata + confidence gate) → navigate real UI
  *   → demonstrate (screenshot) → self-heal a broken selector → never mutate.
  *
- * The LLM seam (intent parsing + natural explanation) is stubbed deterministically
- * here; wire Claude once ANTHROPIC_API_KEY is set (see explain()).
+ * Intent parsing and explanation go through Claude (claude-opus-4-8) when
+ * ANTHROPIC_API_KEY is set, and fall back to deterministic behaviour otherwise.
  */
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { openSession } from './session.js';
 import { ReadOnlyGuard, SelfHealNavigator, type NavStep } from './navigator.js';
+import { parseIntent, narrate, hasLLM } from './llm.js';
 
 const OUT = path.resolve('tmp/demo');
 const CONFIDENCE_THRESHOLD = 0.6;
@@ -41,31 +42,21 @@ const KB: Record<string, Knowledge> = {
   },
 };
 
-function retrieve(intent: string): Knowledge | null {
-  return KB[intent] ?? null;
-}
-
-/** LLM seam. Deterministic template now; swap for a Claude call when keyed. */
-function explain(k: Knowledge): string {
-  return (
-    `${k.answer}\n` +
-    `   ↳ source: ${k.source} · confidence: ${k.confidence} · version: ${k.product_version} · ${k.validation_status}`
-  );
-}
-
 async function run() {
   await mkdir(OUT, { recursive: true });
   const question = 'How does approval delegation work?';
-  console.log(`\nStakeholder: "${question}"\n`);
+  console.log(`\nStakeholder: "${question}"`);
+  console.log(`  (intent + explanation via ${hasLLM ? 'Claude claude-opus-4-8' : 'deterministic fallback — no API key'})\n`);
 
-  // 1) Intent → retrieve cited answer, with confidence gating.
-  const intent = 'approval delegation';
-  const k = retrieve(intent);
+  // 1) Parse intent → retrieve the cited answer, with confidence gating.
+  const { topic, reasoning } = await parseIntent(question, Object.keys(KB));
+  const k = topic ? KB[topic] : null;
   if (!k || k.confidence < CONFIDENCE_THRESHOLD || k.validation_status === 'stale') {
-    console.log("VIN Demo: I'm not certain about that — let me show you the source rather than guess.");
+    console.log(`VIN Demo: I'm not certain about that — let me show you the source rather than guess. (${reasoning})`);
     return;
   }
-  console.log('VIN Demo: ' + explain(k) + '\n');
+  const spoken = await narrate(question, k, 'procurement stakeholder');
+  console.log('VIN Demo: ' + spoken + '\n');
   console.log('VIN Demo: Let me walk you through it in the product…\n');
 
   // 2) Drive the real UI, read-only, as an approver persona who can delegate.

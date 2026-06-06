@@ -28,7 +28,7 @@ Spike code is throwaway and lives in [`src/spike/`](../src/spike/). Run: `npm ru
 4. **Self-healing navigation via a DemoGraph of intent-targets**, each with ordered locator strategies (id/testid → role/text → semantic). Spike proved primary→text recovery; the real version adds visual/LLM-assisted recovery and treats recovery as first-class (Phase 2).
 5. **A real action-classifier for the safety layer, not a text regex.** The text guard works but is brittle (it false-positives on help text like "How do I use Approve…?", filtered here by a hack). The real default-deny guard must classify by element role/intent/context. The default-deny posture itself is validated.
 6. **Retrieval with trust metadata.** The stubbed KB must become pgvector retrieval carrying `confidence/source/last_verified/product_version/validation_status` (Phase 1).
-7. **LLM seam (Claude).** Intent parsing and natural explanation are currently deterministic stubs (`explain()` in `scenario.ts`). Wire Claude (needs `ANTHROPIC_API_KEY`) — this is the next spike increment.
+7. **LLM seam (Claude).** ✅ Done — intent parsing (structured output) and natural explanation now run through `claude-opus-4-8` via the official SDK (`src/spike/llm.ts`), grounded in the retrieved chunk and required to cite source/confidence/version; falls back to deterministic behaviour with no key. The real architecture needs this behind a provider interface (cloud-only build) plus per-demo cost events on each call.
 8. **Cost events (J)** are not yet emitted — add per-demo cost telemetry in Phase 1.
 
 ## Open items / decisions
