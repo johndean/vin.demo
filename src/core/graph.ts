@@ -15,7 +15,7 @@ import { StateGraph, START, END, MemorySaver } from '@langchain/langgraph';
 import { DemoState, type DemoStateT, type Position } from './state.js';
 import { getLlm } from './llm.js';
 import { db } from './db.js';
-import { PoVinDriver, type DemoNode } from './driver.js';
+import { getAdapter, type DemoNode } from './driver.js';
 import { record } from './cost.js';
 import { updateSessionStatus } from './session.js';
 import { recordDiscovery } from './discovery.js';
@@ -73,9 +73,11 @@ async function retrieve(state: DemoStateT): Promise<Partial<DemoStateT>> {
 interface DriveOutcome { navigation: { ok: boolean; healedVia: string | null; url: string }; blockedMutations: string[]; opened: boolean; label: string; traceLines: string[] }
 
 async function driveTo(state: DemoStateT, intent: string): Promise<DriveOutcome> {
-  const { rows } = await db().query<DemoNode & { label?: string }>(
-    `SELECT n.intent_label, n.screen_route, n.locator_strategies, n.persona_labels
-       FROM demo_graph_nodes n JOIN demo_graphs g ON g.id = n.demo_graph_id
+  const { rows } = await db().query<DemoNode & { product_name: string }>(
+    `SELECT n.intent_label, n.screen_route, n.locator_strategies, n.persona_labels, p.name AS product_name
+       FROM demo_graph_nodes n
+       JOIN demo_graphs g ON g.id = n.demo_graph_id
+       JOIN products p ON p.id = g.product_id
       WHERE g.product_id = $1`,
     [state.productId],
   );
@@ -84,12 +86,12 @@ async function driveTo(state: DemoStateT, intent: string): Promise<DriveOutcome>
   const chosen = (await getLlm().pickNode(intent, labels)) || labels[0];
   const node = rows.find((r) => r.intent_label === chosen) ?? rows[0];
 
-  const driver = new PoVinDriver(state.mode);
+  const driver = getAdapter(rows[0].product_name, state.mode);
   try {
     await driver.open(state.role);
     const nav = await driver.gotoNode(node, state.role);
     await record('navigation', 'none', {}, { url: nav.url, node: node.intent_label });
-    const opened = nav.ok ? await driver.openFirstPo() : false;
+    const opened = nav.ok ? await driver.openRecord() : false;
     const scan = opened ? await driver.scanActions() : [];
     const confirmed = scan.filter((s) => s.cls === 'mutating' && s.confident && !s.permitted).map((s) => s.label);
     const defensive = scan.filter((s) => s.cls === 'mutating' && !s.confident && !s.permitted).length;
