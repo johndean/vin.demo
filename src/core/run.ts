@@ -45,6 +45,8 @@ if (out.navigation) {
 } else if (!out.gated && top) {
   console.log('\nNavigation: skipped (no productId or DemoGraph node configured).');
 }
+if (out.discoveryPrompt) console.log(`\nVIN Demo (discovery): ${out.discoveryPrompt}`);
+
 console.log('\nTrace:');
 for (const t of out.trace) console.log(`  • ${t}`);
 

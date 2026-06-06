@@ -5,7 +5,7 @@
  *                        ├─▶ explain ───────────────▶ END   ("why did you show that?")
  *                        ├─▶ resume  ───────────────▶ END   (pop stack, return to context)
  *                        └─▶ retrieve ─(gated?)─┬END
- *                                               └▶ navigate ▶ END  (answer + drive UI)
+ *                                               └▶ navigate ▶ discover ▶ END  (answer · drive UI · discover)
  *
  * A checkpointer keeps state across turns (keyed by thread_id), so a mid-flight
  * pivot pushes the current position and a later resume pops it — the demo
@@ -19,6 +19,7 @@ import { db, toVector } from './db.js';
 import { PoVinDriver, type DemoNode } from './driver.js';
 import { record } from './cost.js';
 import { updateSessionStatus } from './session.js';
+import { recordDiscovery } from './discovery.js';
 
 const CONFIDENCE_THRESHOLD = 0.6;
 const RELEVANCE_MAX_DISTANCE = 0.65; // empirically calibrated to voyage-3 (in-scope ~0.42–0.47)
@@ -38,6 +39,7 @@ async function interpret(state: DemoStateT): Promise<Partial<DemoStateT>> {
     navigation: null,
     blockedMutations: [],
     retrieved: [],
+    discoveryPrompt: null,
     trace: [`interpret: kind=${i.kind}${i.isMetaExplain ? ' [meta-explain]' : ''}${i.isResume ? ' [resume]' : ''} intent="${i.intent}"`],
   };
 }
@@ -152,6 +154,25 @@ async function navigate(state: DemoStateT): Promise<Partial<DemoStateT>> {
   };
 }
 
+// ── discover (active discovery, P2.2 / Gap E) — capture signals + offer one Q ──
+async function discover(state: DemoStateT): Promise<Partial<DemoStateT>> {
+  if (!state.sessionId || !state.interpretation) return {};
+  try {
+    const d = await getLlm().discover({
+      utterance: state.utterance,
+      kind: state.interpretation.kind,
+      answer: state.retrieved[0]?.content ?? '',
+    });
+    if (d.painPoints.length || d.buyingSignals.length || d.businessObjective) {
+      await recordDiscovery(state.sessionId, { painPoints: d.painPoints, buyingSignals: d.buyingSignals, businessObjective: d.businessObjective });
+    }
+    const captured = d.painPoints.length + d.buyingSignals.length + (d.businessObjective ? 1 : 0);
+    return { discoveryPrompt: d.question || null, trace: [`discover: captured ${captured} signal(s)${d.question ? '; offered a question' : ''}`] };
+  } catch (e: any) {
+    return { trace: [`discover: skipped (${e?.message ?? e})`] };
+  }
+}
+
 // ── explain ("why did you show that?") ───────────────────────────────────────
 async function explain(state: DemoStateT): Promise<Partial<DemoStateT>> {
   const pos = state.currentPosition;
@@ -233,10 +254,12 @@ export function buildGraph() {
     .addNode('explain', explain)
     .addNode('resume', resume)
     .addNode('govern', govern)
+    .addNode('discover', discover)
     .addEdge(START, 'interpret')
     .addConditionalEdges('interpret', routeFromInterpret, { govern: 'govern', explain: 'explain', resume: 'resume', retrieve: 'retrieve' })
     .addConditionalEdges('retrieve', (s: DemoStateT) => (s.gated ? END : 'navigate'), { navigate: 'navigate', [END]: END })
-    .addEdge('navigate', END)
+    .addEdge('navigate', 'discover')
+    .addEdge('discover', END)
     .addEdge('explain', END)
     .addEdge('resume', END)
     .addEdge('govern', END)

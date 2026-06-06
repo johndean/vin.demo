@@ -7,6 +7,7 @@
 import { buildGraph } from './graph.js';
 import { createDemoSession } from './session.js';
 import { beginCostSession, sessionCost } from './cost.js';
+import { getDiscovery } from './discovery.js';
 import type { ExecutionMode } from './safety.js';
 
 const productId = process.env.PO_VIN_PRODUCT_ID;
@@ -39,10 +40,13 @@ for (const utterance of turns) {
 
   if (out.navigation?.url) console.log(`  → on ${out.navigation.url}${out.navigation.healedVia ? `  [self-heal: ${out.navigation.healedVia}]` : ''}`);
   if (out.blockedMutations?.length) console.log(`  ⛔ ${mode} blocked: ${out.blockedMutations.join(', ')}`);
+  if (out.discoveryPrompt) console.log(`  ↳ discovery: ${out.discoveryPrompt}`);
   console.log(`  stack depth: ${out.contextStack?.length ?? 0}`);
   console.log(`  trace: ${out.trace.slice(-2).join('  |  ')}`);
 }
 
 const c = await sessionCost(session.id);
-console.log(`\nDemo cost (4 turns): $${c.totalUsd.toFixed(6)} · ${c.totalTokens} tokens (${c.byType.map((b) => `${b.type} $${b.usd.toFixed(6)}`).join(', ')})`);
+console.log(`\nDemo cost (${turns.length} turns): $${c.totalUsd.toFixed(6)} · ${c.totalTokens} tokens (${c.byType.map((b) => `${b.type} $${b.usd.toFixed(6)}`).join(', ')})`);
+const disc = await getDiscovery(session.id);
+console.log(`Discovery — pain: [${disc.painPoints.join('; ')}] · signals: [${disc.buyingSignals.join('; ')}] · objective: ${disc.businessObjective ?? '—'}`);
 process.exit(0);

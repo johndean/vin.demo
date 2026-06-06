@@ -49,6 +49,9 @@ export const DemoState = Annotation.Root({
   contextStack: Annotation<Position[]>({ reducer: (_, b) => b, default: () => [] }),
   explanation: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
 
+  // active discovery (P2.2 / Gap E): the one discovery question offered after an answer (per-turn output).
+  discoveryPrompt: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
+
   // recovery / interrupt governance (P2.1): lifecycle status persists across turns
   // (deliberately NOT reset by interpret, unlike the per-turn outputs above).
   sessionStatus: Annotation<'active' | 'paused' | 'stopped' | 'done'>({ reducer: (_, b) => b, default: () => 'active' }),

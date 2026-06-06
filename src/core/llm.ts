@@ -31,6 +31,19 @@ export interface ExplainContext {
   trace: string[];
 }
 
+export interface DiscoverContext {
+  utterance: string;
+  kind: UtteranceKind;
+  answer: string; // the chunk just shown, to ground the discovery question
+}
+
+export interface DiscoverResult {
+  painPoints: string[];
+  buyingSignals: string[];
+  businessObjective: string | null;
+  question: string; // ONE concise discovery question to offer next
+}
+
 export interface LlmProvider {
   readonly id: string;
   interpret(utterance: string): Promise<Interpretation>;
@@ -38,6 +51,8 @@ export interface LlmProvider {
   pickNode(intent: string, labels: string[]): Promise<string>;
   /** Explain, grounded in the trace, why the agent showed what it showed. */
   explainWhy(ctx: ExplainContext): Promise<string>;
+  /** Active discovery (E): extract expressed pain/signal/objective and offer ONE question. */
+  discover(ctx: DiscoverContext): Promise<DiscoverResult>;
 }
 
 class ClaudeProvider implements LlmProvider {
@@ -161,6 +176,54 @@ class ClaudeProvider implements LlmProvider {
     const b = res.content.find((x) => x.type === 'text');
     const text = b && 'text' in b ? b.text.trim() : '';
     return text || "I can't reconstruct why from the trace — let me show you the source again instead.";
+  }
+
+  async discover(ctx: DiscoverContext): Promise<DiscoverResult> {
+    const empty: DiscoverResult = { painPoints: [], buyingSignals: [], businessObjective: null, question: '' };
+    const res = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      system:
+        'You are VIN Demo doing live solution discovery during a product demo. From the stakeholder utterance, ' +
+        'extract ONLY what they actually expressed (never invent): painPoints (problems/frustrations), buyingSignals ' +
+        '(interest, timeline, budget, comparison), and businessObjective if explicitly stated (else ""). Then propose ' +
+        'ONE short, natural discovery question to learn more, grounded in the topic just shown. Empty arrays / "" are ' +
+        'the correct answer when nothing was expressed.',
+      messages: [{
+        role: 'user',
+        content:
+          `Utterance: ${JSON.stringify(ctx.utterance)}\n` +
+          `Detected kind: ${ctx.kind}\n` +
+          `What we just showed them: ${ctx.answer.slice(0, 400)}`,
+      }],
+      output_config: {
+        format: {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: {
+              painPoints: { type: 'array', items: { type: 'string' } },
+              buyingSignals: { type: 'array', items: { type: 'string' } },
+              businessObjective: { type: 'string', description: 'stated business objective, or "" if none' },
+              question: { type: 'string' },
+            },
+            required: ['painPoints', 'buyingSignals', 'businessObjective', 'question'],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+    await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'discover' });
+    const b = res.content.find((x) => x.type === 'text');
+    if (res.stop_reason === 'refusal' || !b || !('text' in b)) return empty;
+    try {
+      const p = JSON.parse(b.text);
+      const strs = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string' && x.trim().length > 0) : []);
+      const obj = typeof p.businessObjective === 'string' && p.businessObjective.trim() ? p.businessObjective.trim() : null;
+      return { painPoints: strs(p.painPoints), buyingSignals: strs(p.buyingSignals), businessObjective: obj, question: typeof p.question === 'string' ? p.question.trim() : '' };
+    } catch {
+      return empty;
+    }
   }
 }
 
