@@ -6,7 +6,9 @@ An **Autonomous AI Solution Consultant** that demonstrates software products to 
 
 ## Status
 
-**Phase 0 — core loop proven (GO).** The read-only loop runs end-to-end against PO.vin: Claude-parsed intent → cited answer → self-healing navigation → demonstrate approval delegation → never fires a mutating action. Intent + explanation run through `claude-opus-4-8` (`src/spike/llm.ts`). See [docs/phase-0-findings.md](docs/phase-0-findings.md). Spike code in [src/spike/](src/spike/) (`npm run recon`, `npm run demo`).
+**Phase 0 — core loop proven (GO).** The read-only loop runs end-to-end against PO.vin: Claude-parsed intent → cited answer → self-healing navigation → demonstrate approval delegation → never fires a mutating action. Intent + explanation run through `claude-opus-4-8` (`src/spike/llm.ts`). See [docs/phase-0-findings.md](docs/phase-0-findings.md). Spike code in [src/spike/](src/spike/) (`npm run recon`, `npm run demo`, `npm run eval` — 7/7).
+
+**Phase 1 — started.** Entity-model schema laid ([db/migrations/0001_entity_model.sql](db/migrations/0001_entity_model.sql), spine + trust metadata). Walking-skeleton loop plan in [docs/phase-1-plan.md](docs/phase-1-plan.md) — awaiting scope decisions before building the LangGraph loop.
 
 ## Operating rules (the two that override everything)
 
