@@ -126,7 +126,9 @@ class ClaudeProvider implements LlmProvider {
       system:
         'Pick the demo screen the stakeholder should be taken to. Prefer the PRIMARY workflow screen where the ' +
         'feature is performed or explained; only choose a sub-view / result list (e.g. a "bypassed", "history", or ' +
-        '"completed" list) when the stakeholder EXPLICITLY asks for that sub-view. Return "" if none fit.',
+        '"completed" list) when the stakeholder EXPLICITLY asks for that sub-view. A GENERAL "how does X work?" ' +
+        'question (e.g. "how does delegation work?") maps to the PRIMARY screen, NOT a "bypassed"/"delegated"/"history" ' +
+        'sub-view — route to a sub-view only when its name is explicitly requested. Return "" if none fit.',
       messages: [{ role: 'user', content: `Intent: ${JSON.stringify(intent)}\nScreens: ${JSON.stringify(labels)}` }],
       output_config: {
         format: {

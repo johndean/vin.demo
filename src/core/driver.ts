@@ -192,6 +192,9 @@ export class WebAdapter implements InteractionAdapter {
       const cand = await this.candidate(el, isAnchor ? 'a' : 'button');
       const label = (cand.text || cand.ariaLabel || cand.title || '').trim();
       if (!label && cand.tag !== 'a') continue;
+      // Skip stat cards / counters (e.g. "0", "$1,240", "TEAM MEMBERS 0 Direct + delegated") —
+      // they're dashboard tiles, not action controls, and would be false-positive "mutating" (P3.5).
+      if (/^[$\d]/.test(label) || (/\d/.test(label) && label.split(/\s+/).length > 3)) continue;
       const { cls, reason, confident } = classifyAction(cand);
       out.push({ label: label || `[${cand.tag}]`, cls, permitted: permits(cls, this.mode).permitted, confident, reason });
     }

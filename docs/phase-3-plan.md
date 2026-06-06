@@ -20,7 +20,7 @@ Per-increment rhythm unchanged: build → live → adversarial review → eval g
     - **ce.vin (#4)** — token auth + blank-shell redirect, handled by the new `postLoginPath`; live read-only, coverage 4/5.
     - **modelcontract.software (#5)** — a public, no-login VIN Foundation model-employment-agreement **wizard**: the project's first NON-navigate modality, demoed via a **`safe`-mode walkthrough** (`npm run walkthrough`) that steps through choice screens (Next = non-destructive), **honestly pauses at free-text it won't fabricate**, and **never fires the commit** (Generate/Submit stays `mutating`, blocked even in `safe`). Adapter additions: `noAuth`, `walkthrough()`; classifier: wizard-nav → `non_destructive`. `eval:phase1` still 8/8.
   - **The single contract now spans 5 real products and 2 modalities** (navigate-and-read + safe-mode walkthrough): po.vin · expense.vin · rounds.vin · ce.vin · modelcontract.software.
-- [ ] **P3.5 — Validate + `eval:phase3`.** Assert the contract holds across 3 products (the loop runs read-only on each), a version bump degrades a stale answer, and onboarding is config-not-code wherever the contract allows.
+- [x] **P3.5 — Validate + `eval:phase3`.** `npm run eval:phase3` (**7/7**): the shared retrieve+gate returns a cited, trust-tagged answer for all 5 products, and the safe-mode walkthrough never commits. Hardened `pickNode` (a general "how does X work?" → PRIMARY screen, not a sub-view — fixes the `eval:phase1` T1 flake; now reliably → `/queue/manager`) and added a `scanActions` stat-card filter (dashboard tiles like "0" / "Direct + delegated" no longer false-positive as mutating). Lifecycle drift has its own gate (`npm run lifecycle`).
 
 ## What I need from you to onboard each real product (P3.3 / P3.4)
 Non-secret details go here in chat; **credentials go in `.env`, never the chat** — follow the `PO_VIN_*` pattern.
@@ -34,3 +34,5 @@ Self-service onboarding stays **P4** (trigger: adapter contract stable across 3 
 
 ## Done =
 `InteractionAdapter` contract implemented by ≥3 products; lifecycle engine live (a version bump degrades a stale answer); `eval:phase1` 8/8, `eval:phase2` green, `eval:phase3` green; onboarding is config-driven wherever the contract allows.
+
+**STATUS — 2026-06-06: P3 COMPLETE.** P3.1–P3.5 shipped. The single `InteractionAdapter` contract drives **5 real products across 2 modalities** — po.vin · expense.vin · rounds.vin · ce.vin (navigate-and-read) + modelcontract.software (safe-mode wizard walkthrough). Gap B lifecycle engine live. Gates: `eval:phase1` 8/8 · `eval:phase2` 7/7 · `eval:phase3` 7/7 · `npm run lifecycle` ✅. Onboarding a new product = one WebAdapter config entry + a `seed-<product>.ts` (config-not-code) — the bar for **P4 self-service** ("adapter contract stable across 3 manually onboarded products") is met.
