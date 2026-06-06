@@ -5,6 +5,7 @@ import { Annotation } from '@langchain/langgraph';
 import type { Interpretation } from './llm.js';
 import type { NavResult, ActionScan } from './driver.js';
 import type { ExecutionMode } from './safety.js';
+import type { Stakeholder } from './stakeholders.js';
 
 /** A place in the demo we can return to after a detour (mid-flight pivot support). */
 export interface Position {
@@ -55,6 +56,11 @@ export const DemoState = Annotation.Root({
   // recovery / interrupt governance (P2.1): lifecycle status persists across turns
   // (deliberately NOT reset by interpret, unlike the per-turn outputs above).
   sessionStatus: Annotation<'active' | 'paused' | 'stopped' | 'done'>({ reducer: (_, b) => b, default: () => 'active' }),
+
+  // multi-stakeholder (P2.3 / Gap F): `speaker` is a per-turn input naming who's talking;
+  // `activeStakeholder` is resolved from the collection by the whoSpeaks node each turn.
+  speaker: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
+  activeStakeholder: Annotation<Stakeholder | null>({ reducer: (_, b) => b, default: () => null }),
 
   // Trace — appends, so "why did you show this?" can replay the loop's decisions.
   trace: Annotation<string[]>({ reducer: (a, b) => a.concat(b), default: () => [] }),

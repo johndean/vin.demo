@@ -1,7 +1,7 @@
 /**
  * The single LangGraph loop (one loop, not many agents — plan §4), multi-turn.
  *
- *   interpret ─▶ router ─┬─▶ govern  ───────────────▶ END   (pause / stop / resume the session)
+ *   whoSpeaks ─▶ interpret ─▶ router ─┬─▶ govern  ───────────────▶ END   (pause / stop / resume the session)
  *                        ├─▶ explain ───────────────▶ END   ("why did you show that?")
  *                        ├─▶ resume  ───────────────▶ END   (pop stack, return to context)
  *                        └─▶ retrieve ─(gated?)─┬END
@@ -20,11 +20,29 @@ import { PoVinDriver, type DemoNode } from './driver.js';
 import { record } from './cost.js';
 import { updateSessionStatus } from './session.js';
 import { recordDiscovery } from './discovery.js';
+import { setActiveSpeaker, getActiveStakeholder, addOpenItem } from './stakeholders.js';
 
 const CONFIDENCE_THRESHOLD = 0.6;
 const RELEVANCE_MAX_DISTANCE = 0.65; // empirically calibrated to voyage-3 (in-scope ~0.42–0.47)
 const MAX_VERIFY_AGE_DAYS = 180;
 const EXPLAIN_TRACE_WINDOW = 16; // bound the cross-turn trace fed to explain (it grows unbounded)
+
+// ── whoSpeaks (multi-stakeholder, P2.3 / Gap F) — resolve the active speaker ───
+async function whoSpeaks(state: DemoStateT): Promise<Partial<DemoStateT>> {
+  if (!state.sessionId) return {};
+  try {
+    const active = state.speaker
+      ? await setActiveSpeaker(state.sessionId, state.speaker)
+      : await getActiveStakeholder(state.sessionId);
+    // Always set explicitly (null when unresolved) so a turn never inherits a stale speaker.
+    return {
+      activeStakeholder: active,
+      trace: [active ? `speaker: ${active.name ?? '—'} (${active.role ?? '—'})${state.speaker ? '' : ' [continuing]'}` : 'speaker: none resolved'],
+    };
+  } catch (e: any) {
+    return { activeStakeholder: null, trace: [`speaker: unresolved (${e?.message ?? e})`] };
+  }
+}
 
 // ── interpret ────────────────────────────────────────────────────────────────
 async function interpret(state: DemoStateT): Promise<Partial<DemoStateT>> {
@@ -166,6 +184,9 @@ async function discover(state: DemoStateT): Promise<Partial<DemoStateT>> {
     if (d.painPoints.length || d.buyingSignals.length || d.businessObjective) {
       await recordDiscovery(state.sessionId, { painPoints: d.painPoints, buyingSignals: d.buyingSignals, businessObjective: d.businessObjective });
     }
+    if (state.activeStakeholder && (d.painPoints[0] || d.question)) {
+      await addOpenItem(state.activeStakeholder.id, d.painPoints[0] ?? d.question); // F: per-stakeholder follow-up
+    }
     const captured = d.painPoints.length + d.buyingSignals.length + (d.businessObjective ? 1 : 0);
     return { discoveryPrompt: d.question || null, trace: [`discover: captured ${captured} signal(s)${d.question ? '; offered a question' : ''}`] };
   } catch (e: any) {
@@ -255,7 +276,9 @@ export function buildGraph() {
     .addNode('resume', resume)
     .addNode('govern', govern)
     .addNode('discover', discover)
-    .addEdge(START, 'interpret')
+    .addNode('whoSpeaks', whoSpeaks)
+    .addEdge(START, 'whoSpeaks')
+    .addEdge('whoSpeaks', 'interpret')
     .addConditionalEdges('interpret', routeFromInterpret, { govern: 'govern', explain: 'explain', resume: 'resume', retrieve: 'retrieve' })
     .addConditionalEdges('retrieve', (s: DemoStateT) => (s.gated ? END : 'navigate'), { navigate: 'navigate', [END]: END })
     .addEdge('navigate', 'discover')

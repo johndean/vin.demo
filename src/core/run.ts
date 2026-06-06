@@ -8,6 +8,7 @@ import { beginCostSession, sessionCost } from './cost.js';
 const utterance = process.argv.slice(2).join(' ') || 'How does approval delegation work?';
 const productId = process.env.PO_VIN_PRODUCT_ID ?? null;
 const mode = (process.env.PO_VIN_MODE as ExecutionMode) ?? 'read-only';
+const speaker = process.env.PO_VIN_SPEAKER ?? null;
 
 // Open a demo session so state + cost events hang off a real session row.
 let sessionId: string | null = null;
@@ -19,7 +20,7 @@ if (productId) {
 
 const graph = buildGraph();
 const out = await graph.invoke(
-  { utterance, productId, sessionId, role: process.env.PO_VIN_ROLE ?? 'admin', mode },
+  { utterance, productId, sessionId, role: process.env.PO_VIN_ROLE ?? 'admin', mode, speaker },
   { configurable: { thread_id: `cli-${Date.now()}` } },
 );
 
@@ -27,6 +28,7 @@ if (out.explanation) console.log(`\nVIN Demo${out.interpretation?.isMetaExplain 
 
 console.log(`\nStakeholder: "${utterance}"`);
 console.log(`Interpretation: kind=${out.interpretation?.kind} intent="${out.interpretation?.intent}" control=${out.interpretation?.control ?? 'none'}`);
+if (out.activeStakeholder) console.log(`Speaking: ${out.activeStakeholder.name} (${out.activeStakeholder.role})`);
 const top = out.retrieved?.[0];
 if (out.gated) {
   console.log("VIN Demo: I'm not certain about that — let me show you the source rather than guess.");

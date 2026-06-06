@@ -8,6 +8,7 @@ import { buildGraph } from './graph.js';
 import { createDemoSession } from './session.js';
 import { beginCostSession, sessionCost } from './cost.js';
 import { getDiscovery } from './discovery.js';
+import { getStakeholders } from './stakeholders.js';
 import type { ExecutionMode } from './safety.js';
 
 const productId = process.env.PO_VIN_PRODUCT_ID;
@@ -21,18 +22,19 @@ const graph = buildGraph();
 const thread = { configurable: { thread_id: `convo-${Date.now()}` } };
 
 const turns = [
-  'How does approval delegation work?',
-  'Wait — why did you show me that screen?',
-  "Hold on — let's pause for a moment.", // P2.1: interrupt governance (pause)
-  'Okay, continue.',                      // P2.1: resume the session
-  'Got it. Now show me the bypassed / delegated approvals.',
-  'Okay, take me back to where we were.',
+  { speaker: 'Procurement', text: 'How does approval delegation work?' },
+  { speaker: 'Procurement', text: 'Wait — why did you show me that screen?' },
+  { speaker: 'CFO', text: "Hold on — let's pause for a moment." },  // P2.1: interrupt governance (pause)
+  { speaker: 'CFO', text: 'Okay, continue.' },                       // P2.1: resume the session
+  { speaker: 'CFO', text: 'Our approvals stall when I travel. Show me the bypassed / delegated approvals.' },
+  { speaker: 'Procurement', text: 'Okay, take me back to where we were.' },
 ];
 
-for (const utterance of turns) {
-  console.log(`\n══ Stakeholder: "${utterance}"`);
-  const out = await graph.invoke({ utterance, productId, sessionId: session.id, role, mode }, thread);
+for (const { speaker, text } of turns) {
+  console.log(`\n══ ${speaker}: "${text}"`);
+  const out = await graph.invoke({ utterance: text, speaker, productId, sessionId: session.id, role, mode }, thread);
 
+  if (out.activeStakeholder) console.log(`  (speaking: ${out.activeStakeholder.name} — ${out.activeStakeholder.role})`);
   if (out.explanation) console.log(`VIN Demo${out.interpretation?.isMetaExplain ? ' (why)' : ''}: ${out.explanation}`);
   else if (out.gated) console.log(`VIN Demo: I'm not certain about that — let me show you the source rather than guess.`);
   else if (!out.interpretation?.isResume && out.retrieved?.[0]) console.log(`VIN Demo: ${out.retrieved[0].content.slice(0, 150)}…`);
@@ -49,4 +51,6 @@ const c = await sessionCost(session.id);
 console.log(`\nDemo cost (${turns.length} turns): $${c.totalUsd.toFixed(6)} · ${c.totalTokens} tokens (${c.byType.map((b) => `${b.type} $${b.usd.toFixed(6)}`).join(', ')})`);
 const disc = await getDiscovery(session.id);
 console.log(`Discovery — pain: [${disc.painPoints.join('; ')}] · signals: [${disc.buyingSignals.join('; ')}] · objective: ${disc.businessObjective ?? '—'}`);
+const people = await getStakeholders(session.id);
+for (const p of people) console.log(`Stakeholder ${p.name} (${p.role})${p.isActive ? ' *active' : ''} — interests: [${p.interests.join('; ')}] · open items: [${p.openItems.join('; ')}]`);
 process.exit(0);

@@ -5,6 +5,7 @@
  */
 import { db } from './db.js';
 import type { ExecutionMode } from './safety.js';
+import { seedStakeholders } from './stakeholders.js';
 
 export interface DemoSession {
   id: string;
@@ -39,7 +40,9 @@ export async function createDemoSession(productId: string, mode: ExecutionMode):
      VALUES ($1, $2, $3, $4) RETURNING id`,
     [customerId, ver.rows[0]?.id ?? null, env.rows[0]?.id ?? null, mode],
   );
-  return { id: res.rows[0].id, productId, mode };
+  const sessionId = res.rows[0].id;
+  await seedStakeholders(sessionId); // F: every session opens with its stakeholder collection
+  return { id: sessionId, productId, mode };
 }
 
 /**
