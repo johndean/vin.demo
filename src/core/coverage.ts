@@ -10,6 +10,8 @@ import { gateForVector } from './retrieval.js';
 
 const productId = process.env.PO_VIN_PRODUCT_ID;
 if (!productId) throw new Error('PO_VIN_PRODUCT_ID not set — run `npm run seed`.');
+const { rows: prow } = await db().query<{ name: string }>('SELECT name FROM products WHERE id = $1', [productId]);
+const productName = prow[0]?.name ?? productId;
 
 const { rows: intents } = await db().query<{ intent: string }>(
   'SELECT intent FROM expected_intents WHERE product_id = $1 ORDER BY intent',
@@ -22,7 +24,7 @@ if (!intents.length) {
 
 const vecs = await getEmbeddingProvider().embed(intents.map((i) => i.intent)); // one batched embed call
 
-console.log(`\n══ Coverage — PO.vin (${intents.length} expected intents) ══════════`);
+console.log(`\n══ Coverage — ${productName} (${intents.length} expected intents) ══════════`);
 let covered = 0;
 for (let i = 0; i < intents.length; i++) {
   const r = await gateForVector(vecs[i], productId);

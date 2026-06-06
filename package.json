@@ -10,6 +10,7 @@
     "eval": "tsx src/spike/eval.ts",
     "migrate": "tsx src/core/migrate.ts",
     "seed": "tsx src/core/seed.ts",
+    "seed:expense": "tsx src/core/seed-expense.ts",
     "loop": "tsx src/core/run.ts",
     "convo": "tsx src/core/convo.ts",
     "eval:phase1": "tsx src/core/eval-phase1.ts",
