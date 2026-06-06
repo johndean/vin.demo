@@ -8,6 +8,7 @@ import { getLlm } from './llm.js';
 import { getEmbeddingProvider } from './embeddings.js';
 import { db, toVector } from './db.js';
 import { PoVinDriver, type DemoNode } from './driver.js';
+import { record } from './cost.js';
 
 const CONFIDENCE_THRESHOLD = 0.6;   // trust: chunk's own validated confidence
 // Relevance: cosine distance of the best match. Empirically calibrated to live
@@ -100,6 +101,7 @@ async function navigate(state: DemoStateT): Promise<Partial<DemoStateT>> {
   try {
     await driver.open(state.role);
     const nav = await driver.gotoNode(node, state.role);
+    await record('navigation', 'none', {}, { url: nav.url, node: node.intent_label });
     const opened = nav.ok ? await driver.openFirstPo() : false;
     const scan = opened ? await driver.scanActions() : [];
     // Confirmed mutations (matched a verb / dangerous href) are the headline;

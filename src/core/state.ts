@@ -21,6 +21,7 @@ export const DemoState = Annotation.Root({
   // Inputs / config
   utterance: Annotation<string>(),
   productId: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
+  sessionId: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
   role: Annotation<string>({ reducer: (_, b) => b, default: () => 'admin' }),
   mode: Annotation<ExecutionMode>({ reducer: (_, b) => b, default: () => 'read-only' }),
 

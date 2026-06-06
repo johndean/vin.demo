@@ -2,15 +2,28 @@
  *  Usage: npm run loop -- "How does approval delegation work?" */
 import { buildGraph } from './graph.js';
 import type { ExecutionMode } from './safety.js';
+import { createDemoSession } from './session.js';
+import { beginCostSession, sessionCost } from './cost.js';
 
 const utterance = process.argv.slice(2).join(' ') || 'How does approval delegation work?';
+const productId = process.env.PO_VIN_PRODUCT_ID ?? null;
+const mode = (process.env.PO_VIN_MODE as ExecutionMode) ?? 'read-only';
+
+// Open a demo session so state + cost events hang off a real session row.
+let sessionId: string | null = null;
+if (productId) {
+  const s = await createDemoSession(productId, mode);
+  sessionId = s.id;
+  beginCostSession(sessionId);
+}
 
 const graph = buildGraph();
 const out = await graph.invoke({
   utterance,
-  productId: process.env.PO_VIN_PRODUCT_ID ?? null,
+  productId,
+  sessionId,
   role: process.env.PO_VIN_ROLE ?? 'admin',
-  mode: (process.env.PO_VIN_MODE as ExecutionMode) ?? 'read-only',
+  mode,
 });
 
 console.log(`\nStakeholder: "${utterance}"`);
@@ -35,5 +48,11 @@ if (out.navigation) {
 }
 console.log('\nTrace:');
 for (const t of out.trace) console.log(`  • ${t}`);
+
+if (sessionId) {
+  const c = await sessionCost(sessionId);
+  const breakdown = c.byType.map((b) => `${b.type} $${b.usd.toFixed(6)}`).join(', ');
+  console.log(`\nDemo cost: $${c.totalUsd.toFixed(6)} · ${c.totalTokens} tokens (${breakdown})`);
+}
 console.log();
 process.exit(0);

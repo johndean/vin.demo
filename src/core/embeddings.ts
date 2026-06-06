@@ -6,6 +6,7 @@
  */
 import { VoyageAIClient } from 'voyageai';
 import { config as loadEnv } from 'dotenv';
+import { record } from './cost.js';
 
 loadEnv();
 
@@ -25,6 +26,8 @@ class VoyageProvider implements EmbeddingProvider {
     for (let attempt = 0; ; attempt++) {
       try {
         const res = await this.client.embed({ input: texts, model: 'voyage-3' });
+        const u: any = (res as any).usage ?? {};
+        await record('embeddings', 'voyage-3', { total: u.totalTokens ?? u.total_tokens });
         const vecs = (res.data ?? []).map((d) => d.embedding as number[]);
         for (const v of vecs) {
           if (v.length !== this.dim) {

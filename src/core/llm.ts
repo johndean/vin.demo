@@ -5,6 +5,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { config as loadEnv } from 'dotenv';
+import { record } from './cost.js';
 
 loadEnv();
 
@@ -53,6 +54,7 @@ class ClaudeProvider implements LlmProvider {
         },
       },
     });
+    await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'interpret' });
     if (res.stop_reason === 'refusal') throw new Error('interpret: model refused the utterance');
     const block = res.content.find((b) => b.type === 'text');
     if (!block || !('text' in block)) throw new Error(`interpret: no text block (stop_reason=${res.stop_reason})`);
