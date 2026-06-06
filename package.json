@@ -6,7 +6,8 @@
   "description": "Phase 0 throwaway spike: prove VIN Demo's read-only core loop against po.vin",
   "scripts": {
     "recon": "tsx src/spike/recon.ts",
-    "demo": "tsx src/spike/scenario.ts"
+    "demo": "tsx src/spike/scenario.ts",
+    "eval": "tsx src/spike/eval.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

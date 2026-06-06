@@ -42,7 +42,19 @@ const KB: Record<string, Knowledge> = {
   },
 };
 
-async function run() {
+/** Structured result of one scenario run — what the eval asserts against. */
+export interface Evidence {
+  llm: boolean;
+  intentTopic: string | null;
+  gated: boolean;            // true if degraded to "I'm not certain"
+  narration: string | null;
+  poOpened: boolean;
+  poUrl: string | null;
+  heals: { goal: string; primaryCss: string; healedVia: string | null }[];
+  blocked: { goal: string; label: string }[];
+}
+
+export async function runScenario(): Promise<Evidence> {
   await mkdir(OUT, { recursive: true });
   const question = 'How does approval delegation work?';
   console.log(`\nStakeholder: "${question}"`);
@@ -53,7 +65,7 @@ async function run() {
   const k = topic ? KB[topic] : null;
   if (!k || k.confidence < CONFIDENCE_THRESHOLD || k.validation_status === 'stale') {
     console.log(`VIN Demo: I'm not certain about that — let me show you the source rather than guess. (${reasoning})`);
-    return;
+    return { llm: hasLLM, intentTopic: topic, gated: true, narration: null, poOpened: false, poUrl: null, heals: [], blocked: [] };
   }
   const spoken = await narrate(question, k, 'procurement stakeholder');
   console.log('VIN Demo: ' + spoken + '\n');
@@ -104,7 +116,8 @@ async function run() {
     await page.waitForTimeout(1200);
     opened = page.url().includes('/po/');
   }
-  if (opened) console.log(`  ✓ on PO detail: ${page.url()}`);
+  const poDetailUrl = opened ? page.url() : null;
+  if (opened) console.log(`  ✓ on PO detail: ${poDetailUrl}`);
   else console.log('  ! could not open a PO detail');
 
   // 3) Demonstrate delegation + prove the read-only guard blocks EVERY action.
@@ -149,9 +162,23 @@ async function run() {
   console.log('─────────────────────────────────────────────────\n');
 
   await browser.close();
+  return {
+    llm: hasLLM,
+    intentTopic: topic,
+    gated: false,
+    narration: spoken,
+    poOpened: opened,
+    poUrl: poDetailUrl,
+    heals: nav.heals,
+    blocked: guard.blocked,
+  };
 }
 
-run().catch((e) => {
-  console.error('Scenario failed:', e?.message ?? e);
-  process.exit(1);
-});
+// Run directly via `npm run demo`. The eval imports runScenario() instead.
+const isDirectRun = import.meta.url === `file://${process.argv[1]}`;
+if (isDirectRun) {
+  runScenario().catch((e) => {
+    console.error('Scenario failed:', e?.message ?? e);
+    process.exit(1);
+  });
+}

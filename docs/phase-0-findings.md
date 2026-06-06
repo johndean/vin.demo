@@ -8,6 +8,12 @@ The core loop runs reliably end-to-end against a real product, read-only. The sc
 
 Spike code is throwaway and lives in [`src/spike/`](../src/spike/). Run: `npm run recon` (observe-only map) and `npm run demo` (the scenario).
 
+### Repeatable check
+`npm run eval` runs the scenario once and asserts the MVP guarantees, exiting non-zero on any failure (CI / pre-Phase-1 gate). Current: **7/7 PASS** — intent routed, answer cited (confidence + version), ≥2 self-heals, real PO opened, Approve + Delegate both blocked, zero mutating actions fired.
+
+### PO.vin data note (for the founder, not a spike bug)
+The Manager account's queue badge says "Review Queue 3" but its `pos?tab=manager` API returns **200 with 0 rows** — the badge counter and the role-filtered list query disagree (those 3 POs aren't assigned to that specific manager). The Admin view sees all rows at a stage regardless of assignment, so the eval runs as Admin. Worth reconciling badge-vs-list on PO.vin's side.
+
 ### Evidence (latest run)
 - **Self-healing navigation: 2/2.** Both deliberately-stale primary selectors broke and recovered via semantic fallbacks (`#sidebar-approval-queue-v1` → `button:has-text("Manager Queue")`; `.legacy-bypassed-link` → `button:has-text("Bypassed")`).
 - **Read-only guard blocked 6 live mutating controls** on the real PO detail: Approve, Delegate to teammate, Put on Hold, Reject Request, Cancel PO, Post comment. None were clicked — nothing was submitted to the production system.
