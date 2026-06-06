@@ -7,16 +7,24 @@
   "scripts": {
     "recon": "tsx src/spike/recon.ts",
     "demo": "tsx src/spike/scenario.ts",
-    "eval": "tsx src/spike/eval.ts"
+    "eval": "tsx src/spike/eval.ts",
+    "migrate": "tsx src/core/migrate.ts",
+    "seed": "tsx src/core/seed.ts",
+    "loop": "tsx src/core/run.ts"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",
+    "@types/pg": "^8.20.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.101.0",
+    "@langchain/core": "^1.1.48",
+    "@langchain/langgraph": "^1.3.6",
     "dotenv": "^16.4.5",
-    "playwright": "^1.48.0"
+    "pg": "^8.21.0",
+    "playwright": "^1.48.0",
+    "voyageai": "^0.3.1"
   }
 }

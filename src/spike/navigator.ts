@@ -71,7 +71,7 @@ export class SelfHealNavigator {
     let via: string | null = null;
     try {
       const prim = this.page.locator(step.primaryCss);
-      if (await prim.count({ timeout: 2500 } as any).catch(() => 0)) {
+      if (await prim.count().catch(() => 0)) {
         target = await this.firstUsable(prim);
       }
     } catch { /* primary broke */ }

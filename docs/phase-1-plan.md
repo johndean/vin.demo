@@ -3,8 +3,11 @@
 **Goal (plan §5):** the approval-delegation scenario end-to-end, real but thin — a single LangGraph loop on the entity model, with the "accept now" gaps wired through. This is the production rebuild of the Phase 0 spike (which stays throwaway in `src/spike/`).
 
 ## Status
-- [x] Entity model schema (`db/migrations/0001_entity_model.sql`) — the spine + trust metadata, baked in.
-- [ ] Everything below — sequenced, not yet built. **Awaiting a go/scope decision (see bottom).**
+- [x] Entity model schema (`db/migrations/0001_entity_model.sql`) — spine + trust metadata.
+- [x] **Increment 1 code** (`src/core/`): pluggable embedding provider (Voyage default; Gemini/Vertex registered swaps), pg DB layer, LangGraph loop with **interpret → retrieve** nodes (confidence/staleness gate), idempotent PO.vin seed, migration runner. Type-clean. Scripts: `npm run migrate | seed | loop`.
+- [ ] Increment 1 **live eval** — pending `DATABASE_URL` (Railway) + `VOYAGE_API_KEY`: apply migration, seed PO.vin, run `npm run loop`.
+- [ ] Increment 2 — navigate node (DemoGraph-driven self-heal + action classifier).
+- [ ] Increment 3 — explain + recover/interrupt; tracing + cost events.
 
 ## The single LangGraph loop (one loop, not many agents — §4)
 Nodes, each thin:

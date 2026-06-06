@@ -64,7 +64,9 @@ CREATE TABLE knowledge_chunks (
   product_version_id  uuid REFERENCES product_versions(id) ON DELETE SET NULL,
   category            text NOT NULL DEFAULT 'docs',  -- docs|faq|sop|release_note|competitor_positioning|...
   content             text NOT NULL,
-  embedding           vector(1536),                  -- dim is provider-configurable
+  -- Voyage voyage-3 = 1024 (default). Gemini/Vertex text-embedding = 768.
+  -- Dim is fixed per deployment; switching provider class requires a dim migration.
+  embedding           vector(1024),
   confidence          real NOT NULL DEFAULT 0.0,     -- 0..1
   source              text NOT NULL,
   last_verified       date,
