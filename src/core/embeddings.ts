@@ -20,8 +20,21 @@ class VoyageProvider implements EmbeddingProvider {
   readonly dim = 1024; // voyage-3
   private client = new VoyageAIClient({ apiKey: process.env.VOYAGE_API_KEY ?? '' });
   async embed(texts: string[]): Promise<number[][]> {
-    const res = await this.client.embed({ input: texts, model: 'voyage-3' });
-    return (res.data ?? []).map((d) => d.embedding as number[]);
+    // Free tier is 3 RPM without a payment method — retry 429s with backoff.
+    const delays = [21_000, 42_000];
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const res = await this.client.embed({ input: texts, model: 'voyage-3' });
+        return (res.data ?? []).map((d) => d.embedding as number[]);
+      } catch (e: any) {
+        if (e?.statusCode === 429 && attempt < delays.length) {
+          console.error(`  (Voyage rate-limited; retrying in ${delays[attempt] / 1000}s — add a payment method to lift the 3 RPM free limit)`);
+          await new Promise((r) => setTimeout(r, delays[attempt]));
+          continue;
+        }
+        throw e;
+      }
+    }
   }
 }
 

@@ -8,7 +8,11 @@ import { getLlm } from './llm.js';
 import { getEmbeddingProvider } from './embeddings.js';
 import { db, toVector } from './db.js';
 
-const CONFIDENCE_THRESHOLD = 0.6;
+const CONFIDENCE_THRESHOLD = 0.6;   // trust: chunk's own validated confidence
+const RELEVANCE_MAX_DISTANCE = 0.65; // relevance: cosine distance of the best match
+// Both gates matter: a high-confidence chunk that's semantically far from the
+// question is the wrong answer, and answering it would be "confidently demoing
+// the wrong thing". Gate on either failing.
 
 /** interpret — utterance → intent + kind (intent-driven, never script-driven). */
 async function interpret(state: DemoStateT): Promise<Partial<DemoStateT>> {
@@ -44,13 +48,18 @@ async function retrieve(state: DemoStateT): Promise<Partial<DemoStateT>> {
     params,
   );
   const top = rows[0];
-  const gated = !top || top.confidence < CONFIDENCE_THRESHOLD || top.validation_status === 'stale';
+  const lowConfidence = !top || top.confidence < CONFIDENCE_THRESHOLD;
+  const stale = top?.validation_status === 'stale';
+  const irrelevant = !top || top.distance > RELEVANCE_MAX_DISTANCE;
+  const gated = lowConfidence || stale || irrelevant;
+  const reason = !top ? 'no knowledge' : lowConfidence ? 'low confidence' : stale ? 'stale' : irrelevant ? 'not relevant' : 'ok';
   return {
     retrieved: rows,
     gated,
     trace: [
       `retrieve: ${rows.length} chunks; top confidence=${top?.confidence ?? 'n/a'} ` +
-        `status=${top?.validation_status ?? 'n/a'} → ${gated ? 'GATED (say "I\'m not certain")' : 'answer'}`,
+        `status=${top?.validation_status ?? 'n/a'} distance=${top?.distance?.toFixed(3) ?? 'n/a'} ` +
+        `→ ${gated ? `GATED (${reason}) — say "I'm not certain"` : 'answer'}`,
     ],
   };
 }

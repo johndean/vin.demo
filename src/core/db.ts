@@ -11,10 +11,12 @@ export function db(): Pool {
     throw new Error('DATABASE_URL is not set — provision Railway Postgres and add it to .env.');
   }
   if (!pool) {
+    const url = process.env.DATABASE_URL;
+    const isLocal = /@(localhost|127\.0\.0\.1)/.test(url) || url.includes('sslmode=disable');
     pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      // Railway external connections require TLS; internal do not. Be permissive.
-      ssl: process.env.DATABASE_URL.includes('railway') ? { rejectUnauthorized: false } : undefined,
+      connectionString: url,
+      // Remote (Railway proxy) needs TLS; local dev does not.
+      ssl: isLocal ? undefined : { rejectUnauthorized: false },
     });
   }
   return pool;
