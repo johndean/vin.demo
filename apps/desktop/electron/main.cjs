@@ -62,6 +62,10 @@ ipcMain.handle('auth:login', async (_e, { email, password }) => {
   }
 });
 
+// Log out: drop the captured token and abort any running session. The desktop holds no browser
+// cookie jar (it sends the Cookie header manually), so clearing sessionCookie fully signs out.
+ipcMain.handle('auth:logout', () => { stopSession(); sessionCookie = null; return { ok: true }; });
+
 // Thin client: fetch the SAME real console data the web renders (the SSOT), using the captured cookie.
 ipcMain.handle('data:fetch', async () => {
   try {

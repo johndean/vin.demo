@@ -387,7 +387,7 @@ const COST_COLOR: Record<string, string> = { llm: '#002855', navigation: '#0097A
 const SEG_BTN: React.CSSProperties = { border: 'none', background: 'transparent', color: 'var(--color-steel-hover)', fontSize: 10.5, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', padding: '4px 9px', borderRadius: 6, cursor: 'pointer' };
 const SEG_ON: React.CSSProperties = { background: '#fff', color: 'var(--color-navy)' };
 
-export default function ControlRoom() {
+export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}) {
   // Runtime toggle (Settings): LIVE engine is the default; SCRIPTED is the QA/testing path.
   const [runtime, setRuntime] = useState<'live' | 'scripted'>(() => {
     try { return localStorage.getItem('vd-runtime') === 'scripted' ? 'scripted' : 'live'; } catch { return 'live'; }
@@ -447,6 +447,7 @@ export default function ControlRoom() {
         <span className={`cr-mode ${MODE_META[mode].cls}`}><Icon name={MODE_META[mode].icon} size={12} /> {MODE_META[mode].label}</span>
         <span className="cr-clock">{fmt(secs)}</span>
         <a className="cr-icon-btn" href="https://demofor.vin" target="_blank" rel="noreferrer" title="Back to console"><Icon name="external" size={16} /></a>
+        <button className="cr-icon-btn" onClick={onLogout} title="Log out"><Icon name="logout" size={16} /></button>
       </div>
 
       <div className="cr-body">

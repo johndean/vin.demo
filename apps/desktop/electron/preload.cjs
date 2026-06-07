@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('win', {
 // request runs in the main process (no CORS) — the desktop is a thin client of the web SSOT.
 contextBridge.exposeInMainWorld('auth', {
   login: (email, password) => ipcRenderer.invoke('auth:login', { email, password }),
+  logout: () => ipcRenderer.invoke('auth:logout'),
 });
 
 // Real console data from the web SSOT (gated by the captured session cookie).

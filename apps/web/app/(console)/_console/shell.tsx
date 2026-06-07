@@ -2,6 +2,7 @@
 /* VIN Demo console — shared icon set + shell primitives (ported from web/shell.jsx).
    PageHead is co-located here so the view modules import in one direction. */
 import React, { Fragment } from 'react';
+import { useRouter } from 'next/navigation';
 
 export type Go = (route: string, param?: string | null) => void;
 
@@ -50,6 +51,7 @@ export const ICONS: Record<string, string> = {
   target: 'M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20zM12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12zM12 14a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   send: 'M22 2 11 13M22 2l-7 20-4-9-9-4z',
   pin: 'M12 22s7-5.8 7-12a7 7 0 1 0-14 0c0 6.2 7 12 7 12zM12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
+  logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
 };
 
 export function Icon({ name, size = 16, fill = false, style, cls }: { name: string; size?: number; fill?: boolean; style?: React.CSSProperties; cls?: string }) {
@@ -138,9 +140,14 @@ export function PageHead({ overline, title, desc, actions, crumbs, go }: { overl
 
 /* ---- Topbar ---- */
 export function Topbar({ cost, workspace, operator }: { cost: string; workspace?: { name: string; sub: string }; operator?: string }) {
+  const router = useRouter();
   const ws = workspace ?? { name: 'VIN Demo', sub: 'workspace' };
   const opName = operator ? operator.replace(/@.*/, '') : 'operator';
   const opInitials = (opName.split(/[.\s_-]+/).map((s) => s[0]).filter(Boolean).slice(0, 2).join('') || 'OP').toUpperCase();
+  async function logout() {
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* clear cookie best-effort */ }
+    router.replace('/login');
+  }
   return (
     <header className="topbar">
       <div className="brand">
@@ -172,6 +179,7 @@ export function Topbar({ cost, workspace, operator }: { cost: string; workspace?
       </div>
       <button className="topbar__icon" title="Notifications"><Icon name="bell" size={16} /><span className="dot" /></button>
       <div className="avatar" title={operator ?? 'Operator'}>{opInitials}</div>
+      <button className="topbar__icon" title="Log out" onClick={logout}><Icon name="logout" size={16} /></button>
     </header>
   );
 }

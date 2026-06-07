@@ -17,9 +17,17 @@ export default function App() {
   }, [authed]);
 
   if (!authed) return <Login onDone={() => setAuthed(true)} />;
+
+  const onLogout = async () => {
+    const api = (window as unknown as { auth?: { logout(): Promise<unknown> } }).auth;
+    try { await api?.logout?.(); } catch { /* */ }
+    setData(null);
+    setAuthed(false); // back to the Login screen
+  };
+
   return (
     <RealDataProvider value={data}>
-      <ControlRoom />
+      <ControlRoom onLogout={onLogout} />
     </RealDataProvider>
   );
 }
