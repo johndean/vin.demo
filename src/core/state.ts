@@ -37,6 +37,13 @@ export const DemoState = Annotation.Root({
   // e.g. a staging URL). null → use the product's configured baseUrl. The driver merges it over the
   // resolved ProductWebConfig; everything else (login, selectors, knowledge) is unchanged.
   baseUrl: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
+  // Client-driven navigation (desktop embedded browser): instead of driving a server-side Playwright
+  // browser + screenshotting, the navigate node resolves the demo-graph node to a label/selectors and
+  // emits a click instruction the embedded browser performs in the operator's OWN logged-in session.
+  // No server creds, no screenshot latency, and the human can take over the same pane.
+  clientNav: Annotation<boolean>({ reducer: (_, b) => b, default: () => false }),
+  // Per-turn output: the navigation instruction for the client to perform (clientNav only).
+  navAction: Annotation<{ label?: string; selectors?: string[]; url?: string } | null>({ reducer: (_, b) => b, default: () => null }),
 
   // interpret node
   interpretation: Annotation<Interpretation | null>({ reducer: (_, b) => b, default: () => null }),

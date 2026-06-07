@@ -24,6 +24,7 @@ export interface SessionTarget {
   mode?: ExecutionMode | null;// execution mode; coerced to read-only unless an allowed non-write mode
   baseUrl?: string | null;    // optional per-session URL override for the chosen product's adapter
   scenario?: string | null;   // optional opening question/scenario the engine asks first (entry-point concern)
+  clientNav?: boolean | null; // desktop embedded browser drives navigation (no server Playwright/screenshot)
 }
 
 // Operator-selectable execution modes. 'execution' (full-write) is deliberately EXCLUDED — it stays
@@ -36,6 +37,7 @@ export interface SessionCtx {
   role: string;
   mode: ExecutionMode;
   baseUrl: string | null;
+  clientNav: boolean;
   sessionId: string;
   graph: ReturnType<typeof buildGraph>;
   thread: { configurable: { thread_id: string } };
@@ -62,6 +64,7 @@ export async function bootSession(threadPrefix = 'live', target: SessionTarget =
   const requested = (target.mode ?? 'read-only') as ExecutionMode;
   const mode: ExecutionMode = SELECTABLE_MODES.includes(requested) ? requested : 'read-only';
   const baseUrl = target.baseUrl?.trim() || null;
+  const clientNav = !!target.clientNav;
 
   // Resolve (and validate) the product — its real name drives the adapter registry + the start event.
   const p = await db().query<{ name: string }>('SELECT name FROM products WHERE id = $1', [productId]);
@@ -72,7 +75,7 @@ export async function bootSession(threadPrefix = 'live', target: SessionTarget =
   beginCostSession(session.id);
   const graph = buildGraph();
   const thread = { configurable: { thread_id: `${threadPrefix}-${session.id}` } };
-  return { productId, productName, role, mode, baseUrl, sessionId: session.id, graph, thread };
+  return { productId, productName, role, mode, baseUrl, clientNav, sessionId: session.id, graph, thread };
 }
 
 /** Run ONE turn through the brain and emit its events. Same logic whether the utterance came from the
@@ -83,7 +86,7 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
 
   let out: any;
   try {
-    out = await ctx.graph.invoke({ utterance: turn.text, speaker: turn.speaker, productId: ctx.productId, sessionId: ctx.sessionId, role: ctx.role, mode: ctx.mode, baseUrl: ctx.baseUrl }, ctx.thread);
+    out = await ctx.graph.invoke({ utterance: turn.text, speaker: turn.speaker, productId: ctx.productId, sessionId: ctx.sessionId, role: ctx.role, mode: ctx.mode, baseUrl: ctx.baseUrl, clientNav: ctx.clientNav }, ctx.thread);
   } catch (e: any) {
     emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: `(engine error: ${e?.message ?? e})`, uncertain: true });
     return;
@@ -102,7 +105,11 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
   if (top && !out.gated) {
     emit({ type: 'cite', k: { title: String(top.content).slice(0, 64), content: top.content, source: top.source, conf: top.confidence, ver: String(top.product_version ?? '').replace(/^v/i, ''), status: top.validation_status, verified: top.last_verified, type: top.category ?? 'docs' } });
   }
-  if (out.navigation?.url) {
+  if (out.navAction) {
+    // Client-driven: tell the embedded browser to navigate (click the labeled element) in the operator's
+    // own logged-in session. No server screenshot — the live pane IS the view.
+    emit({ type: 'nav', clientDriven: true, label: out.navAction.label, selectors: out.navAction.selectors ?? [], url: out.navAction.url ?? '', healedVia: null });
+  } else if (out.navigation?.url) {
     emit({ type: 'nav', url: out.navigation.url, healedVia: out.navigation.healedVia ?? null, screenshot: await shot() });
   }
   if (out.blockedMutations?.length) emit({ type: 'blocked', actions: out.blockedMutations });

@@ -109,7 +109,7 @@ function tokenFrom(req: http.IncomingMessage, url: URL): string | null {
  *  All optional — bootSession falls back to env, validates the productId, and coerces the mode. */
 function targetFrom(url: URL): SessionTarget {
   const g = (k: string) => url.searchParams.get(k)?.trim() || undefined;
-  return { productId: g('productId'), role: g('role'), mode: g('mode') as ExecutionMode | undefined, baseUrl: g('url'), scenario: g('scenario') };
+  return { productId: g('productId'), role: g('role'), mode: g('mode') as ExecutionMode | undefined, baseUrl: g('url'), scenario: g('scenario'), clientNav: url.searchParams.get('clientNav') === '1' };
 }
 
 const server = http.createServer(async (req, res) => {

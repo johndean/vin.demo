@@ -136,7 +136,7 @@ async function pumpSSE(body) {
 function targetQuery(target) {
   if (!target || typeof target !== 'object') return '';
   const qs = new URLSearchParams();
-  for (const k of ['productId', 'role', 'mode', 'url', 'scenario']) {
+  for (const k of ['productId', 'role', 'mode', 'url', 'scenario', 'clientNav']) {
     const v = target[k];
     if (v != null && String(v).trim()) qs.set(k, String(v).trim());
   }

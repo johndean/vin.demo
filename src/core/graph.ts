@@ -51,6 +51,7 @@ async function interpret(state: DemoStateT): Promise<Partial<DemoStateT>> {
     explanation: null,
     gated: false,
     navigation: null,
+    navAction: null,
     blockedMutations: [],
     retrieved: [],
     discoveryPrompt: null,
@@ -70,7 +71,7 @@ async function retrieve(state: DemoStateT): Promise<Partial<DemoStateT>> {
 }
 
 // ── shared UI-driving used by navigate + resume ──────────────────────────────
-interface DriveOutcome { navigation: { ok: boolean; healedVia: string | null; url: string }; blockedMutations: string[]; opened: boolean; label: string; traceLines: string[] }
+interface DriveOutcome { navigation: { ok: boolean; healedVia: string | null; url: string }; blockedMutations: string[]; opened: boolean; label: string; traceLines: string[]; navAction?: { label?: string; selectors?: string[]; url?: string } }
 
 async function driveTo(state: DemoStateT, intent: string): Promise<DriveOutcome> {
   const { rows } = await db().query<DemoNode & { product_name: string }>(
@@ -85,6 +86,22 @@ async function driveTo(state: DemoStateT, intent: string): Promise<DriveOutcome>
   const labels = rows.map((r) => r.intent_label);
   const chosen = (await getLlm().pickNode(intent, labels)) || labels[0];
   const node = rows.find((r) => r.intent_label === chosen) ?? rows[0];
+
+  // Client-driven nav (desktop embedded browser): don't drive a server browser — resolve the node to
+  // the role's on-screen label + any plain CSS selectors, and hand the click to the embedded pane.
+  // The human is logged in there; the agent only navigates (read-only) within their own session.
+  if (state.clientNav) {
+    const label = node.persona_labels?.[state.role] ?? node.persona_labels?.['default'] ?? node.intent_label;
+    const selectors = (node.locator_strategies ?? [])
+      .map((s) => String(s.value).replaceAll('{label}', label))
+      .filter((v) => /^[#.]/.test(v)); // plain id/class only; the client matches the label text otherwise
+    return {
+      navigation: { ok: true, healedVia: null, url: '' },
+      blockedMutations: [], opened: true, label,
+      traceLines: [`drive (client-nav): instruct embedded browser → "${label}" as ${state.role}`],
+      navAction: { label, selectors, url: node.screen_route || undefined },
+    };
+  }
 
   const driver = await getAdapter(rows[0].product_name, state.mode, state.baseUrl);
   try {
@@ -148,6 +165,7 @@ async function navigate(state: DemoStateT): Promise<Partial<DemoStateT>> {
   const newPos: Position = { intent, url: d.navigation.url, answer: state.retrieved[0]?.content ?? null };
   return {
     navigation: d.navigation,
+    navAction: d.navAction ?? null,
     blockedMutations: d.blockedMutations,
     currentPosition: newPos,
     contextStack,
@@ -199,6 +217,7 @@ async function resume(state: DemoStateT): Promise<Partial<DemoStateT>> {
   const d = await driveTo(state, target.intent);
   return {
     navigation: d.navigation,
+    navAction: d.navAction ?? null,
     blockedMutations: d.blockedMutations,
     currentPosition: { intent: target.intent, url: d.navigation.url, answer: target.answer },
     contextStack: stack.slice(0, -1),

@@ -173,7 +173,9 @@
 .live-bar__url svg { stroke: var(--cr-ok); flex-shrink: 0; }
 .live-bar__tag { flex-shrink: 0; font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--cr-ok); background: var(--cr-ok-bg); border: 1px solid var(--cr-ok-bd); padding: 3px 8px; border-radius: 999px; }
 .live-bar__tag.driving { color: var(--cr-accent); background: var(--cr-accent-soft); border-color: var(--cr-accent-bd); }
+.live-role { flex-shrink: 0; font-size: 10px; font-weight: 700; letter-spacing: .03em; text-transform: uppercase; color: var(--cr-fg2); background: var(--cr-panel); border: 1px solid var(--cr-line); padding: 4px 9px; border-radius: 999px; }
 .live-webview { flex: 1; width: 100%; border: none; background: #fff; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 .stage { position: relative; flex: 1; min-height: 0; background: #f4f6f9; border: 1px solid var(--cr-line); border-top: none; border-radius: 0 0 var(--radius-md) var(--radius-md); overflow: hidden; }
 

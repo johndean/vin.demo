@@ -10,7 +10,7 @@ import { useReal, useDemoProduct, type RealProduct } from './real-data';
 import { VoiceClient } from './voice-client';
 
 /** What the operator can define per session, sent to the engine as query params. */
-type TargetParams = { productId?: string; role?: string; mode?: string; url?: string; scenario?: string };
+type TargetParams = { productId?: string; role?: string; mode?: string; url?: string; scenario?: string; clientNav?: string };
 /** The committed demo target (selection + config) the control room drives against. */
 interface DemoTarget { productId: string; host: string; mk: string; color: string; role: string; mode: string; url: string; scenario: string }
 const TARGET_ROLES = ['admin', 'manager', 'owner', 'accounting', 'employee'];
@@ -177,7 +177,7 @@ function RightRail({ beat, mode, liveCite, liveCost }: { beat: Beat; mode: strin
       <div className="cr-sec">
         <div className="cr-sec__title">Execution mode</div>
         <div className="flex between items-center" style={{ gap: 10 }}>
-          <span className={`cr-mode ${MODE_META[mode].cls}`}><Icon name={MODE_META[mode].icon} size={12} /> {MODE_META[mode].label}</span>
+          <span className={`cr-mode ${MODE_META[mode].cls}`} title="Read-only is the AI agent's limit — it never fires a mutating action. You're logged in yourself and have full control of your live session; take over and click anything, anytime."><Icon name={MODE_META[mode].icon} size={12} /> {MODE_META[mode].label}</span>
           <button className="kill"><Icon name="stop" size={12} className="solid" /> Kill</button>
         </div>
         <div style={{ fontSize: 11, color: 'var(--cr-fg3)', marginTop: 9, lineHeight: 1.45 }}>Default-deny. Mutating actions require an explicit mode + action grant. Hard kill is always available.</div>
@@ -242,11 +242,11 @@ function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, 
    consultant co-drives it: an engine `nav` event (navTo) navigates the same pane, so the agent walks
    the real UI and the human grabs the wheel whenever they want. Persistent partition → the login
    survives reloads/turns. Replaces the screenshot stage on the desktop. */
-function LiveBrowser({ initialUrl, navTo, driving }: { initialUrl: string; navTo?: string; driving?: boolean }) {
+function LiveBrowser({ initialUrl, navAction, driving, picker, role }: { initialUrl: string; navAction?: { label?: string; selectors?: string[]; url?: string; seq: number } | null; driving?: boolean; picker?: (liveUrl: string) => React.ReactNode; role?: string }) {
   const ref = useRef<any>(null);
   const [bar, setBar] = useState(initialUrl);
   const [nav, setNav] = useState({ back: false, fwd: false, loading: false });
-  const lastNav = useRef('');
+  const lastSeq = useRef(0);
   const lastBase = useRef(initialUrl);
 
   useEffect(() => {
@@ -261,9 +261,32 @@ function LiveBrowser({ initialUrl, navTo, driving }: { initialUrl: string; navTo
     return () => { for (const e of ['did-navigate', 'did-navigate-in-page', 'did-start-loading', 'did-stop-loading', 'dom-ready']) wv.removeEventListener(e, upd); };
   }, []);
   // Operator switched product → load the new site (it carries its own persisted login).
-  useEffect(() => { const wv = ref.current; if (wv && initialUrl && initialUrl !== lastBase.current) { lastBase.current = initialUrl; lastNav.current = ''; try { wv.loadURL(initialUrl); } catch { /* */ } } }, [initialUrl]);
-  // AI co-drive → the agent navigated; take the same pane there (dedupe; ignore non-http).
-  useEffect(() => { const wv = ref.current; if (wv && navTo && navTo !== lastNav.current && /^https?:/.test(navTo)) { lastNav.current = navTo; try { wv.loadURL(navTo); } catch { /* */ } } }, [navTo]);
+  useEffect(() => { const wv = ref.current; if (wv && initialUrl && initialUrl !== lastBase.current) { lastBase.current = initialUrl; try { wv.loadURL(initialUrl); } catch { /* */ } } }, [initialUrl]);
+  // AI co-drive → the agent issued a nav instruction; perform it in the operator's live session:
+  // find the labeled element (or a CSS selector), highlight it, and click it. Falls back to loadURL.
+  useEffect(() => {
+    const wv = ref.current;
+    if (!wv || !navAction || navAction.seq === lastSeq.current) return;
+    lastSeq.current = navAction.seq;
+    const { label, selectors = [], url } = navAction;
+    if (label || selectors.length) {
+      const code = `(function(){
+        var label=${JSON.stringify(label ?? '')}, sels=${JSON.stringify(selectors)};
+        function act(el){ if(!el) return false; el.scrollIntoView({behavior:'smooth',block:'center'});
+          var o=el.style.outline, off=el.style.outlineOffset; el.style.outline='3px solid #0861CE'; el.style.outlineOffset='2px';
+          setTimeout(function(){ try{ el.click(); }catch(e){} }, 420);
+          setTimeout(function(){ el.style.outline=o; el.style.outlineOffset=off; }, 2400); return true; }
+        for(var i=0;i<sels.length;i++){ try{ var e=document.querySelector(sels[i]); if(e&&e.offsetParent!==null) return act(e); }catch(x){} }
+        if(label){ var lc=label.toLowerCase(),
+          els=[].slice.call(document.querySelectorAll('a,button,[role="button"],[role="menuitem"],nav a,aside a,li a,li')), best=null;
+          for(var j=0;j<els.length;j++){ var el=els[j], t=(el.textContent||'').trim(); if(t&&t.toLowerCase().indexOf(lc)>=0&&el.offsetParent!==null){ if(!best||t.length<(best.textContent||'').trim().length) best=el; } }
+          if(best) return act(best.closest('a,button,[role="button"],[role="menuitem"]')||best); }
+        return false; })();`;
+      try { wv.executeJavaScript(code, true).catch(() => {}); } catch { /* */ }
+    } else if (url && /^https?:/.test(url)) {
+      try { wv.loadURL(url); } catch { /* */ }
+    }
+  }, [navAction?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const act = (fn: string) => { try { ref.current?.[fn]?.(); } catch { /* */ } };
   return (
@@ -271,9 +294,10 @@ function LiveBrowser({ initialUrl, navTo, driving }: { initialUrl: string; navTo
       <div className="live-bar">
         <button className="live-nav" onClick={() => act('goBack')} disabled={!nav.back} title="Back">‹</button>
         <button className="live-nav" onClick={() => act('goForward')} disabled={!nav.fwd} title="Forward">›</button>
-        <button className="live-nav" onClick={() => act('reload')} title="Reload">⟳</button>
-        <span className="live-bar__url" title={bar}><Icon name="lock" size={11} /> {bar}{nav.loading ? ' · loading…' : ''}</span>
-        <span className={`live-bar__tag ${driving ? 'driving' : ''}`}>{driving ? 'AI DRIVING' : 'LIVE · you can take over'}</span>
+        <button className="live-nav" onClick={() => act('reload')} title="Reload" style={nav.loading ? { animation: 'spin 1s linear infinite' } : undefined}>⟳</button>
+        {picker ? picker(bar) : <span className="live-bar__url" title={bar}><Icon name="lock" size={11} /> {bar}</span>}
+        {role && <span className="live-role" title="The persona the AI drives as — keep it consistent with who you're logged in as">as {role}</span>}
+        <span className={`live-bar__tag ${driving ? 'driving' : ''}`} title={driving ? 'The AI consultant is navigating — click anywhere to take over' : 'You are in control — it is your live, logged-in session'}>{driving ? 'AI DRIVING' : 'LIVE · you take over'}</span>
       </div>
       {createElement('webview', { ref, src: initialUrl, partition: 'persist:vinlive', allowpopups: 'true', className: 'live-webview' })}
     </div>
@@ -353,6 +377,8 @@ function TargetPicker({ products, target, liveUrl, onApply }: { products: RealPr
 function Stage({ beat, onResolve, screenshot, blocked, url, picker, browser }: { beat: Beat; onResolve: () => void; screenshot?: string | null; blocked?: string[]; url?: string; picker?: React.ReactNode; browser?: React.ReactNode }) {
   const live = !!screenshot;
   const scriptedUrl = `https://${beat.screen === 'audit' ? 'demo.vin/audit' : beat.screen === 'delegation' || beat.screen === 'settings' || beat.screen === 'newdelegation' ? 'demo.vin/approvals/' + beat.screen : 'demo.vin/' + (beat.screen === 'dashboard' ? '' : beat.screen)}`;
+  // Embedded live browser owns the whole stage (it carries its own single control bar + the picker).
+  if (browser) return <div className="stage-wrap">{browser}</div>;
   return (
     <div className="stage-wrap">
       <div className="stage-bar">
@@ -493,8 +519,9 @@ interface LiveState {
   running: boolean; done: boolean; ready: boolean; loopIdx: number; phase: string; brain: string; sub: string; conf: number;
   messages: Msg[]; cite: any | null; cost: number; byType: { type: string; usd: number }[];
   screenshot: string | null; url: string; blocked: string[]; error: string | null;
+  navAction: { label?: string; selectors?: string[]; url?: string; seq: number } | null; // client-driven nav instruction for the embedded browser
 }
-const LIVE_INIT: LiveState = { running: false, done: false, ready: false, loopIdx: -1, phase: 'Ready', brain: 'Live engine ready — press Run agent to drive po.vin read-only.', sub: 'awaiting start', conf: 0.9, messages: [], cite: null, cost: 0, byType: [], screenshot: null, url: '', blocked: [], error: null };
+const LIVE_INIT: LiveState = { running: false, done: false, ready: false, loopIdx: -1, phase: 'Ready', brain: 'Live engine ready — press Run agent to drive po.vin read-only.', sub: 'awaiting start', conf: 0.9, messages: [], cite: null, cost: 0, byType: [], screenshot: null, url: '', blocked: [], error: null, navAction: null };
 
 function reduceLive(p: LiveState, ev: any): LiveState {
   switch (ev.type) {
@@ -504,7 +531,13 @@ function reduceLive(p: LiveState, ev: any): LiveState {
     case 'message': return { ...p, messages: [...p.messages, { side: ev.side, who: ev.who, role: ev.role, av: ev.side === 'ai' ? 'AI' : String(ev.who ?? '?')[0].toUpperCase(), color: ev.side === 'ai' ? '#002855' : '#4D6995', text: ev.text, tag: ev.tag, uncertain: ev.uncertain }] };
     case 'beat': return { ...p, loopIdx: ev.loopIdx ?? p.loopIdx, phase: ev.phase ?? p.phase, brain: ev.brain ?? p.brain, sub: ev.sub ?? p.sub, conf: ev.conf ?? p.conf };
     case 'cite': return { ...p, cite: ev.k };
-    case 'nav': return { ...p, screenshot: ev.screenshot ?? p.screenshot, url: ev.url ?? p.url };
+    case 'nav': return {
+      ...p,
+      screenshot: ev.screenshot ?? p.screenshot,
+      url: ev.url ?? p.url,
+      // Client-driven instruction → bump seq so the embedded browser performs it (click the labeled element).
+      navAction: ev.clientDriven ? { label: ev.label, selectors: ev.selectors ?? [], url: ev.url || undefined, seq: (p.navAction?.seq ?? 0) + 1 } : p.navAction,
+    };
     case 'blocked': return { ...p, blocked: ev.actions ?? [] };
     case 'cost': return { ...p, cost: ev.total ?? p.cost, byType: ev.byType ?? p.byType };
     case 'done': return { ...p, running: false, done: true, loopIdx: 6 };
@@ -585,7 +618,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
     setTarget({ productId: p.id, host: p.domain, mk: p.mk, color: p.color, role: 'admin', mode: 'read-only', url: '', scenario: '' });
   }, [products, target]);
   const targetParams: TargetParams | undefined = target
-    ? { productId: target.productId || undefined, role: target.role, mode: target.mode, url: target.url || undefined, scenario: target.scenario || undefined }
+    ? { productId: target.productId || undefined, role: target.role, mode: target.mode, url: target.url || undefined, scenario: target.scenario || undefined, clientNav: '1' }
     : undefined;
   const tkey = target ? `${target.productId}|${target.role}|${target.mode}|${target.url}|${target.scenario}` : '';
   // The URL the embedded browser opens: an explicit override/ad-hoc URL, else the product's domain.
@@ -642,7 +675,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
           <button style={{ ...SEG_BTN, ...(runtime === 'live' ? SEG_ON : {}) }} onClick={() => setMode('live')}>Reel</button>
           <button style={{ ...SEG_BTN, ...(runtime === 'scripted' ? SEG_ON : {}) }} onClick={() => setMode('scripted')}>Scripted</button>
         </div>
-        <span className={`cr-mode ${MODE_META[mode].cls}`}><Icon name={MODE_META[mode].icon} size={12} /> {MODE_META[mode].label}</span>
+        <span className={`cr-mode ${MODE_META[mode].cls}`} title="Read-only is the AI agent's limit — it never fires a mutating action. You're logged in yourself and have full control of your live session; take over and click anything, anytime."><Icon name={MODE_META[mode].icon} size={12} /> {MODE_META[mode].label}</span>
         <span className="cr-clock">{fmt(secs)}</span>
         <a className="cr-icon-btn" href="https://demofor.vin" target="_blank" rel="noreferrer" title="Back to console"><Icon name="external" size={16} /></a>
         <button className="cr-icon-btn" onClick={onLogout} title="Log out"><Icon name="logout" size={16} /></button>
@@ -652,8 +685,10 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
         <div className="cr-stagearea">
           <Stage beat={beat} onResolve={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
             screenshot={engine ? live.screenshot : null} blocked={engine ? live.blocked : undefined} url={engine ? live.url : undefined}
-            picker={engine && target ? <TargetPicker products={products} target={target} liveUrl={browserUrl.replace(/^https?:\/\//, '')} onApply={setTarget} /> : undefined}
-            browser={engine && target && browserUrl ? <LiveBrowser initialUrl={browserUrl} navTo={live.url || undefined} driving={live.running} /> : undefined} />
+            browser={engine && target && browserUrl
+              ? <LiveBrowser initialUrl={browserUrl} navAction={live.navAction} driving={live.running} role={target.role}
+                  picker={(liveUrl) => <TargetPicker products={products} target={target} liveUrl={liveUrl} onApply={setTarget} />} />
+              : undefined} />
         </div>
         <RightPanel beat={beat} mode={mode} open={panelOpen} setOpen={setPanelOpen} tab={tab} setTab={setTab} messages={messages} typing={typing}
           onAsk={(runtime === 'ask' || runtime === 'talk') ? onAsk : undefined} canAsk={canAsk}
