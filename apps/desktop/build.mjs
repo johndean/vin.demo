@@ -20,7 +20,7 @@ await build({
 });
 
 cpSync('index.html', 'dist/index.html');
-for (const f of ['tokens.css', 'vin-demo.css', 'control-room.css']) cpSync(`styles/${f}`, `dist/${f}`);
+for (const f of ['tokens.css', 'vin-demo.css', 'control-room.css', 'login.css']) cpSync(`styles/${f}`, `dist/${f}`);
 cpSync('fonts', 'dist/fonts', { recursive: true });
 cpSync('assets', 'dist/assets', { recursive: true });
 
