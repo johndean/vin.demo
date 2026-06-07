@@ -46,7 +46,7 @@ export interface DiscoverResult {
 }
 
 /** One element on the live page the agent can act on (perceived from the embedded browser's DOM). */
-export interface PageElement { ref: number; text: string; role?: string; kind?: string; }
+export interface PageElement { ref: number; text: string; role?: string; kind?: string; options?: string[]; required?: boolean; filled?: boolean; }
 export interface AgentStepContext {
   goal: string;            // the stakeholder's request — what to demonstrate / answer
   url: string;
@@ -60,9 +60,9 @@ export interface AgentStepContext {
 }
 /** The single next action the agent takes to drive the live demo (read-only: never commits). */
 export interface AgentStep {
-  action: 'click' | 'type' | 'done';
-  ref: number;             // element ref for click/type (-1 when action=done)
-  value: string;           // text for 'type' ("" otherwise)
+  action: 'click' | 'type' | 'select' | 'done';
+  ref: number;             // element ref for click/type/select (-1 when action=done)
+  value: string;           // text to type, or the option to choose for 'select' ("" otherwise)
   say: string;             // one-sentence narration, grounded in what's on screen
 }
 
@@ -206,7 +206,11 @@ class ClaudeProvider implements LlmProvider {
 
   async agentStep(ctx: AgentStepContext): Promise<AgentStep> {
     const done = (say: string): AgentStep => ({ action: 'done', ref: -1, value: '', say });
-    const elementList = ctx.elements.map((e) => `[${e.ref}] ${e.kind ?? e.role ?? 'el'}: ${JSON.stringify(e.text)}`).join('\n');
+    const elementList = ctx.elements.map((e) => {
+      const flags = [e.required ? 'REQUIRED' : '', e.filled ? 'filled' : (e.kind && /text|select|textarea|email|number|tel|date|password|search/.test(e.kind) ? 'EMPTY' : '')].filter(Boolean).join(',');
+      const opts = e.options && e.options.length ? ` options=[${e.options.slice(0, 25).map((o) => JSON.stringify(o)).join(', ')}]` : '';
+      return `[${e.ref}] ${e.kind ?? e.role ?? 'el'}: ${JSON.stringify(e.text)}${flags ? ` (${flags})` : ''}${opts}`;
+    }).join('\n');
     const policy = ctx.mode === 'execution'
       ? 'EXECUTION MODE — the operator authorized LIVE writes against their OWN demo environment, so you MAY ' +
         'complete the workflow end to end, INCLUDING save/submit/create, to show it actually working. Type only ' +
@@ -225,9 +229,15 @@ class ClaudeProvider implements LlmProvider {
         'specific app. Given the goal and the interactive elements visible NOW (each with a [ref]), decide the ' +
         'SINGLE next action that best advances the demo:\n' +
         '• click — open/navigate/act via an element [ref] (menus, tabs, rows, "New …" buttons, and in execution mode the commit).\n' +
-        '• type — enter a realistic demo value into a field [ref] (never real/sensitive data).\n' +
-        '• done — the goal is achieved, OR (outside execution mode) the only way forward is a commit.\n' +
+        '• type — enter a realistic demo value into a text field [ref] (never real/sensitive data).\n' +
+        '• select — choose an option for a dropdown. For a `select` element, set `value` to one of its listed options. ' +
+        'For a CUSTOM dropdown (a button/combobox that opens a list), first `click` it to open, then on the next step `click` the option that appears.\n' +
+        '• done — the goal is achieved, OR (outside execution mode) the only way forward is a commit, OR you are blocked.\n' +
         policy + '\n' +
+        'FORMS: to complete a form, fill EVERY field marked REQUIRED and EMPTY with a realistic demo value before attempting submit — ' +
+        'a required dropdown left empty keeps Submit disabled. Use `select` for dropdowns. Do not repeat an action that already ran ' +
+        '(if a field still shows EMPTY after you tried, it likely needs a different approach). If you genuinely cannot complete a ' +
+        'required field, return done and say which field the human should set so you can continue — NEVER loop on the same step.\n' +
         'Always narrate `say` in ONE concise, friendly sentence grounded ONLY in what is on screen — never invent. ' +
         'Prefer the most direct path to the goal; do not wander.',
       messages: [{
@@ -246,9 +256,9 @@ class ClaudeProvider implements LlmProvider {
           schema: {
             type: 'object',
             properties: {
-              action: { type: 'string', enum: ['click', 'type', 'done'] },
-              ref: { type: 'integer', description: 'element ref for click/type; -1 for done' },
-              value: { type: 'string', description: 'text to type (type only); "" otherwise' },
+              action: { type: 'string', enum: ['click', 'type', 'select', 'done'] },
+              ref: { type: 'integer', description: 'element ref for click/type/select; -1 for done' },
+              value: { type: 'string', description: 'text to type, or the dropdown option to choose for select; "" otherwise' },
               say: { type: 'string', description: 'one-sentence narration of this step, grounded in the screen' },
             },
             required: ['action', 'ref', 'value', 'say'],
@@ -263,7 +273,7 @@ class ClaudeProvider implements LlmProvider {
     if (!b || !('text' in b)) return done('I could not read the screen clearly — you can take over and click directly.');
     try {
       const p = JSON.parse(b.text);
-      const action = p.action === 'click' || p.action === 'type' ? p.action : 'done';
+      const action = p.action === 'click' || p.action === 'type' || p.action === 'select' ? p.action : 'done';
       return { action, ref: Number.isInteger(p.ref) ? p.ref : -1, value: typeof p.value === 'string' ? p.value : '', say: typeof p.say === 'string' ? p.say : '' };
     } catch {
       return done('I had trouble planning the next step — take over whenever you like.');

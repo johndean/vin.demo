@@ -219,7 +219,12 @@ const server = http.createServer(async (req, res) => {
     const mode: ExecutionMode = ALLOWED.includes(body?.mode) ? body.mode : 'read-only';
     const history = Array.isArray(body?.history) ? body.history.filter((x: any) => typeof x === 'string').slice(-12) : [];
     const elements = Array.isArray(page?.elements)
-      ? page.elements.slice(0, 120).map((e: any) => ({ ref: Number(e?.ref), text: String(e?.text ?? '').slice(0, 120), role: e?.role ? String(e.role) : undefined, kind: e?.kind ? String(e.kind) : undefined })).filter((e: any) => Number.isInteger(e.ref))
+      ? page.elements.slice(0, 140).map((e: any) => ({
+          ref: Number(e?.ref), text: String(e?.text ?? '').slice(0, 120),
+          role: e?.role ? String(e.role) : undefined, kind: e?.kind ? String(e.kind) : undefined,
+          options: Array.isArray(e?.options) ? e.options.slice(0, 25).map((o: any) => String(o).slice(0, 60)) : undefined,
+          required: e?.required === true || undefined, filled: e?.filled === true || undefined,
+        })).filter((e: any) => Number.isInteger(e.ref))
       : [];
     if (!goal) { res.writeHead(400, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify({ error: 'no goal' })); return; }
     const finish = (step: any) => { res.writeHead(200, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify(step)); };

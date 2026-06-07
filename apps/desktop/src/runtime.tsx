@@ -241,21 +241,40 @@ function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, 
    stable data-vin-ref on each so the agent can point at one to click/type. Product-agnostic. */
 const PAGE_SNAPSHOT_JS = `(function(){
   function vis(el){ try{ var r=el.getBoundingClientRect(); return el.offsetParent!==null && r.width>1 && r.height>1; }catch(e){ return false; } }
-  var sel='a[href],button,[role="button"],[role="menuitem"],[role="tab"],[role="link"],input:not([type="hidden"]),select,textarea,summary,[onclick]';
+  var sel='a[href],button,[role="button"],[role="menuitem"],[role="tab"],[role="link"],[role="option"],[role="combobox"],input:not([type="hidden"]),select,textarea,summary,[onclick]';
   var nodes=[].slice.call(document.querySelectorAll(sel)), out=[], ref=0;
-  for(var i=0;i<nodes.length && ref<120;i++){ var el=nodes[i]; if(!vis(el)) continue;
+  for(var i=0;i<nodes.length && ref<140;i++){ var el=nodes[i]; if(!vis(el)) continue;
     var tag=el.tagName.toLowerCase();
-    var kind = tag==='a'?'link': tag==='input'?(el.getAttribute('type')||'text'): tag==='select'?'select': tag==='textarea'?'textarea':'button';
+    var kind = tag==='a'?'link': tag==='input'?((el.getAttribute('type')||'text').toLowerCase()): tag==='select'?'select': tag==='textarea'?'textarea':'button';
     var text=(el.innerText||el.value||el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.getAttribute('title')||'').trim().replace(/\\s+/g,' ').slice(0,120);
     if(!text && tag!=='input' && tag!=='select' && tag!=='textarea') continue;
     el.setAttribute('data-vin-ref', String(ref));
-    out.push({ ref: ref, text: text, role: el.getAttribute('role')||undefined, kind: kind }); ref++; }
+    var item={ ref: ref, text: text, role: el.getAttribute('role')||undefined, kind: kind };
+    if(el.required || el.getAttribute('aria-required')==='true') item.required=true;
+    if(tag==='select'){
+      item.options=[].slice.call(el.options||[]).map(function(o){return (o.text||'').trim();}).filter(Boolean).slice(0,25);
+      item.filled = el.selectedIndex>0 && !!el.value;            // option 0 is usually the empty placeholder
+    } else if(tag==='input'){
+      var t=(el.getAttribute('type')||'text').toLowerCase();
+      item.filled = (t==='checkbox'||t==='radio') ? !!el.checked : !!el.value;
+    } else if(tag==='textarea'){ item.filled = !!el.value; }
+    out.push(item); ref++; }
   var heads=[].slice.call(document.querySelectorAll('h1,h2,h3')).filter(vis).map(function(h){return (h.innerText||'').trim().replace(/\\s+/g,' ').slice(0,100);}).filter(Boolean).slice(0,12);
   return { url: location.href, title: document.title, headings: heads, elements: out };
 })()`;
 const clickRefJs = (ref: number) => `(function(){ var el=document.querySelector('[data-vin-ref="'+${ref}+'"]'); if(!el) return false;
   el.scrollIntoView({behavior:'smooth',block:'center'}); var o=el.style.outline, off=el.style.outlineOffset; el.style.outline='3px solid #0861CE'; el.style.outlineOffset='2px';
   setTimeout(function(){ try{ el.click(); }catch(e){} }, 400); setTimeout(function(){ el.style.outline=o; el.style.outlineOffset=off; }, 2400); return true; })()`;
+const selectRefJs = (ref: number, val: string) => `(function(){ var el=document.querySelector('[data-vin-ref="'+${ref}+'"]'); if(!el) return false;
+  el.scrollIntoView({behavior:'smooth',block:'center'}); var want=${JSON.stringify(val)}.toString().toLowerCase().trim();
+  if(el.tagName==='SELECT'){ var opts=[].slice.call(el.options), pick=-1;
+    for(var i=0;i<opts.length;i++){ var t=(opts[i].text||'').toLowerCase().trim(), v=(opts[i].value||'').toLowerCase().trim(); if(t===want||v===want){ pick=i; break; } }
+    if(pick<0) for(var j=0;j<opts.length;j++){ if((opts[j].text||'').toLowerCase().indexOf(want)>=0 && want){ pick=j; break; } }
+    if(pick<0) for(var k=1;k<opts.length;k++){ if(opts[k].value && !opts[k].disabled){ pick=k; break; } } // fallback: first real option
+    if(pick<0) return false;
+    el.selectedIndex=pick; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
+    var o=el.style.outline; el.style.outline='3px solid #0861CE'; setTimeout(function(){el.style.outline=o;},2400); return true; }
+  try{ el.click(); }catch(e){} return true; })()`; // custom dropdown trigger → open it; the option is clicked next step
 const typeRefJs = (ref: number, val: string) => `(function(){ var el=document.querySelector('[data-vin-ref="'+${ref}+'"]'); if(!el) return false;
   el.scrollIntoView({behavior:'smooth',block:'center'}); try{ el.focus(); var proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype; var s=Object.getOwnPropertyDescriptor(proto,'value').set; s.call(el, ${JSON.stringify(val)}); }catch(e){ try{ el.value=${JSON.stringify(val)}; }catch(x){} }
   el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
@@ -292,6 +311,7 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, contr
       snapshot: () => ref.current?.executeJavaScript(PAGE_SNAPSHOT_JS, true),
       clickRef: (r: number) => ref.current?.executeJavaScript(clickRefJs(r), true),
       typeInto: (r: number, v: string) => ref.current?.executeJavaScript(typeRefJs(r, v), true),
+      selectOption: (r: number, v: string) => ref.current?.executeJavaScript(selectRefJs(r, v), true),
     };
     return () => { if (controlsRef) controlsRef.current = null; };
   }, [controlsRef]);
@@ -624,7 +644,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   // Live engine session.
   const { live, start, startInteractive, ask, stop, pushEvent, reset } = useLiveSession();
   const vcRef = useRef<VoiceClient | null>(null);
-  const browserCtl = useRef<{ snapshot: () => Promise<any>; clickRef: (r: number) => Promise<any>; typeInto: (r: number, v: string) => Promise<any> } | null>(null);
+  const browserCtl = useRef<{ snapshot: () => Promise<any>; clickRef: (r: number) => Promise<any>; typeInto: (r: number, v: string) => Promise<any>; selectOption: (r: number, v: string) => Promise<any> } | null>(null);
   const driving = useRef(false);
   const [driveActive, setDriveActive] = useState(false);
   const [voiceState, setVoiceState] = useState<string>('idle');
@@ -712,18 +732,27 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
     pushEvent({ type: 'message', side: 'them', who: target?.role ?? 'You', role: 'Operator', text: goal, tag: 'question' });
     pushEvent({ type: 'beat', loopIdx: 2, phase: 'Driving the demo', brain: 'Reading the live screen and taking the next step.', sub: goal });
     const history: string[] = [];
+    const say = (text: string, uncertain?: boolean) => pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text, uncertain });
+    let lastSig = ''; let finished = false;
     try {
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < 14; i++) { // forms need several steps; stuck-detection (below) ends it early if it's not progressing
         const page = await ctl.snapshot().catch(() => null);
-        if (!page) { pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: "I can't read the page yet — make sure it's loaded (and you're logged in), then ask again.", uncertain: true }); break; }
+        if (!page) { say("I can't read the page yet — make sure it's loaded (and you're logged in), then ask again.", true); finished = true; break; }
         const res = await api.agentStep({ goal, page, history, role: target?.role, mode: target?.mode });
-        if (!res) { pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: 'Lost the connection to the engine for a moment — try again.', uncertain: true }); break; }
-        if (res.say) { pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: res.say, uncertain: res.action === 'done' && i === 0 ? false : undefined }); history.push(res.say); }
-        if (res.action === 'done') break;
+        if (!res) { say('Lost the connection to the engine for a moment — try again.', true); finished = true; break; }
+        if (res.say) { say(res.say, res.action === 'done' && i === 0 ? false : undefined); history.push(res.say); }
+        if (res.action === 'done') { finished = true; break; }
+        // Never freeze: if the agent repeats the exact same action, it's stuck (e.g. a dropdown it can't
+        // resolve) — hand the wheel back gracefully instead of looping.
+        const sig = `${res.action}:${res.ref}:${res.value ?? ''}`;
+        if (sig === lastSig) { say("I've gone as far as I can automatically here — could you set that field, then tell me to continue? I'll pick it right back up.", true); finished = true; break; }
+        lastSig = sig;
         if (res.action === 'click') await ctl.clickRef(res.ref).catch(() => {});
         else if (res.action === 'type') await ctl.typeInto(res.ref, res.value ?? '').catch(() => {});
+        else if (res.action === 'select') await ctl.selectOption(res.ref, res.value ?? '').catch(() => {});
         await new Promise((r) => setTimeout(r, 1500)); // let the page settle before the next perception
       }
+      if (!finished) say("That's as far as I'll take this automatically — your turn to finish up, then ask me to continue.", true);
     } finally { driving.current = false; setDriveActive(false); }
   };
   // Typed questions in engine modes drive the live pane; spoken (mic) input still flows server-side.
