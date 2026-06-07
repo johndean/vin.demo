@@ -167,16 +167,81 @@ export function DemoGraphInner({ p }: { p: any }) {
 /* ============================ ENVIRONMENTS ============================ */
 export function Environments({ go }: { go: Go }) {
   const VD = useData();
+  const [creating, setCreating] = useState(false);
   return (
     <div className="page scroll">
       <PageHead overline="Library" title="Environments"
-        desc="The interaction layer always points at a demo environment with seeded data and a reset mechanism — never a customer's live production tenant. Pointing at production requires an explicit, audited opt-in."
-        actions={<button className="btn btn-primary"><Icon name="plus" size={14} /> New environment</button>} />
-      <div className="banner banner-warn" style={{ marginBottom: 18 }}><Icon name="alert" size={18} style={{ color: 'var(--color-amber)' }} /><div><strong>Production routing is OFF for all environments.</strong> Demo data is part of the architecture — every demo runs against a reset-able tenant so a broken click can never touch real records.</div></div>
+        desc="The interaction layer points at an environment with seeded data and a reset mechanism. Demo (non-production) is the default; pointing at a production tenant is an explicit, visible choice."
+        actions={<button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="plus" size={14} /> New environment</button>} />
       <div className="grid cols-2">
-        {VD.products.map((p) => <EnvCard key={p.id} p={p} />)}
+        {VD.products.map((p) => <EnvCard key={p.id} p={p} products={VD.products} />)}
       </div>
+      {creating && <EnvForm env={null} products={VD.products} onClose={() => setCreating(false)} />}
     </div>
+  );
+}
+
+const ENV_MODES = ['read-only', 'safe', 'approval', 'execution'];
+/* Create / edit an environment — all real columns editable; belongs to a product. */
+function EnvForm({ env, products, onClose }: { env: any | null; products: any[]; onClose: () => void }) {
+  const router = useRouter();
+  const [productId, setProductId] = useState(env?.id ?? products[0]?.id ?? '');
+  const [name, setName] = useState(env?.env && env.env !== '—' ? env.env : '');
+  const [url, setUrl] = useState(env?.connectionTarget ?? '');
+  const [reset, setReset] = useState(env?.resetMechanism ?? '');
+  const [cadence, setCadence] = useState(env?.refreshCadence ?? '');
+  const [seed, setSeed] = useState(env?.seedDataset ?? '');
+  const [isProd, setIsProd] = useState(!!env?.isProduction);
+  const [mode, setMode] = useState(env?.defaultMode ?? 'read-only');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const editing = !!env?.envId;
+  const save = async () => {
+    if (!name.trim()) { setErr('Environment name is required.'); return; }
+    setBusy(true); setErr('');
+    try {
+      const fields = { name: name.trim(), connection_target: url.trim(), reset_mechanism: reset.trim(), refresh_cadence: cadence.trim(), seed_dataset: { summary: seed.trim() }, is_production: isProd, default_mode: mode };
+      if (editing) await adminMutate('environment', 'update', { id: env.envId, data: fields });
+      else await adminMutate('environment', 'create', { data: { ...fields, product_id: productId } });
+      onClose(); router.refresh();
+    } catch (e: any) { setErr(e?.message || 'Save failed'); setBusy(false); }
+  };
+  return (
+    <Drawer title={editing ? `Edit environment · ${env.env}` : 'New environment'} subtitle={editing ? env.name : undefined} onClose={onClose}
+      footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save environment'}</button></>}>
+      {!editing && <Field label="Product"><select value={productId} onChange={(e) => setProductId(e.target.value)}>{products.map((p: any) => <option key={p.id} value={p.id}>{p.domain}</option>)}</select></Field>}
+      <Field label="Environment name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="demo-04" /></Field>
+      <Field label="Connection target (URL)"><input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://po.vin" /></Field>
+      <Field label="Seed dataset (description)"><input value={seed} onChange={(e) => setSeed(e.target.value)} placeholder="240 requests · 18 approvers · 6 vendors" /></Field>
+      <div className="flex gap-2">
+        <Field label="Reset mechanism"><input value={reset} onChange={(e) => setReset(e.target.value)} placeholder="snapshot / script / manual" /></Field>
+        <Field label="Refresh cadence"><input value={cadence} onChange={(e) => setCadence(e.target.value)} placeholder="Nightly + pre-session" /></Field>
+      </div>
+      <div className="flex gap-2">
+        <Field label="Default mode"><select value={mode} onChange={(e) => setMode(e.target.value)}>{ENV_MODES.map((m) => <option key={m} value={m}>{m}</option>)}</select></Field>
+        <Field label="Production tenant?"><select value={isProd ? 'yes' : 'no'} onChange={(e) => setIsProd(e.target.value === 'yes')}><option value="no">No — demo/QA</option><option value="yes">Yes — production</option></select></Field>
+      </div>
+      {isProd && <div className="modal__err" style={{ color: 'var(--color-amber, #9a6b1a)' }}>Production tenant — real data. The agent stays read-only unless explicitly raised.</div>}
+      {err && <div className="modal__err">{err}</div>}
+    </Drawer>
+  );
+}
+
+function DeleteEnv({ env, onClose }: { env: any; onClose: () => void }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const del = async () => {
+    setBusy(true); setErr('');
+    try { await adminMutate('environment', 'delete', { id: env.envId }); onClose(); router.refresh(); }
+    catch (e: any) { setErr(e?.message || 'Delete failed'); setBusy(false); }
+  };
+  return (
+    <Drawer title="Delete environment" width={420} onClose={onClose}
+      footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" style={{ background: 'var(--color-danger, #a8332f)' }} onClick={del} disabled={busy}>{busy ? 'Deleting…' : 'Delete'}</button></>}>
+      <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-primary)' }}>Delete the <b>{env.env}</b> environment for <b>{env.name}</b>? Sessions that used it keep their history.</p>
+      {err && <div className="modal__err">{err}</div>}
+    </Drawer>
   );
 }
 
@@ -212,7 +277,9 @@ function ModeSelect({ p }: { p: any }) {
   );
 }
 
-function EnvCard({ p }: { p: any }) {
+function EnvCard({ p, products }: { p: any; products?: any[] }) {
+  const [edit, setEdit] = useState(false);
+  const [del, setDel] = useState(false);
   const healthy = p.envStatus === 'Healthy';
   return (
     <div className="card">
@@ -222,18 +289,22 @@ function EnvCard({ p }: { p: any }) {
       </div>
       <div className="card-pad">
         <dl className="kv">
-          <dt>Routing</dt><dd><Pill kind="info">Demo only</Pill></dd>
+          <dt>Routing</dt><dd>{p.isProduction ? <Pill kind="warn" dot>Production tenant</Pill> : <Pill kind="info">Demo only</Pill>}</dd>
+          <dt>URL</dt><dd className="mono" style={{ fontSize: 12 }}>{p.connectionTarget || '—'}</dd>
           <dt>Default mode</dt><dd><ModeSelect p={p} /></dd>
-          <dt>Seed dataset</dt><dd>{p.name === 'demo.vin' ? '240 requests · 18 approvers · 6 vendors' : 'Scenario fixtures loaded'}</dd>
-          <dt>Reset mechanism</dt><dd>Snapshot restore</dd>
+          <dt>Seed dataset</dt><dd>{p.seedDataset || '—'}</dd>
+          <dt>Reset mechanism</dt><dd>{p.resetMechanism || '—'}</dd>
           <dt>Last reset</dt><dd>{p.lastReset}</dd>
-          <dt>Refresh cadence</dt><dd>Nightly + pre-session</dd>
+          <dt>Refresh cadence</dt><dd>{p.refreshCadence || '—'}</dd>
         </dl>
         <div className="flex gap-2" style={{ marginTop: 16 }}>
-          <button className="btn btn-secondary btn-sm"><Icon name="refresh" size={13} /> Reset now</button>
-          <button className="btn btn-ghost btn-sm"><Icon name="external" size={13} /> Open env</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => setEdit(true)}><Icon name="edit" size={13} /> Edit</button>
+          {p.connectionTarget && <a className="btn btn-ghost btn-sm" href={p.connectionTarget} target="_blank" rel="noreferrer"><Icon name="external" size={13} /> Open env</a>}
+          {p.envId && <button className="btn btn-ghost btn-sm" onClick={() => setDel(true)}><Icon name="x" size={13} /> Delete</button>}
         </div>
       </div>
+      {edit && <EnvForm env={p} products={products ?? []} onClose={() => setEdit(false)} />}
+      {del && p.envId && <DeleteEnv env={p} onClose={() => setDel(false)} />}
     </div>
   );
 }

@@ -1,13 +1,53 @@
 'use client';
 /* VIN Demo console — Pipeline + Operations views (ported from web/views-ops.jsx). */
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useData } from './data-context';
 import { PageHead, Icon, Pill, ModeChip, Avatar, Metric, type Go } from './shell';
+import { Drawer, Field } from './Modal';
+import { adminMutate } from './admin';
+
+const CUSTOMER_STAGES = ['Qualifying', 'Demo scheduled', 'Live demo', 'Follow-up', 'Evaluation', 'Closed'];
+/* Create / edit a department (account). Pipeline fields live in metadata jsonb — editable here (were heuristic fallbacks). */
+function CustomerForm({ customer, onClose }: { customer: any | null; onClose: () => void }) {
+  const router = useRouter();
+  const [name, setName] = useState(customer?.name ?? '');
+  const [seg, setSeg] = useState(customer?.seg ?? '');
+  const [stage, setStage] = useState(customer?.stage ?? 'Qualifying');
+  const [next, setNext] = useState(customer?.next ?? '');
+  const [color, setColor] = useState(customer?.color ?? '#4D6995');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const save = async () => {
+    if (!name.trim()) { setErr('Name is required.'); return; }
+    setBusy(true); setErr('');
+    try {
+      const data = { name: name.trim(), metadata: { seg, stage, next, color } };
+      if (customer?.id) await adminMutate('customer', 'update', { id: customer.id, data });
+      else await adminMutate('customer', 'create', { data });
+      onClose(); router.refresh();
+    } catch (e: any) { setErr(e?.message || 'Save failed'); setBusy(false); }
+  };
+  return (
+    <Drawer title={customer ? `Edit ${customer.name}` : 'New department'} onClose={onClose}
+      footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save'}</button></>}>
+      <Field label="Department / account name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Procurement · Acme Corp" /></Field>
+      <Field label="Segment"><input value={seg} onChange={(e) => setSeg(e.target.value)} placeholder="Enterprise · Manufacturing" /></Field>
+      <div className="flex gap-2">
+        <Field label="Stage"><select value={stage} onChange={(e) => setStage(e.target.value)}>{CUSTOMER_STAGES.map((s) => <option key={s} value={s}>{s}</option>)}</select></Field>
+        <Field label="Color"><input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ padding: 3, height: 38, width: 48 }} /></Field>
+      </div>
+      <Field label="Next step"><input value={next} onChange={(e) => setNext(e.target.value)} placeholder="Exec readout · Tue" /></Field>
+      {err && <div className="modal__err">{err}</div>}
+    </Drawer>
+  );
+}
 
 /* ============================ CUSTOMERS ============================ */
 export function Customers({ go, selected }: { go: Go; selected?: string | null }) {
   const VD = useData();
   const [sel, setSel] = useState<string | null>(selected || null);
+  const [editing, setEditing] = useState<any | null | undefined>(undefined); // undefined=closed, null=new, obj=edit
   useEffect(() => { setSel(selected || null); }, [selected]);
   const { customers } = VD;
   if (sel) { const c = customers.find((x) => x.id === sel); if (c) return <CustomerDetail c={c} go={go} back={() => setSel(null)} />; }
@@ -15,24 +55,26 @@ export function Customers({ go, selected }: { go: Go; selected?: string | null }
     <div className="page scroll">
       <PageHead overline="Pipeline" title="Departments"
         desc="Departments evaluating the products. Each carries demo sessions and a stakeholder graph — a collection of roles, interests, and open items tracked per person."
-        actions={<button className="btn btn-primary"><Icon name="plus" size={14} /> Add department</button>} />
+        actions={<button className="btn btn-primary" onClick={() => setEditing(null)}><Icon name="plus" size={14} /> Add department</button>} />
       <div className="card" style={{ overflow: 'hidden' }}>
         <table className="tbl">
-          <thead><tr><th>Department</th><th>Stage</th><th>Product</th><th>Stakeholders</th><th>Sessions</th><th>Next</th></tr></thead>
+          <thead><tr><th>Department</th><th>Stage</th><th>Product</th><th>Stakeholders</th><th>Sessions</th><th>Next</th><th></th></tr></thead>
           <tbody>
             {customers.map((c) => (
-              <tr key={c.id} onClick={() => setSel(c.id)}>
+              <tr key={c.id} onClick={() => setSel(c.id)} style={{ cursor: 'pointer' }}>
                 <td><div className="flex items-center gap-3"><Avatar initials={c.name.split(' ').map((w) => w[0]).slice(0, 2).join('')} color={c.color} size={30} /><div><div className="cell-strong">{c.name}</div><div className="cell-sub">{c.seg}</div></div></div></td>
                 <td>{c.hot ? <Pill kind="danger" dot>Live demo</Pill> : c.stage === 'Demo scheduled' ? <Pill kind="info">{c.stage}</Pill> : c.stage === 'Follow-up' ? <Pill kind="warn">{c.stage}</Pill> : <Pill kind="neutral">{c.stage}</Pill>}</td>
                 <td><span className="mono" style={{ fontSize: 12 }}>{c.product}</span></td>
                 <td className="tnum">{c.stakeholders}</td>
                 <td className="tnum">{c.sessions}</td>
                 <td><span className="muted" style={{ fontSize: 12.5 }}>{c.next}</span></td>
+                <td><button className="btn btn-ghost btn-sm" onClick={(e) => { e.stopPropagation(); setEditing(c); }}><Icon name="edit" size={13} /></button></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+      {editing !== undefined && <CustomerForm customer={editing} onClose={() => setEditing(undefined)} />}
     </div>
   );
 }

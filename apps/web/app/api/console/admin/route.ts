@@ -17,6 +17,10 @@ const SPECS: Record<string, Spec> = {
   // First entity (template). The presentation fields (scope/limits/brand/color/calls) live in the
   // definition jsonb, so they become real + editable here. More entities register below as we roll out.
   persona: { table: 'personas', workspaceScoped: true, fields: { name: 'text', status: 'text', definition: 'json' }, del: 'hard' },
+  // Environment belongs to a product (form supplies product_id). Config row → hard delete (demo_sessions FK is ON DELETE SET NULL).
+  environment: { table: 'environments', fields: { product_id: 'text', name: 'text', connection_target: 'text', reset_mechanism: 'text', refresh_cadence: 'text', seed_dataset: 'json', is_production: 'bool', default_mode: 'text' }, del: 'hard' },
+  // Customer (account) — workspace-scoped; metadata holds seg/stage/next/color. Soft archive keeps demo history.
+  customer: { table: 'customers', workspaceScoped: true, fields: { name: 'text', metadata: 'json' }, del: 'hard' },
 };
 
 function coerce(t: FieldType, v: any) {

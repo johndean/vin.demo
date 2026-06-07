@@ -9,6 +9,7 @@ export interface ProductRow {
   kbValidated: number; kbReview: number; kbStale: number;
   env: string; envStatus: string; lastReset: string; graphNodes: number; graphFlows: number;
   defaultMode: string; // per-site default execution mode (read-only|safe|approval|execution)
+  envId: string | null; connectionTarget: string; isProduction: boolean; resetMechanism: string; refreshCadence: string; seedDataset: string;
 }
 export interface KnowledgeRow { id: string; title: string; content: string; type: string; conf: number; source: string; verified: string; ver: string; status: string }
 export interface PersonaRow {

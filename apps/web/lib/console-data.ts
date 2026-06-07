@@ -61,10 +61,11 @@ export async function getConsoleData(): Promise<VDType> {
        (SELECT count(*)::int FROM demo_graph_nodes n JOIN demo_graphs g ON g.id=n.demo_graph_id WHERE g.product_id=p.id) AS graph_nodes,
        (SELECT count(*)::int FROM demo_graphs g WHERE g.product_id=p.id) AS graph_flows,
        (SELECT count(*)::int FROM demo_sessions ds JOIN product_versions pv ON pv.id=ds.product_version_id WHERE pv.product_id=p.id) AS demos,
-       e.name AS env_name, e.connection_target, e.is_production, e.created_at AS env_created
+       e.id AS env_id, e.name AS env_name, e.connection_target, e.is_production, e.created_at AS env_created,
+       e.reset_mechanism, e.refresh_cadence, e.seed_dataset
      FROM products p
      LEFT JOIN LATERAL (SELECT version_label FROM product_versions WHERE product_id=p.id AND status='active' ORDER BY created_at DESC LIMIT 1) av ON true
-     LEFT JOIN LATERAL (SELECT name, connection_target, is_production, default_mode, created_at FROM environments WHERE product_id=p.id ORDER BY created_at LIMIT 1) e ON true
+     LEFT JOIN LATERAL (SELECT id, name, connection_target, is_production, default_mode, reset_mechanism, refresh_cadence, seed_dataset, created_at FROM environments WHERE product_id=p.id ORDER BY created_at LIMIT 1) e ON true
      WHERE p.name <> ALL($1::text[])
      ORDER BY p.created_at`,
     [TEST_PRODUCTS],
@@ -88,6 +89,13 @@ export async function getConsoleData(): Promise<VDType> {
       lastReset: relTime(p.env_created),
       graphNodes: p.graph_nodes ?? 0, graphFlows: p.graph_flows ?? 0,
       defaultMode: p.default_mode ?? 'read-only',
+      // Real environment fields (de-faked — these were hardcoded strings in the UI).
+      envId: p.env_id ?? null,
+      connectionTarget: p.connection_target ?? '',
+      isProduction: !!p.is_production,
+      resetMechanism: p.reset_mechanism ?? '',
+      refreshCadence: p.refresh_cadence ?? '',
+      seedDataset: (p.seed_dataset && (p.seed_dataset.summary ?? '')) || '',
     };
   });
 
