@@ -56,6 +56,7 @@ export interface AgentStepContext {
   history: string[];       // narrations of the steps already taken this turn
   role: string;            // the persona the agent is driving as
   mode: ExecutionMode;     // read-only/safe/approval → never commit; execution → may save/submit
+  personaPreamble?: string; // active specialist overlay (system prompt + scope + hard limits), if handed off
 }
 /** The single next action the agent takes to drive the live demo (read-only: never commits). */
 export interface AgentStep {
@@ -218,6 +219,7 @@ class ClaudeProvider implements LlmProvider {
       model: MODEL,
       max_tokens: 1024,
       system:
+        (ctx.personaPreamble ? ctx.personaPreamble + '\n\n— — —\n' : '') +
         'You are VIN, an autonomous solution consultant DRIVING a live product demo in the stakeholder\'s real, ' +
         'logged-in browser. You work on ANY web product purely by reading the current screen — never assume a ' +
         'specific app. Given the goal and the interactive elements visible NOW (each with a [ref]), decide the ' +

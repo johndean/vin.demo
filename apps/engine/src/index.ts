@@ -35,6 +35,7 @@ import { startVoiceSession } from './voice-session.js';
 import { verifyToken } from './session-token.js';
 import { type ExecutionMode, classifyAction, permits } from '../../../src/core/safety.js';
 import { getLlm } from '../../../src/core/llm.js';
+import { loadPersona, personaPreamble, recordHandoff } from '../../../src/core/persona.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const COOKIE_NAME = 'vin_demo_session'; // must match apps/web/middleware.ts SESSION_COOKIE
@@ -222,8 +223,10 @@ const server = http.createServer(async (req, res) => {
       : [];
     if (!goal) { res.writeHead(400, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify({ error: 'no goal' })); return; }
     const finish = (step: any) => { res.writeHead(200, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify(step)); };
+    // Active specialist (if handed off): its overlay focuses the agent + its prohibited actions tighten the gate.
+    const persona = await loadPersona(typeof body?.personaId === 'string' ? body.personaId : null);
     try {
-      let step = await getLlm().agentStep({ goal, url: String(page.url ?? ''), title: String(page.title ?? ''), headings: Array.isArray(page.headings) ? page.headings.slice(0, 12).map(String) : [], elements, history, role, mode });
+      let step = await getLlm().agentStep({ goal, url: String(page.url ?? ''), title: String(page.title ?? ''), headings: Array.isArray(page.headings) ? page.headings.slice(0, 12).map(String) : [], elements, history, role, mode, personaPreamble: personaPreamble(persona) });
       if (step.action === 'click') {
         const el = elements.find((e: any) => e.ref === step.ref);
         if (!el) {
@@ -245,6 +248,19 @@ const server = http.createServer(async (req, res) => {
       console.error('[engine] agent/step error:', e);
       finish({ action: 'done', ref: -1, value: '', say: 'I hit a snag planning the next step — take over whenever you like.' });
     }
+    return;
+  }
+
+  // Record a real persona hand-off (the metric + audit source). The Control Center calls this when the
+  // operator switches specialist; from/to are persona ids (null = lead consultant).
+  if (req.method === 'POST' && url.pathname === '/persona/handoff') {
+    const payload = await verifyToken(tokenFrom(req, url));
+    if (!payload) { res.writeHead(401, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+    const body = await readJson(req);
+    const sessionId = typeof body?.sessionId === 'string' ? body.sessionId : interactive?.ctx.sessionId ?? null;
+    await recordHandoff(sessionId, body?.fromId ?? null, body?.toId ?? null, typeof body?.trigger === 'string' ? body.trigger : 'operator');
+    res.writeHead(202, { 'content-type': 'application/json', ...cors });
+    res.end(JSON.stringify({ ok: true }));
     return;
   }
 
