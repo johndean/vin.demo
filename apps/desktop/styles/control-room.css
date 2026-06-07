@@ -163,6 +163,18 @@
 .target__apply { margin-top: 2px; padding: 8px; border: none; border-radius: var(--radius-sm); background: var(--cr-accent); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
 .target__apply:hover { background: var(--cr-navy); }
 
+/* Embedded live browser (Electron <webview>) — the real, operable product on the desktop stage. */
+.live-browser { display: flex; flex-direction: column; width: 100%; height: 100%; background: #fff; }
+.live-bar { display: flex; align-items: center; gap: 6px; padding: 5px 8px; background: var(--cr-panel-2); border-bottom: 1px solid var(--cr-line); }
+.live-nav { width: 24px; height: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; border: 1px solid var(--cr-line); border-radius: var(--radius-sm); background: var(--cr-panel); color: var(--cr-fg2); font-size: 15px; line-height: 1; cursor: pointer; }
+.live-nav:hover:not(:disabled) { background: var(--cr-accent-soft); border-color: var(--cr-accent-bd); color: var(--cr-accent); }
+.live-nav:disabled { opacity: .4; cursor: default; }
+.live-bar__url { flex: 1; display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 9px; background: var(--cr-bg); border: 1px solid var(--cr-line); border-radius: 999px; font-family: var(--font-mono); font-size: 11px; color: var(--cr-fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.live-bar__url svg { stroke: var(--cr-ok); flex-shrink: 0; }
+.live-bar__tag { flex-shrink: 0; font-size: 9px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--cr-ok); background: var(--cr-ok-bg); border: 1px solid var(--cr-ok-bd); padding: 3px 8px; border-radius: 999px; }
+.live-bar__tag.driving { color: var(--cr-accent); background: var(--cr-accent-soft); border-color: var(--cr-accent-bd); }
+.live-webview { flex: 1; width: 100%; border: none; background: #fff; }
+
 .stage { position: relative; flex: 1; min-height: 0; background: #f4f6f9; border: 1px solid var(--cr-line); border-top: none; border-radius: 0 0 var(--radius-md) var(--radius-md); overflow: hidden; }
 
 /* AI overlay */

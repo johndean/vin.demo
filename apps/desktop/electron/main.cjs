@@ -17,6 +17,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
+      webviewTag: true, // the stage embeds a real <webview> — the operator logs into the product live
     },
   });
 

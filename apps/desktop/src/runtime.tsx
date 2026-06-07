@@ -1,7 +1,7 @@
 /* VIN Demo — Control Room runtime (ported 1:1 from desktop/runtime.jsx).
    Plays the demo-loop beats. Stage = the demoed product; one collapsible right panel
    with Conversation (default) / Brief / Reasoning; an AI-consultant control bar. */
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, createElement } from 'react';
 import { Icon, MODE_META, VALIDATION } from './shell';
 import { VD } from './data';
 import { LOOP, PLAN, QUOTES, SEED, BEATS, type Beat, type Msg } from './beats';
@@ -237,6 +237,49 @@ function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, 
   );
 }
 
+/* LiveBrowser — a REAL embedded Chromium pane (Electron <webview>). The operator logs into the
+   product live (no stored credentials) and can take over at any moment — it's a real browser. The AI
+   consultant co-drives it: an engine `nav` event (navTo) navigates the same pane, so the agent walks
+   the real UI and the human grabs the wheel whenever they want. Persistent partition → the login
+   survives reloads/turns. Replaces the screenshot stage on the desktop. */
+function LiveBrowser({ initialUrl, navTo, driving }: { initialUrl: string; navTo?: string; driving?: boolean }) {
+  const ref = useRef<any>(null);
+  const [bar, setBar] = useState(initialUrl);
+  const [nav, setNav] = useState({ back: false, fwd: false, loading: false });
+  const lastNav = useRef('');
+  const lastBase = useRef(initialUrl);
+
+  useEffect(() => {
+    const wv = ref.current; if (!wv) return;
+    const upd = () => { try { setBar(wv.getURL()); setNav({ back: wv.canGoBack(), fwd: wv.canGoForward(), loading: false }); } catch { /* */ } };
+    const start = () => setNav((n) => ({ ...n, loading: true }));
+    wv.addEventListener('did-navigate', upd);
+    wv.addEventListener('did-navigate-in-page', upd);
+    wv.addEventListener('did-start-loading', start);
+    wv.addEventListener('did-stop-loading', upd);
+    wv.addEventListener('dom-ready', upd);
+    return () => { for (const e of ['did-navigate', 'did-navigate-in-page', 'did-start-loading', 'did-stop-loading', 'dom-ready']) wv.removeEventListener(e, upd); };
+  }, []);
+  // Operator switched product → load the new site (it carries its own persisted login).
+  useEffect(() => { const wv = ref.current; if (wv && initialUrl && initialUrl !== lastBase.current) { lastBase.current = initialUrl; lastNav.current = ''; try { wv.loadURL(initialUrl); } catch { /* */ } } }, [initialUrl]);
+  // AI co-drive → the agent navigated; take the same pane there (dedupe; ignore non-http).
+  useEffect(() => { const wv = ref.current; if (wv && navTo && navTo !== lastNav.current && /^https?:/.test(navTo)) { lastNav.current = navTo; try { wv.loadURL(navTo); } catch { /* */ } } }, [navTo]);
+
+  const act = (fn: string) => { try { ref.current?.[fn]?.(); } catch { /* */ } };
+  return (
+    <div className="live-browser">
+      <div className="live-bar">
+        <button className="live-nav" onClick={() => act('goBack')} disabled={!nav.back} title="Back">‹</button>
+        <button className="live-nav" onClick={() => act('goForward')} disabled={!nav.fwd} title="Forward">›</button>
+        <button className="live-nav" onClick={() => act('reload')} title="Reload">⟳</button>
+        <span className="live-bar__url" title={bar}><Icon name="lock" size={11} /> {bar}{nav.loading ? ' · loading…' : ''}</span>
+        <span className={`live-bar__tag ${driving ? 'driving' : ''}`}>{driving ? 'AI DRIVING' : 'LIVE · you can take over'}</span>
+      </div>
+      {createElement('webview', { ref, src: initialUrl, partition: 'persist:vinlive', allowpopups: 'true', className: 'live-webview' })}
+    </div>
+  );
+}
+
 /* The demo-target picker — replaces the static address bar in engine modes. The operator picks any
    real product (or types an ad-hoc URL), and configures role / execution-mode / opening question.
    Applying commits a DemoTarget upstream, which restarts the live session against it. Pixel-native:
@@ -307,7 +350,7 @@ function TargetPicker({ products, target, liveUrl, onApply }: { products: RealPr
   );
 }
 
-function Stage({ beat, onResolve, screenshot, blocked, url, picker }: { beat: Beat; onResolve: () => void; screenshot?: string | null; blocked?: string[]; url?: string; picker?: React.ReactNode }) {
+function Stage({ beat, onResolve, screenshot, blocked, url, picker, browser }: { beat: Beat; onResolve: () => void; screenshot?: string | null; blocked?: string[]; url?: string; picker?: React.ReactNode; browser?: React.ReactNode }) {
   const live = !!screenshot;
   const scriptedUrl = `https://${beat.screen === 'audit' ? 'demo.vin/audit' : beat.screen === 'delegation' || beat.screen === 'settings' || beat.screen === 'newdelegation' ? 'demo.vin/approvals/' + beat.screen : 'demo.vin/' + (beat.screen === 'dashboard' ? '' : beat.screen)}`;
   return (
@@ -318,6 +361,7 @@ function Stage({ beat, onResolve, screenshot, blocked, url, picker }: { beat: Be
         <span className="stage-bar__env">{live ? 'LIVE · demo tenant' : 'Demo tenant · demo-04'}</span>
       </div>
       <div className="stage">
+        {browser /* the real embedded browser replaces the screenshot/mock on the desktop */ ?? <>
         {live
           ? <img src={screenshot!} alt="Live product (driven by the AI consultant, read-only)" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
           : <DemoApp screen={beat.screen} />}
@@ -351,6 +395,7 @@ function Stage({ beat, onResolve, screenshot, blocked, url, picker }: { beat: Be
             <span><b style={{ color: '#f0807d' }}>{blocked.length} mutating action{blocked.length > 1 ? 's' : ''} blocked</b> (read-only): {blocked.slice(0, 4).join(', ')}{blocked.length > 4 ? '…' : ''} — never fired.</span>
           </div>
         )}
+        </>}
       </div>
     </div>
   );
@@ -543,6 +588,8 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
     ? { productId: target.productId || undefined, role: target.role, mode: target.mode, url: target.url || undefined, scenario: target.scenario || undefined }
     : undefined;
   const tkey = target ? `${target.productId}|${target.role}|${target.mode}|${target.url}|${target.scenario}` : '';
+  // The URL the embedded browser opens: an explicit override/ad-hoc URL, else the product's domain.
+  const browserUrl = target ? (target.url?.trim() ? (/^https?:\/\//.test(target.url) ? target.url : `https://${target.url.replace(/^https?:\/\//, '')}`) : `https://${target.host}`) : '';
 
   useEffect(() => { try { localStorage.setItem('vd-cr-beat', String(idx)); } catch { /* */ } }, [idx]);
   useEffect(() => { document.getElementById('boot')?.style.setProperty('display', 'none'); }, []);
@@ -605,7 +652,8 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
         <div className="cr-stagearea">
           <Stage beat={beat} onResolve={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
             screenshot={engine ? live.screenshot : null} blocked={engine ? live.blocked : undefined} url={engine ? live.url : undefined}
-            picker={engine && target ? <TargetPicker products={products} target={target} liveUrl={live.url || undefined} onApply={setTarget} /> : undefined} />
+            picker={engine && target ? <TargetPicker products={products} target={target} liveUrl={browserUrl.replace(/^https?:\/\//, '')} onApply={setTarget} /> : undefined}
+            browser={engine && target && browserUrl ? <LiveBrowser initialUrl={browserUrl} navTo={live.url || undefined} driving={live.running} /> : undefined} />
         </div>
         <RightPanel beat={beat} mode={mode} open={panelOpen} setOpen={setPanelOpen} tab={tab} setTab={setTab} messages={messages} typing={typing}
           onAsk={(runtime === 'ask' || runtime === 'talk') ? onAsk : undefined} canAsk={canAsk}
