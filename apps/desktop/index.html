@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- CSP: scripts self-only (no eval) silences the Electron insecure-CSP warning while staying safe;
+     inline styles allowed (the shell uses them); https/wss/data/blob permitted for voice WS, screenshots,
+     fonts. The embedded <webview> is a separate WebContents and navigates independently of this policy. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self' data:; media-src 'self' blob: data:; connect-src 'self' https: wss:;" />
 <title>VIN Demo — Control Room</title>
 <link rel="stylesheet" href="./tokens.css" />
 <link rel="stylesheet" href="./vin-demo.css" />

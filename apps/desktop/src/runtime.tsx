@@ -272,6 +272,7 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, contr
   const [nav, setNav] = useState({ back: false, fwd: false, loading: false });
   const lastSeq = useRef(0);
   const lastBase = useRef(initialUrl);
+  const firstUrl = useRef(initialUrl); // the webview's src is set ONCE; later navigation uses loadURL (avoids src+loadURL double-nav → ERR_ABORTED)
 
   useEffect(() => {
     const wv = ref.current; if (!wv) return;
@@ -333,7 +334,7 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, contr
         {role && <span className="live-role" title="The persona the AI drives as — keep it consistent with who you're logged in as">as {role}</span>}
         <span className={`live-bar__tag ${driving ? 'driving' : ''} ${mode === 'execution' ? 'exec' : ''}`} title={mode === 'execution' ? 'EXECUTION — the agent makes real changes (clicks, types, saves) on this live target' : (driving ? 'The AI consultant is navigating — click anywhere to take over' : 'You are in control — it is your live, logged-in session')}>{mode === 'execution' ? (driving ? 'AI WRITING · execution' : 'EXECUTION · live') : (driving ? 'AI DRIVING' : 'LIVE · you take over')}</span>
       </div>
-      {createElement('webview', { ref, src: initialUrl, partition: 'persist:vinlive', allowpopups: 'true', className: 'live-webview' })}
+      {createElement('webview', { ref, src: firstUrl.current, partition: 'persist:vinlive', allowpopups: 'true', className: 'live-webview' })}
     </div>
   );
 }
