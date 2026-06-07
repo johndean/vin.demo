@@ -1,6 +1,6 @@
 {
   "name": "expense.vin",
-  "version": "v1 · Flowint SSOT",
+  "version": "v1",
   "environment": { "connectionTarget": "https://www.expense.vin", "isProduction": true, "resetMechanism": "manual" },
   "adapter": {
     "baseUrl": "https://www.expense.vin",

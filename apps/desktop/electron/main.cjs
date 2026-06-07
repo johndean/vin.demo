@@ -38,3 +38,20 @@ app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(
 ipcMain.on('win:minimize', () => win?.minimize());
 ipcMain.on('win:maximize', () => { if (win?.isMaximized()) win.unmaximize(); else win?.maximize(); });
 ipcMain.on('win:close', () => win?.close());
+
+// Auth SSOT: the desktop authenticates against the web console's /api/auth/login (same
+// seeded admin, same validation). Runs in the main process to avoid CORS. Override the
+// base with VIN_DEMO_WEB_URL for local dev.
+const AUTH_BASE = process.env.VIN_DEMO_WEB_URL || 'https://demofor.vin';
+ipcMain.handle('auth:login', async (_e, { email, password }) => {
+  try {
+    const res = await fetch(`${AUTH_BASE}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    return { ok: res.ok };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+});

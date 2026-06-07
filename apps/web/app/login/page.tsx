@@ -52,9 +52,9 @@ export default function LoginPage() {
 
         <div className={styles.titleRow}>
           <h1 className={styles.title}>Demo Hub</h1>
-          <span className={styles.pill}>V2 · Flowint SSOT</span>
+          <span className={styles.pill}>V2</span>
         </div>
-        <p className={styles.subtitle}>Reconciled with Flowint SSOT · 7-stage workflow · audit-traceable mutations</p>
+        <p className={styles.subtitle}>7-stage workflow · audit-traceable mutations</p>
 
         <div className={styles.fields}>
           <div className={styles.field}>

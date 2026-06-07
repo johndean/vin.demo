@@ -32,7 +32,7 @@ npm run dev                  # http://localhost:3000  → redirects to /login
 ## Structure
 
 - `app/login/` — pixel-faithful sign-in (navy gradient + VIN hatch, compact card, ViN
-  wordmark + Demo chip, gold Flowint SSOT pill).
+  wordmark + Demo chip, gold version pill).
 - `app/(console)/` — the gated operator console (full 12-view port in progress).
 - `app/api/auth/` — login / logout.
 - `app/globals.css` — the VIN design tokens (ported from `colors_and_type.css`).

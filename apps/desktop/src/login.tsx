@@ -11,14 +11,24 @@ export function Login({ onDone }: { onDone: () => void }) {
   const [label, setLabel] = useState('Sign in');
   const [error, setError] = useState('');
 
-  function onSubmit(e: React.FormEvent) {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (busy) return;
     if (!email.trim() || !password) { setError('Enter your email and password.'); return; }
     setBusy(true);
     setError('');
     setLabel('Signing in…');
-    setTimeout(() => { setLabel('Signed in ✓'); onDone(); }, 600);
+    // Validate against the SAME source of truth as the web console (via the main process).
+    const auth = (window as unknown as { auth?: { login(e: string, p: string): Promise<{ ok: boolean; error?: string }> } }).auth;
+    try {
+      const res = auth ? await auth.login(email, password) : { ok: false, error: 'Auth bridge unavailable' };
+      if (res.ok) { setLabel('Signed in ✓'); onDone(); }
+      else { setError(res.error ? 'Could not reach the sign-in service.' : 'Incorrect email or password.'); setBusy(false); setLabel('Sign in'); }
+    } catch {
+      setError('Could not reach the sign-in service.');
+      setBusy(false);
+      setLabel('Sign in');
+    }
   }
 
   return (
@@ -31,9 +41,9 @@ export function Login({ onDone }: { onDone: () => void }) {
 
         <div className="title-row">
           <h1 className="title">Demo Hub</h1>
-          <span className="pill">V2 · Flowint SSOT</span>
+          <span className="pill">V2</span>
         </div>
-        <p className="subtitle">Reconciled with Flowint SSOT · 7-stage workflow · audit-traceable mutations</p>
+        <p className="subtitle">7-stage workflow · audit-traceable mutations</p>
 
         <div className="fields">
           <div className="field">

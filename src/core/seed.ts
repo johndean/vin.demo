@@ -29,8 +29,8 @@ const wsId = await upsert('workspaces', { org_id: orgId, name: 'default' }, { or
 const productId = await upsert('products', { workspace_id: wsId, name: 'PO.vin' }, { workspace_id: wsId, name: 'PO.vin' });
 const versionId = await upsert(
   'product_versions',
-  { product_id: productId, version_label: 'v2 · Flowint SSOT' },
-  { product_id: productId, version_label: 'v2 · Flowint SSOT', status: 'active' },
+  { product_id: productId, version_label: 'v2' },
+  { product_id: productId, version_label: 'v2', status: 'active' },
 );
 await upsert(
   'environments',

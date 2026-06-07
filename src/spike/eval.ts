@@ -17,7 +17,7 @@ function evaluate(e: Evidence): Check[] {
   const healed = e.heals.filter((h) => h.healedVia);
   const blockedLabels = e.blocked.map((b) => b.label.toLowerCase());
   const citesConfidence = !!e.narration && /confidence/i.test(e.narration);
-  const citesVersion = !!e.narration && /(flowint|v2)/i.test(e.narration);
+  const citesVersion = !!e.narration && /v2/i.test(e.narration);
 
   return [
     { name: 'intent routed to approval delegation', pass: !e.gated && e.intentTopic === 'approval delegation', detail: `topic=${e.intentTopic}, gated=${e.gated}` },

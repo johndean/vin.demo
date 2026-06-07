@@ -37,7 +37,7 @@ const KB: Record<string, Knowledge> = {
     confidence: 0.82,
     source: 'po.vin docs · purchase-order-workflow.ts',
     last_verified: '2026-06-05',
-    product_version: 'v2 · Flowint SSOT',
+    product_version: 'v2',
     validation_status: 'validated',
   },
 };
