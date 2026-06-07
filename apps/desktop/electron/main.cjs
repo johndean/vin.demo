@@ -66,6 +66,13 @@ ipcMain.handle('auth:login', async (_e, { email, password }) => {
 // cookie jar (it sends the Cookie header manually), so clearing sessionCookie fully signs out.
 ipcMain.handle('auth:logout', () => { stopSession(); sessionCookie = null; return { ok: true }; });
 
+// Voice: hand the renderer the captured token + engine URL so it can open the /voice WebSocket
+// directly (Chromium has getUserMedia + WebSocket). No secrets beyond the short-lived session token.
+ipcMain.handle('auth:voiceToken', () => ({
+  token: sessionCookie ? sessionCookie.split('=').slice(1).join('=') : null,
+  engineUrl: ENGINE_BASE,
+}));
+
 // Thin client: fetch the SAME real console data the web renders (the SSOT), using the captured cookie.
 ipcMain.handle('data:fetch', async () => {
   try {

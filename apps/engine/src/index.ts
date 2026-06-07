@@ -22,9 +22,14 @@
  * Multi-session (per-session browser contexts / replicas) is deferred until real concurrent demand.
  */
 import http from 'node:http';
+import { writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import 'dotenv/config';
+import { WebSocketServer } from 'ws';
 import { runLiveSession } from '../../../src/core/live-session.js';
 import { startInteractive, type InteractiveSession } from './interactive-session.js';
+import { startVoiceSession } from './voice-session.js';
 import { verifyToken } from './session-token.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -34,6 +39,17 @@ const COOKIE_NAME = 'vin_demo_session'; // must match apps/web/middleware.ts SES
 if (!process.env.SESSION_SECRET) {
   console.error('FATAL: SESSION_SECRET is not set — refusing to start an unauthenticated engine.');
   process.exit(1);
+}
+
+// Voice: materialize the base64 GCP service-account key (Railway env) to a file the Google SDKs read
+// via GOOGLE_APPLICATION_CREDENTIALS. Skipped if that var is already a path (local dev).
+if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON && !process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+  try {
+    const p = join(tmpdir(), 'vin-gcp-key.json');
+    writeFileSync(p, Buffer.from(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON, 'base64').toString('utf8'));
+    process.env.GOOGLE_APPLICATION_CREDENTIALS = p;
+    console.log('[engine] GCP voice credentials ready');
+  } catch (e) { console.error('[engine] failed writing GCP key:', e); }
 }
 
 let active = false; // serialize: one live session at a time (singleton browser + shared shot file)
@@ -166,6 +182,23 @@ const server = http.createServer(async (req, res) => {
 
   res.writeHead(404, { 'content-type': 'application/json' });
   res.end(JSON.stringify({ error: 'not found' }));
+});
+
+// Voice gateway — WebSocket on /voice, same signed-token gate + single-session serialize as HTTP.
+const wss = new WebSocketServer({ noServer: true });
+server.on('upgrade', async (req, socket, head) => {
+  let url: URL;
+  try { url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`); } catch { socket.destroy(); return; }
+  if (url.pathname !== '/voice') { socket.destroy(); return; }
+  const payload = await verifyToken(tokenFrom(req, url));
+  if (!payload) { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); socket.destroy(); return; }
+  if (active) { socket.write('HTTP/1.1 409 Conflict\r\n\r\n'); socket.destroy(); return; }
+  active = true;
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    console.log(`[engine] voice session start for ${payload.email}`);
+    ws.on('close', () => { active = false; console.log(`[engine] voice session end for ${payload.email}`); });
+    startVoiceSession(ws).catch((e) => { console.error('[engine] voice session error:', e); active = false; try { ws.close(); } catch { /* */ } });
+  });
 });
 
 server.listen(PORT, '0.0.0.0', () => console.log(`[engine] listening on :${PORT}`));

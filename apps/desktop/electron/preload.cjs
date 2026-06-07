@@ -12,6 +12,7 @@ contextBridge.exposeInMainWorld('win', {
 contextBridge.exposeInMainWorld('auth', {
   login: (email, password) => ipcRenderer.invoke('auth:login', { email, password }),
   logout: () => ipcRenderer.invoke('auth:logout'),
+  voiceToken: () => ipcRenderer.invoke('auth:voiceToken'),
 });
 
 // Real console data from the web SSOT (gated by the captured session cookie).

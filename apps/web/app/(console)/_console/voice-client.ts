@@ -1,0 +1,118 @@
+/* VoiceClient — browser side of the voice channel. Captures mic audio, downsamples to 16 kHz
+   LINEAR16 PCM, streams it over a WebSocket to the engine's /voice gateway, and plays back the
+   MP3 audio the engine streams (the consultant speaking), sentence by sentence. Barge-in: starting
+   the mic stops any in-progress playback. Pure Web APIs — identical copy in apps/desktop/src. */
+export type VoiceState = 'connecting' | 'ready' | 'listening' | 'speaking' | 'error' | 'closed';
+
+export class VoiceClient {
+  private ws: WebSocket | null = null;
+  private ac: AudioContext | null = null;
+  private micStream: MediaStream | null = null;
+  private node: ScriptProcessorNode | null = null;
+  private source: MediaStreamAudioSourceNode | null = null;
+  private mute: GainNode | null = null;
+  private queue: AudioBufferSourceNode[] = [];
+  private nextAt = 0;
+  private listening = false;
+
+  constructor(private url: string, private onEvent: (ev: any) => void, private onState: (s: VoiceState) => void) {}
+
+  connect() {
+    this.onState('connecting');
+    const ws = new WebSocket(this.url);
+    ws.binaryType = 'arraybuffer';
+    this.ws = ws;
+    ws.onmessage = (e) => {
+      if (typeof e.data !== 'string') return;
+      let ev: any; try { ev = JSON.parse(e.data); } catch { return; }
+      if (ev.type === 'ready') this.onState('ready');
+      else if (ev.type === 'listening') this.onState('listening');
+      else if (ev.type === 'audio') { this.onState('speaking'); void this.play(ev.data); }
+      else if (ev.type === 'turn_done') this.onState('ready');
+      this.onEvent(ev);
+    };
+    ws.onerror = () => this.onState('error');
+    ws.onclose = () => this.onState('closed');
+  }
+
+  async startMic() {
+    this.stopPlayback(); // barge-in
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    try {
+      this.micStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
+    } catch { this.onState('error'); return; }
+    this.ac ??= new AudioContext();
+    const ac = this.ac;
+    await ac.resume().catch(() => {});
+    const inRate = ac.sampleRate;
+    this.source = ac.createMediaStreamSource(this.micStream);
+    this.node = ac.createScriptProcessor(4096, 1, 1);
+    this.mute = ac.createGain(); this.mute.gain.value = 0; // route through silent gain so we don't echo the mic
+    this.listening = true;
+    this.ws.send(JSON.stringify({ type: 'mic_start' }));
+    this.node.onaudioprocess = (ev) => {
+      if (!this.listening || this.ws?.readyState !== WebSocket.OPEN) return;
+      this.ws.send(downsampleTo16kInt16(ev.inputBuffer.getChannelData(0), inRate));
+    };
+    this.source.connect(this.node);
+    this.node.connect(this.mute);
+    this.mute.connect(ac.destination);
+  }
+
+  stopMic() {
+    if (!this.listening) return;
+    this.listening = false;
+    try { this.ws?.send(JSON.stringify({ type: 'mic_end' })); } catch { /* */ }
+    try { this.node?.disconnect(); } catch { /* */ }
+    try { this.source?.disconnect(); } catch { /* */ }
+    this.micStream?.getTracks().forEach((t) => t.stop());
+    this.node = null; this.source = null; this.micStream = null;
+  }
+
+  setVoice(id: string) { try { this.ws?.send(JSON.stringify({ type: 'voice', id })); } catch { /* */ } }
+  sendText(text: string) { try { this.ws?.send(JSON.stringify({ type: 'text', text })); } catch { /* */ } }
+  close() { this.stopMic(); this.stopPlayback(); try { this.ws?.close(); } catch { /* */ } try { void this.ac?.close(); } catch { /* */ } this.ac = null; }
+
+  private async play(b64: string) {
+    if (!b64) return;
+    this.ac ??= new AudioContext();
+    const ac = this.ac;
+    try {
+      const bin = atob(b64);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      const buf = await ac.decodeAudioData(bytes.buffer);
+      const src = ac.createBufferSource();
+      src.buffer = buf; src.connect(ac.destination);
+      const start = Math.max(ac.currentTime, this.nextAt);
+      src.start(start);
+      this.nextAt = start + buf.duration;
+      this.queue.push(src);
+      src.onended = () => { this.queue = this.queue.filter((s) => s !== src); };
+    } catch { /* undecodable chunk */ }
+  }
+
+  private stopPlayback() {
+    for (const s of this.queue) { try { s.stop(); } catch { /* */ } }
+    this.queue = []; this.nextAt = 0;
+  }
+}
+
+function downsampleTo16kInt16(input: Float32Array, inRate: number): ArrayBuffer {
+  const outRate = 16000;
+  const ratio = inRate / outRate;
+  if (ratio <= 1) {
+    const out = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) out[i] = Math.max(-1, Math.min(1, input[i])) * 0x7fff;
+    return out.buffer;
+  }
+  const outLen = Math.floor(input.length / ratio);
+  const out = new Int16Array(outLen);
+  for (let i = 0; i < outLen; i++) {
+    const start = Math.floor(i * ratio), end = Math.min(input.length, Math.floor((i + 1) * ratio));
+    let sum = 0, n = 0;
+    for (let j = start; j < end; j++) { sum += input[j]; n++; }
+    out[i] = Math.max(-1, Math.min(1, n ? sum / n : 0)) * 0x7fff;
+  }
+  return out.buffer;
+}

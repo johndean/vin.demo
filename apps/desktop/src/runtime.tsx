@@ -7,6 +7,7 @@ import { VD } from './data';
 import { LOOP, PLAN, QUOTES, SEED, BEATS, type Beat, type Msg } from './beats';
 import { DemoApp } from './demo-app';
 import { useReal, useDemoProduct } from './real-data';
+import { VoiceClient } from './voice-client';
 
 const CURSOR = (
   <svg viewBox="0 0 24 24" style={{ width: 24, height: 24 }}><path d="M5 3l15 9-7 1.5L9 21z" fill="#0861CE" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" /></svg>
@@ -196,7 +197,7 @@ function RightRail({ beat, mode, liveCite, liveCost }: { beat: Beat; mode: strin
   );
 }
 
-function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, onAsk, canAsk, liveCite, liveCost }: { beat: Beat; mode: string; open: boolean; setOpen: (b: boolean) => void; tab: string; setTab: (t: string) => void; messages: Msg[]; typing: boolean; onAsk?: (text: string) => void; canAsk?: boolean; liveCite?: any; liveCost?: { total: number; byType: { type: string; usd: number }[] } }) {
+function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, onAsk, canAsk, onMic, micActive, liveCite, liveCost }: { beat: Beat; mode: string; open: boolean; setOpen: (b: boolean) => void; tab: string; setTab: (t: string) => void; messages: Msg[]; typing: boolean; onAsk?: (text: string) => void; canAsk?: boolean; onMic?: () => void; micActive?: boolean; liveCite?: any; liveCost?: { total: number; byType: { type: string; usd: number }[] } }) {
   const TABS = [
     { id: 'convo', label: 'Conversation', icon: 'sessions' },
     { id: 'brief', label: 'Brief', icon: 'customers' },
@@ -219,7 +220,7 @@ function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, 
         <button className="cr-panel__collapse" onClick={() => setOpen(false)} title="Collapse panel"><Icon name="chevR" size={15} /></button>
       </div>
       <div className="cr-panel__body">
-        {tab === 'convo' && <Convo messages={messages} typing={typing} onAsk={onAsk} canAsk={canAsk} />}
+        {tab === 'convo' && <Convo messages={messages} typing={typing} onAsk={onAsk} canAsk={canAsk} onMic={onMic} micActive={micActive} />}
         {tab === 'brief' && <LeftRail beat={beat} />}
         {tab === 'reasoning' && <RightRail beat={beat} mode={mode} liveCite={liveCite} liveCost={liveCost} />}
       </div>
@@ -278,12 +279,13 @@ function Stage({ beat, onResolve, screenshot, blocked, url }: { beat: Beat; onRe
 
 const ASK_CHIPS = ['How does delegation get audited?', 'What about SSO?', 'Show me out-of-office routing', 'Can you submit a real PO?'];
 
-function Convo({ messages, typing, onAsk, canAsk }: { messages: Msg[]; typing: boolean; onAsk?: (text: string) => void; canAsk?: boolean }) {
+function Convo({ messages, typing, onAsk, canAsk, onMic, micActive }: { messages: Msg[]; typing: boolean; onAsk?: (text: string) => void; canAsk?: boolean; onMic?: () => void; micActive?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [messages.length, typing]);
   const send = (q: string) => { const t = q.trim(); if (!t || !onAsk || !canAsk) return; onAsk(t); setText(''); };
-  const placeholder = !onAsk ? 'Switch to Ask mode to type a question' : canAsk ? 'Ask the consultant a question…' : 'Connecting to the consultant…';
+  const placeholder = onMic ? (micActive ? 'Listening… tap to send' : canAsk ? 'Tap the mic or type a question…' : 'Connecting…')
+    : !onAsk ? 'Switch to Ask mode to type a question' : canAsk ? 'Ask the consultant a question…' : 'Connecting to the consultant…';
   return (
     <div className="convo">
       <div className="convo__head"><Icon name="sessions" size={14} style={{ stroke: 'var(--cr-fg3)' }} /><span className="overline">Conversation · intent-driven</span></div>
@@ -303,6 +305,12 @@ function Convo({ messages, typing, onAsk, canAsk }: { messages: Msg[]; typing: b
       <div className="convo__input">
         {ASK_CHIPS.map((c) => <button key={c} className="ask-chip" onClick={() => send(c)} disabled={!canAsk}>{c}</button>)}
         <div className="field">
+          {onMic && (
+            <button onClick={onMic} disabled={!canAsk && !micActive} title={micActive ? 'Tap to send' : 'Tap to talk'}
+              style={{ background: 'none', border: 'none', padding: 0, marginRight: 6, display: 'flex', cursor: (canAsk || micActive) ? 'pointer' : 'default' }}>
+              <Icon name={micActive ? 'stop' : 'spark'} size={18} className="solid" style={{ stroke: 'none', fill: micActive ? '#C54644' : 'var(--cr-accent)' }} />
+            </button>
+          )}
           <input placeholder={placeholder} value={text} disabled={!canAsk}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => { if (e.key === 'Enter') send(text); }} />
@@ -393,7 +401,9 @@ function useLiveSession() {
   const startInteractive = () => { setLive({ ...LIVE_INIT }); (window as unknown as { session?: { startInteractive(): void } }).session?.startInteractive?.(); };
   const ask = (text: string, speaker?: string) => { setLive((p) => ({ ...p, running: true })); (window as unknown as { session?: { ask(t: string, s?: string): void } }).session?.ask?.(text, speaker); };
   const stop = () => { (window as unknown as { session?: { stop(): void } }).session?.stop?.(); setLive((p) => ({ ...p, running: false, ready: false })); };
-  return { live, start, startInteractive, ask, stop };
+  const pushEvent = (ev: any) => setLive((p) => reduceLive(p, ev)); // feed VoiceClient (WS) events into the same state
+  const reset = () => setLive({ ...LIVE_INIT });
+  return { live, start, startInteractive, ask, stop, pushEvent, reset };
 }
 
 const COST_LABEL: Record<string, string> = { llm: 'LLM tokens', embeddings: 'Embeddings', navigation: 'Navigation / compute', compute: 'Compute', storage: 'Storage' };
@@ -405,9 +415,9 @@ const SEG_ON: React.CSSProperties = { background: '#fff', color: 'var(--color-na
 export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}) {
   // Input mode: ASK = live interactive (type any question), REEL ('live') = canned 3-question run on
   // the real engine, SCRIPTED = offline canned beats (QA). All three render the same panels.
-  type RT = 'ask' | 'live' | 'scripted';
+  type RT = 'ask' | 'talk' | 'live' | 'scripted';
   const [runtime, setRuntime] = useState<RT>(() => {
-    try { const v = localStorage.getItem('vd-runtime'); return v === 'scripted' ? 'scripted' : v === 'ask' ? 'ask' : 'live'; } catch { return 'live'; }
+    try { const v = localStorage.getItem('vd-runtime'); return v === 'scripted' ? 'scripted' : v === 'talk' ? 'talk' : v === 'ask' ? 'ask' : 'live'; } catch { return 'live'; }
   });
   const setMode = (m: RT) => { setRuntime(m); try { localStorage.setItem('vd-runtime', m); } catch { /* */ } };
   const isLive = runtime === 'live';
@@ -419,7 +429,21 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   const [speed, setSpeed] = useState(1);
   const [secs, setSecs] = useState(724);
   // Live engine session.
-  const { live, start, startInteractive, ask, stop } = useLiveSession();
+  const { live, start, startInteractive, ask, stop, pushEvent, reset } = useLiveSession();
+  const vcRef = useRef<VoiceClient | null>(null);
+  const [voiceState, setVoiceState] = useState<string>('idle');
+  const [listening, setListening] = useState(false);
+  const startVoice = async () => {
+    reset(); setVoiceState('connecting'); setListening(false);
+    const api = (window as unknown as { auth?: { voiceToken(): Promise<{ token: string | null; engineUrl: string }> } }).auth;
+    const cfg = api?.voiceToken ? await api.voiceToken() : null;
+    if (!cfg?.token) { setVoiceState('error'); return; }
+    const wss = String(cfg.engineUrl).replace(/^http/, 'ws') + `/voice?token=${encodeURIComponent(cfg.token)}`;
+    const vc = new VoiceClient(wss, (ev) => pushEvent(ev), (s) => setVoiceState(s));
+    vcRef.current = vc; vc.connect();
+  };
+  const stopVoice = () => { vcRef.current?.close(); vcRef.current = null; setListening(false); setVoiceState('idle'); };
+  const toggleMic = () => { const vc = vcRef.current; if (!vc) return; if (listening) { vc.stopMic(); setListening(false); } else { void vc.startMic(); setListening(true); } };
 
   const [panelOpen, setPanelOpen] = useState(true);
   const [tab, setTab] = useState('convo');
@@ -428,9 +452,10 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   useEffect(() => { try { localStorage.setItem('vd-cr-beat', String(idx)); } catch { /* */ } }, [idx]);
   useEffect(() => { document.getElementById('boot')?.style.setProperty('display', 'none'); }, []);
 
-  // Interactive (Ask) mode: open a live session on entry, close it on leave.
+  // Ask = interactive text (IPC SSE); Talk = voice (WS via VoiceClient). Open on entry, close on leave.
   useEffect(() => {
     if (runtime === 'ask') { startInteractive(); return () => stop(); }
+    if (runtime === 'talk') { void startVoice(); return () => stopVoice(); }
   }, [runtime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scripted autoplay (scripted mode only).
@@ -454,19 +479,21 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   const beat = engine ? liveBeat : scriptedBeat;
   const messages = engine ? live.messages : [...SEED, ...BEATS.slice(1, idx + 1).flatMap((b) => b.push || [])];
   const typing = engine ? live.running : (playing && idx > 0 && idx < BEATS.length - 1);
-  const canAsk = runtime === 'ask' && live.ready && !live.running; // interactive session is up and idle
-  const onAsk = (t: string) => ask(t);
+  const canAsk = runtime === 'ask' ? (live.ready && !live.running)
+    : runtime === 'talk' ? (voiceState === 'ready' && !listening) : false;
+  const onAsk = (t: string) => { if (runtime === 'talk') vcRef.current?.sendText(t); else ask(t); };
 
   return (
     <div className="cr">
       <div className="cr-strip">
         <div className="cr-strip__brand"><img src="./assets/VIN-light.svg" alt="VIN" /><span className="cr-strip__div" />
           <div><div className="cr-strip__product">Demo</div><div className="cr-strip__sub">Control Room</div></div></div>
-        <div className="cr-strip__live"><span className="rec" /><span>{runtime === 'scripted' ? 'Scripted' : runtime === 'ask' ? 'Ask · live' : 'Reel · live'}</span></div>
+        <div className="cr-strip__live"><span className="rec" /><span>{runtime === 'scripted' ? 'Scripted' : runtime === 'ask' ? 'Ask · live' : runtime === 'talk' ? 'Talk · live' : 'Reel · live'}</span></div>
         <div className="cr-strip__meta"><b>Procurement</b> · po.vin · Approval delegation</div>
         <div className="cr-strip__spacer" />
-        <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 8, background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.12)' }} title="Input mode — Ask: type any question (live engine) · Reel: canned scenario (live engine) · Scripted: offline beats (QA)">
+        <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 8, background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.12)' }} title="Input mode — Ask: type · Talk: speak · Reel: canned scenario · Scripted: offline beats (QA). Ask/Talk/Reel use the live engine.">
           <button style={{ ...SEG_BTN, ...(runtime === 'ask' ? SEG_ON : {}) }} onClick={() => setMode('ask')}>Ask</button>
+          <button style={{ ...SEG_BTN, ...(runtime === 'talk' ? SEG_ON : {}) }} onClick={() => setMode('talk')}>Talk</button>
           <button style={{ ...SEG_BTN, ...(runtime === 'live' ? SEG_ON : {}) }} onClick={() => setMode('live')}>Reel</button>
           <button style={{ ...SEG_BTN, ...(runtime === 'scripted' ? SEG_ON : {}) }} onClick={() => setMode('scripted')}>Scripted</button>
         </div>
@@ -482,7 +509,8 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
             screenshot={engine ? live.screenshot : null} blocked={engine ? live.blocked : undefined} url={engine ? live.url : undefined} />
         </div>
         <RightPanel beat={beat} mode={mode} open={panelOpen} setOpen={setPanelOpen} tab={tab} setTab={setTab} messages={messages} typing={typing}
-          onAsk={runtime === 'ask' ? onAsk : undefined} canAsk={canAsk}
+          onAsk={(runtime === 'ask' || runtime === 'talk') ? onAsk : undefined} canAsk={canAsk}
+          onMic={runtime === 'talk' ? toggleMic : undefined} micActive={listening}
           liveCite={engine ? live.cite : undefined} liveCost={engine ? { total: live.cost, byType: live.byType } : undefined} />
       </div>
 
