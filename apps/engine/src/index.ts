@@ -33,7 +33,7 @@ import { runLiveSession, type SessionTarget } from '../../../src/core/live-sessi
 import { startInteractive, type InteractiveSession } from './interactive-session.js';
 import { startVoiceSession } from './voice-session.js';
 import { verifyToken } from './session-token.js';
-import { type ExecutionMode, classifyAction, permits } from '../../../src/core/safety.js';
+import { type ExecutionMode, classifyAction } from '../../../src/core/safety.js';
 import { getLlm } from '../../../src/core/llm.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -227,11 +227,14 @@ const server = http.createServer(async (req, res) => {
         if (!el) {
           step = { action: 'done', ref: -1, value: '', say: step.say || 'That control is no longer on screen — take over if you like.' };
         } else {
-          // Hard read-only guarantee: never let the agent click a mutating control (the classifier, not the LLM, decides).
+          // Hard guarantee (classifier decides, not the LLM): block only a CONFIRMED commit — a clear
+          // mutating verb (submit/create/save/pay/approve/delete…). Opening forms ("New …"), walking
+          // wizard steps (Next/Continue), filtering, and tabs are safe navigation the agent may do; an
+          // unrecognized button (fail-closed but NOT confident) is allowed to navigate. The human fires commits.
           const cand = { tag: el.kind === 'link' ? 'a' : (el.kind === 'input' || el.kind === 'select' || el.kind === 'textarea') ? 'input' : 'button', text: el.text, role: el.role ?? null, type: null, href: el.kind === 'link' ? '#' : null, ariaLabel: null, title: null, className: null, inNav: false };
-          const { cls } = classifyAction(cand);
-          if (!permits(cls, 'read-only').permitted) {
-            step = { action: 'done', ref: -1, value: '', say: `The next step — “${el.text}” — would commit a change, so I'll stop here (read-only). You can take over to complete it.` };
+          const { cls, confident } = classifyAction(cand);
+          if (cls === 'mutating' && confident) {
+            step = { action: 'done', ref: -1, value: '', say: `The next step — “${el.text}” — commits a change, so I'll stop here. Click it yourself to finalize whenever you're ready.` };
           }
         }
       }
