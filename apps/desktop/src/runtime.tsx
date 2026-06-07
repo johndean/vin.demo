@@ -237,12 +237,36 @@ function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, 
   );
 }
 
+/* Perception: distill the live page into the interactive elements the agent can act on. Stamps a
+   stable data-vin-ref on each so the agent can point at one to click/type. Product-agnostic. */
+const PAGE_SNAPSHOT_JS = `(function(){
+  function vis(el){ try{ var r=el.getBoundingClientRect(); return el.offsetParent!==null && r.width>1 && r.height>1; }catch(e){ return false; } }
+  var sel='a[href],button,[role="button"],[role="menuitem"],[role="tab"],[role="link"],input:not([type="hidden"]),select,textarea,summary,[onclick]';
+  var nodes=[].slice.call(document.querySelectorAll(sel)), out=[], ref=0;
+  for(var i=0;i<nodes.length && ref<120;i++){ var el=nodes[i]; if(!vis(el)) continue;
+    var tag=el.tagName.toLowerCase();
+    var kind = tag==='a'?'link': tag==='input'?(el.getAttribute('type')||'text'): tag==='select'?'select': tag==='textarea'?'textarea':'button';
+    var text=(el.innerText||el.value||el.getAttribute('aria-label')||el.getAttribute('placeholder')||el.getAttribute('title')||'').trim().replace(/\\s+/g,' ').slice(0,120);
+    if(!text && tag!=='input' && tag!=='select' && tag!=='textarea') continue;
+    el.setAttribute('data-vin-ref', String(ref));
+    out.push({ ref: ref, text: text, role: el.getAttribute('role')||undefined, kind: kind }); ref++; }
+  var heads=[].slice.call(document.querySelectorAll('h1,h2,h3')).filter(vis).map(function(h){return (h.innerText||'').trim().replace(/\\s+/g,' ').slice(0,100);}).filter(Boolean).slice(0,12);
+  return { url: location.href, title: document.title, headings: heads, elements: out };
+})()`;
+const clickRefJs = (ref: number) => `(function(){ var el=document.querySelector('[data-vin-ref="'+${ref}+'"]'); if(!el) return false;
+  el.scrollIntoView({behavior:'smooth',block:'center'}); var o=el.style.outline, off=el.style.outlineOffset; el.style.outline='3px solid #0861CE'; el.style.outlineOffset='2px';
+  setTimeout(function(){ try{ el.click(); }catch(e){} }, 400); setTimeout(function(){ el.style.outline=o; el.style.outlineOffset=off; }, 2400); return true; })()`;
+const typeRefJs = (ref: number, val: string) => `(function(){ var el=document.querySelector('[data-vin-ref="'+${ref}+'"]'); if(!el) return false;
+  el.scrollIntoView({behavior:'smooth',block:'center'}); try{ el.focus(); var proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype; var s=Object.getOwnPropertyDescriptor(proto,'value').set; s.call(el, ${JSON.stringify(val)}); }catch(e){ try{ el.value=${JSON.stringify(val)}; }catch(x){} }
+  el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
+  var o=el.style.outline; el.style.outline='3px solid #0861CE'; setTimeout(function(){ el.style.outline=o; }, 2400); return true; })()`;
+
 /* LiveBrowser — a REAL embedded Chromium pane (Electron <webview>). The operator logs into the
    product live (no stored credentials) and can take over at any moment — it's a real browser. The AI
    consultant co-drives it: an engine `nav` event (navTo) navigates the same pane, so the agent walks
    the real UI and the human grabs the wheel whenever they want. Persistent partition → the login
    survives reloads/turns. Replaces the screenshot stage on the desktop. */
-function LiveBrowser({ initialUrl, navAction, driving, picker, role }: { initialUrl: string; navAction?: { label?: string; selectors?: string[]; url?: string; seq: number } | null; driving?: boolean; picker?: (liveUrl: string) => React.ReactNode; role?: string }) {
+function LiveBrowser({ initialUrl, navAction, driving, picker, role, controlsRef }: { initialUrl: string; navAction?: { label?: string; selectors?: string[]; url?: string; seq: number } | null; driving?: boolean; picker?: (liveUrl: string) => React.ReactNode; role?: string; controlsRef?: React.MutableRefObject<any> }) {
   const ref = useRef<any>(null);
   const [bar, setBar] = useState(initialUrl);
   const [nav, setNav] = useState({ back: false, fwd: false, loading: false });
@@ -260,6 +284,16 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role }: { initial
     wv.addEventListener('dom-ready', upd);
     return () => { for (const e of ['did-navigate', 'did-navigate-in-page', 'did-start-loading', 'did-stop-loading', 'dom-ready']) wv.removeEventListener(e, upd); };
   }, []);
+  // Expose perceive/act controls so the drive loop can read the page and click/type in this pane.
+  useEffect(() => {
+    if (!controlsRef) return;
+    controlsRef.current = {
+      snapshot: () => ref.current?.executeJavaScript(PAGE_SNAPSHOT_JS, true),
+      clickRef: (r: number) => ref.current?.executeJavaScript(clickRefJs(r), true),
+      typeInto: (r: number, v: string) => ref.current?.executeJavaScript(typeRefJs(r, v), true),
+    };
+    return () => { if (controlsRef) controlsRef.current = null; };
+  }, [controlsRef]);
   // Operator switched product → load the new site (it carries its own persisted login).
   useEffect(() => { const wv = ref.current; if (wv && initialUrl && initialUrl !== lastBase.current) { lastBase.current = initialUrl; try { wv.loadURL(initialUrl); } catch { /* */ } } }, [initialUrl]);
   // AI co-drive → the agent issued a nav instruction; perform it in the operator's live session:
@@ -588,6 +622,9 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   // Live engine session.
   const { live, start, startInteractive, ask, stop, pushEvent, reset } = useLiveSession();
   const vcRef = useRef<VoiceClient | null>(null);
+  const browserCtl = useRef<{ snapshot: () => Promise<any>; clickRef: (r: number) => Promise<any>; typeInto: (r: number, v: string) => Promise<any> } | null>(null);
+  const driving = useRef(false);
+  const [driveActive, setDriveActive] = useState(false);
   const [voiceState, setVoiceState] = useState<string>('idle');
   const [listening, setListening] = useState(false);
   const startVoice = async (t?: TargetParams) => {
@@ -656,10 +693,36 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   const liveBeat: Beat = { loopIdx: live.loopIdx, planIdx: Math.min(Math.max(live.loopIdx, 0), PLAN.length - 1), phase: live.phase, brain: live.brain, sub: live.sub, screen: 'dashboard', conf: live.conf, activeStk: 's1', cost: live.cost, cite: null, loopDone: live.done, push: [] };
   const beat = engine ? liveBeat : scriptedBeat;
   const messages = engine ? live.messages : [...SEED, ...BEATS.slice(1, idx + 1).flatMap((b) => b.push || [])];
-  const typing = engine ? live.running : (playing && idx > 0 && idx < BEATS.length - 1);
-  const canAsk = runtime === 'ask' ? (live.ready && !live.running)
-    : runtime === 'talk' ? (voiceState === 'ready' && !listening) : false;
-  const onAsk = (t: string) => { if (runtime === 'talk') vcRef.current?.sendText(t); else ask(t); };
+  const typing = engine ? (live.running || driveActive) : (playing && idx > 0 && idx < BEATS.length - 1);
+  const canAsk = runtime === 'ask' ? (live.ready && !live.running && !driveActive)
+    : runtime === 'talk' ? (voiceState === 'ready' && !listening && !driveActive) : false;
+  // Agentic DRIVE loop: perceive the live pane → ask the engine for the next action → click/type →
+  // repeat, narrating each step. Read-only is enforced engine-side (mutating clicks are refused).
+  const driveGoal = async (goal: string) => {
+    const ctl = browserCtl.current;
+    const api = (window as unknown as { session?: { agentStep(p: any): Promise<any> } }).session;
+    if (!ctl || !api?.agentStep) { ask(goal); return; } // no live pane → fall back to a server turn
+    if (driving.current) return;
+    driving.current = true; setDriveActive(true);
+    pushEvent({ type: 'message', side: 'them', who: target?.role ?? 'You', role: 'Operator', text: goal, tag: 'question' });
+    pushEvent({ type: 'beat', loopIdx: 2, phase: 'Driving the demo', brain: 'Reading the live screen and taking the next step.', sub: goal });
+    const history: string[] = [];
+    try {
+      for (let i = 0; i < 7; i++) {
+        const page = await ctl.snapshot().catch(() => null);
+        if (!page) { pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: "I can't read the page yet — make sure it's loaded (and you're logged in), then ask again.", uncertain: true }); break; }
+        const res = await api.agentStep({ goal, page, history, role: target?.role });
+        if (!res) { pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: 'Lost the connection to the engine for a moment — try again.', uncertain: true }); break; }
+        if (res.say) { pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: res.say, uncertain: res.action === 'done' && i === 0 ? false : undefined }); history.push(res.say); }
+        if (res.action === 'done') break;
+        if (res.action === 'click') await ctl.clickRef(res.ref).catch(() => {});
+        else if (res.action === 'type') await ctl.typeInto(res.ref, res.value ?? '').catch(() => {});
+        await new Promise((r) => setTimeout(r, 1500)); // let the page settle before the next perception
+      }
+    } finally { driving.current = false; setDriveActive(false); }
+  };
+  // Typed questions in engine modes drive the live pane; spoken (mic) input still flows server-side.
+  const onAsk = (t: string) => { if (engine && browserCtl.current) void driveGoal(t); else if (runtime === 'talk') vcRef.current?.sendText(t); else ask(t); };
 
   return (
     <div className="cr">
@@ -686,7 +749,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
           <Stage beat={beat} onResolve={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
             screenshot={engine ? live.screenshot : null} blocked={engine ? live.blocked : undefined} url={engine ? live.url : undefined}
             browser={engine && target && browserUrl
-              ? <LiveBrowser initialUrl={browserUrl} navAction={live.navAction} driving={live.running} role={target.role}
+              ? <LiveBrowser initialUrl={browserUrl} navAction={live.navAction} driving={live.running} role={target.role} controlsRef={browserCtl}
                   picker={(liveUrl) => <TargetPicker products={products} target={target} liveUrl={liveUrl} onApply={setTarget} />} />
               : undefined} />
         </div>

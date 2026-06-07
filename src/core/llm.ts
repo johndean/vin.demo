@@ -44,6 +44,25 @@ export interface DiscoverResult {
   question: string; // ONE concise discovery question to offer next
 }
 
+/** One element on the live page the agent can act on (perceived from the embedded browser's DOM). */
+export interface PageElement { ref: number; text: string; role?: string; kind?: string; }
+export interface AgentStepContext {
+  goal: string;            // the stakeholder's request — what to demonstrate / answer
+  url: string;
+  title: string;
+  headings: string[];
+  elements: PageElement[]; // the interactive elements currently on screen (with stable refs)
+  history: string[];       // narrations of the steps already taken this turn
+  role: string;            // the persona the agent is driving as
+}
+/** The single next action the agent takes to drive the live demo (read-only: never commits). */
+export interface AgentStep {
+  action: 'click' | 'type' | 'done';
+  ref: number;             // element ref for click/type (-1 when action=done)
+  value: string;           // text for 'type' ("" otherwise)
+  say: string;             // one-sentence narration, grounded in what's on screen
+}
+
 export interface LlmProvider {
   readonly id: string;
   interpret(utterance: string): Promise<Interpretation>;
@@ -53,6 +72,8 @@ export interface LlmProvider {
   explainWhy(ctx: ExplainContext): Promise<string>;
   /** Active discovery (E): extract expressed pain/signal/objective and offer ONE question. */
   discover(ctx: DiscoverContext): Promise<DiscoverResult>;
+  /** Decide the next action to DRIVE a live demo from the current page (read-only ReAct step). */
+  agentStep(ctx: AgentStepContext): Promise<AgentStep>;
 }
 
 class ClaudeProvider implements LlmProvider {
@@ -178,6 +199,64 @@ class ClaudeProvider implements LlmProvider {
     const b = res.content.find((x) => x.type === 'text');
     const text = b && 'text' in b ? b.text.trim() : '';
     return text || "I can't reconstruct why from the trace — let me show you the source again instead.";
+  }
+
+  async agentStep(ctx: AgentStepContext): Promise<AgentStep> {
+    const done = (say: string): AgentStep => ({ action: 'done', ref: -1, value: '', say });
+    const elementList = ctx.elements.map((e) => `[${e.ref}] ${e.kind ?? e.role ?? 'el'}: ${JSON.stringify(e.text)}`).join('\n');
+    const res = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      system:
+        'You are VIN, an autonomous solution consultant DRIVING a live product demo in the stakeholder\'s real, ' +
+        'logged-in browser. You work on ANY web product purely by reading the current screen — never assume a ' +
+        'specific app. Given the goal and the interactive elements visible NOW (each with a [ref]), decide the ' +
+        'SINGLE next action that best advances the demo:\n' +
+        '• click — open/navigate via an element [ref] (menus, tabs, rows, "New …" buttons that open a form).\n' +
+        '• type — enter a realistic demo value into a field [ref] (never real/sensitive data).\n' +
+        '• done — the goal screen/state is reached, OR the only way forward is a COMMIT.\n' +
+        'READ-ONLY — you are NEVER allowed to click a control that commits/creates/submits/saves/deletes/pays/sends. ' +
+        'When the next step would be such a commit, return done and say the human can complete it. ' +
+        'Always narrate `say` in ONE concise, friendly sentence grounded ONLY in what is on screen — never invent. ' +
+        'Prefer the most direct path to the goal; do not wander.',
+      messages: [{
+        role: 'user',
+        content:
+          `Goal: ${JSON.stringify(ctx.goal)}\n` +
+          `Driving as: ${ctx.role}\n` +
+          `Current URL: ${ctx.url}\nTitle: ${ctx.title}\n` +
+          `Headings: ${JSON.stringify(ctx.headings.slice(0, 12))}\n` +
+          `Steps already taken this turn:\n${ctx.history.length ? ctx.history.map((h, i) => `${i + 1}. ${h}`).join('\n') : '(none yet)'}\n\n` +
+          `Interactive elements on screen:\n${elementList || '(none detected)'}`,
+      }],
+      output_config: {
+        format: {
+          type: 'json_schema',
+          schema: {
+            type: 'object',
+            properties: {
+              action: { type: 'string', enum: ['click', 'type', 'done'] },
+              ref: { type: 'integer', description: 'element ref for click/type; -1 for done' },
+              value: { type: 'string', description: 'text to type (type only); "" otherwise' },
+              say: { type: 'string', description: 'one-sentence narration of this step, grounded in the screen' },
+            },
+            required: ['action', 'ref', 'value', 'say'],
+            additionalProperties: false,
+          },
+        },
+      },
+    });
+    await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'agentStep' });
+    if (res.stop_reason === 'refusal') return done("I'd rather not guess my next move here — want to take over?");
+    const b = res.content.find((x) => x.type === 'text');
+    if (!b || !('text' in b)) return done('I could not read the screen clearly — you can take over and click directly.');
+    try {
+      const p = JSON.parse(b.text);
+      const action = p.action === 'click' || p.action === 'type' ? p.action : 'done';
+      return { action, ref: Number.isInteger(p.ref) ? p.ref : -1, value: typeof p.value === 'string' ? p.value : '', say: typeof p.say === 'string' ? p.say : '' };
+    } catch {
+      return done('I had trouble planning the next step — take over whenever you like.');
+    }
   }
 
   async discover(ctx: DiscoverContext): Promise<DiscoverResult> {

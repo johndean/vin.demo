@@ -217,6 +217,21 @@ ipcMain.handle('session:ask', async (_e, { text, speaker }) => {
     return { ok: false, error: String(err && err.message ? err.message : err) };
   }
 });
+// Agentic drive step: forward the live page + goal to the engine's product-agnostic step-brain.
+ipcMain.handle('session:agentStep', async (_e, payload) => {
+  if (!sessionCookie) return null;
+  try {
+    const res = await fetch(`${ENGINE_BASE}/agent/step`, {
+      method: 'POST',
+      headers: { Cookie: sessionCookie, 'content-type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+});
 ipcMain.handle('session:stop', () => { stopSession(); return { ok: true }; });
 app.on('before-quit', stopSession);
 

@@ -33,7 +33,8 @@ import { runLiveSession, type SessionTarget } from '../../../src/core/live-sessi
 import { startInteractive, type InteractiveSession } from './interactive-session.js';
 import { startVoiceSession } from './voice-session.js';
 import { verifyToken } from './session-token.js';
-import type { ExecutionMode } from '../../../src/core/safety.js';
+import { type ExecutionMode, classifyAction, permits } from '../../../src/core/safety.js';
+import { getLlm } from '../../../src/core/llm.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const COOKIE_NAME = 'vin_demo_session'; // must match apps/web/middleware.ts SESSION_COOKIE
@@ -199,6 +200,46 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(202, { 'content-type': 'application/json', ...cors });
     res.end(JSON.stringify({ ok: true })); // the answer streams on the open interactive SSE
     interactive.ask(text, speaker).catch(() => { /* errors are emitted on the SSE */ });
+    return;
+  }
+
+  // Agentic drive step — the brain for the desktop's perceive→reason→act loop. Product-AGNOSTIC: it
+  // reasons purely over the live page the embedded browser sends (url/headings/interactive elements),
+  // returns ONE next action (click/type/done) + narration, and HARD-blocks any mutating click in
+  // read-only (the human completes commits). One LLM call per step; the desktop runs the loop.
+  if (req.method === 'POST' && url.pathname === '/agent/step') {
+    const payload = await verifyToken(tokenFrom(req, url));
+    if (!payload) { res.writeHead(401, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+    const body = await readJson(req);
+    const goal = typeof body?.goal === 'string' ? body.goal.trim() : '';
+    const page = body?.page ?? {};
+    const role = typeof body?.role === 'string' ? body.role : 'admin';
+    const history = Array.isArray(body?.history) ? body.history.filter((x: any) => typeof x === 'string').slice(-12) : [];
+    const elements = Array.isArray(page?.elements)
+      ? page.elements.slice(0, 120).map((e: any) => ({ ref: Number(e?.ref), text: String(e?.text ?? '').slice(0, 120), role: e?.role ? String(e.role) : undefined, kind: e?.kind ? String(e.kind) : undefined })).filter((e: any) => Number.isInteger(e.ref))
+      : [];
+    if (!goal) { res.writeHead(400, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify({ error: 'no goal' })); return; }
+    const finish = (step: any) => { res.writeHead(200, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify(step)); };
+    try {
+      let step = await getLlm().agentStep({ goal, url: String(page.url ?? ''), title: String(page.title ?? ''), headings: Array.isArray(page.headings) ? page.headings.slice(0, 12).map(String) : [], elements, history, role });
+      if (step.action === 'click') {
+        const el = elements.find((e: any) => e.ref === step.ref);
+        if (!el) {
+          step = { action: 'done', ref: -1, value: '', say: step.say || 'That control is no longer on screen — take over if you like.' };
+        } else {
+          // Hard read-only guarantee: never let the agent click a mutating control (the classifier, not the LLM, decides).
+          const cand = { tag: el.kind === 'link' ? 'a' : (el.kind === 'input' || el.kind === 'select' || el.kind === 'textarea') ? 'input' : 'button', text: el.text, role: el.role ?? null, type: null, href: el.kind === 'link' ? '#' : null, ariaLabel: null, title: null, className: null, inNav: false };
+          const { cls } = classifyAction(cand);
+          if (!permits(cls, 'read-only').permitted) {
+            step = { action: 'done', ref: -1, value: '', say: `The next step — “${el.text}” — would commit a change, so I'll stop here (read-only). You can take over to complete it.` };
+          }
+        }
+      }
+      finish(step);
+    } catch (e: any) {
+      console.error('[engine] agent/step error:', e);
+      finish({ action: 'done', ref: -1, value: '', say: 'I hit a snag planning the next step — take over whenever you like.' });
+    }
     return;
   }
 

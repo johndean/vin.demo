@@ -25,6 +25,8 @@ contextBridge.exposeInMainWorld('session', {
   start: (target) => ipcRenderer.invoke('session:start', { target }),
   startInteractive: (target) => ipcRenderer.invoke('session:startInteractive', { target }),
   ask: (text, speaker) => ipcRenderer.invoke('session:ask', { text, speaker }),
+  // One step of the agentic drive loop — sends the live page + goal, gets back the next action.
+  agentStep: (payload) => ipcRenderer.invoke('session:agentStep', payload),
   stop: () => ipcRenderer.invoke('session:stop'),
   onEvent: (cb) => {
     const h = (_e, ev) => cb(ev);
