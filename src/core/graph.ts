@@ -50,6 +50,7 @@ async function interpret(state: DemoStateT): Promise<Partial<DemoStateT>> {
     interpretation: i,
     explanation: null,
     gated: false,
+    navigable: false,
     navigation: null,
     navAction: null,
     blockedMutations: [],
@@ -66,7 +67,8 @@ async function retrieve(state: DemoStateT): Promise<Partial<DemoStateT>> {
   return {
     retrieved: r.rows,
     gated: r.gated,
-    trace: [`retrieve: ${r.rows.length} chunks; top confidence=${r.top?.confidence ?? 'n/a'} status=${r.top?.validation_status ?? 'n/a'} age=${r.ageDays ?? 'n/a'}d distance=${r.top?.distance?.toFixed(3) ?? 'n/a'} → ${r.gated ? `GATED (${r.reason})` : 'answer'}`],
+    navigable: r.navigable,
+    trace: [`retrieve: ${r.rows.length} chunks; top confidence=${r.top?.confidence ?? 'n/a'} status=${r.top?.validation_status ?? 'n/a'} age=${r.ageDays ?? 'n/a'}d distance=${r.top?.distance?.toFixed(3) ?? 'n/a'} → ${r.gated ? `GATED (${r.reason})${r.navigable ? ' but navigable — still showing the screen' : ''}` : 'answer'}`],
   };
 }
 
@@ -282,7 +284,9 @@ export function buildGraph() {
     .addEdge(START, 'whoSpeaks')
     .addEdge('whoSpeaks', 'interpret')
     .addConditionalEdges('interpret', routeFromInterpret, { govern: 'govern', explain: 'explain', resume: 'resume', retrieve: 'retrieve' })
-    .addConditionalEdges('retrieve', (s: DemoStateT) => (s.gated ? END : 'navigate'), { navigate: 'navigate', [END]: END })
+    // Gate the ANSWER, not the SCREEN: a gated-but-navigable query still navigates (showing the live
+    // product isn't inventing). Only a truly off-topic query (gated AND not navigable) ends here.
+    .addConditionalEdges('retrieve', (s: DemoStateT) => (s.gated && !s.navigable ? END : 'navigate'), { navigate: 'navigate', [END]: END })
     .addEdge('navigate', 'discover')
     .addEdge('discover', END)
     .addEdge('explain', END)

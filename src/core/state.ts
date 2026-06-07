@@ -51,6 +51,8 @@ export const DemoState = Annotation.Root({
   // retrieve node
   retrieved: Annotation<RetrievedChunk[]>({ reducer: (_, b) => b, default: () => [] }),
   gated: Annotation<boolean>({ reducer: (_, b) => b, default: () => false }),
+  // Gated answer but relevant enough to still navigate (show the real screen, soft on specifics).
+  navigable: Annotation<boolean>({ reducer: (_, b) => b, default: () => false }),
 
   // navigate node
   navigation: Annotation<NavResult | null>({ reducer: (_, b) => b, default: () => null }),

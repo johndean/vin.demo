@@ -10,12 +10,18 @@ import type { RetrievedChunk } from './state.js';
 
 export const CONFIDENCE_THRESHOLD = 0.6;
 export const RELEVANCE_MAX_DISTANCE = 0.65; // empirically calibrated to voyage-3 (in-scope ~0.42–0.47)
+// "Navigable" band: related enough to the product to SHOW a screen even when we can't confidently
+// ANSWER (gated). Showing the live product is not inventing — so a gated-but-navigable query still
+// navigates (the agent shows the relevant screen, honestly soft on specifics). Beyond this distance
+// the query is genuinely off-topic (e.g. "capital of France") → deflect with no navigation.
+export const NAVIGABLE_MAX_DISTANCE = 0.9;
 export const MAX_VERIFY_AGE_DAYS = 180;
 
 export interface GateResult {
   rows: RetrievedChunk[];
   top: RetrievedChunk | undefined;
   gated: boolean;
+  navigable: boolean; // gated answer, but relevant enough to still show a screen
   reason: string;
   ageDays: number | null;
 }
@@ -49,6 +55,8 @@ export async function gateForVector(vec: number[], productId: string | null): Pr
   const versionStale = !!top && top.product_version_status != null && top.product_version_status !== 'active';
   const irrelevant = !top || top.distance == null || top.distance > RELEVANCE_MAX_DISTANCE;
   const gated = lowConfidence || untrusted || timeStale || versionStale || irrelevant;
+  // Navigable when there's a chunk within the wider band — relevant enough to show a screen even if gated.
+  const navigable = !!top && top.distance != null && top.distance <= NAVIGABLE_MAX_DISTANCE;
   const reason = !top ? 'no knowledge'
     : lowConfidence ? `low confidence (${top.confidence})`
     : untrusted ? `not validated (${top.validation_status})`
@@ -56,7 +64,7 @@ export async function gateForVector(vec: number[], productId: string | null): Pr
     : versionStale ? `superseded product version (${top.product_version_status}) — show the current version`
     : irrelevant ? `not relevant (distance ${top.distance?.toFixed(3) ?? 'n/a'})`
     : 'ok';
-  return { rows, top, gated, reason, ageDays };
+  return { rows, top, gated, navigable, reason, ageDays };
 }
 
 /** Embed a single query, then gate. (The graph's per-turn path.) */

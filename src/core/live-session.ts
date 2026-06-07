@@ -102,7 +102,9 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
     conf: top?.confidence ?? null,
   });
 
-  if (top && !out.gated) {
+  const navigated = !!out.navAction || !!out.navigation?.ok;
+  // Show the closest source when we have one and either it's confident OR we still navigated to a screen.
+  if (top && (!out.gated || navigated)) {
     emit({ type: 'cite', k: { title: String(top.content).slice(0, 64), content: top.content, source: top.source, conf: top.confidence, ver: String(top.product_version ?? '').replace(/^v/i, ''), status: top.validation_status, verified: top.last_verified, type: top.category ?? 'docs' } });
   }
   if (out.navAction) {
@@ -114,9 +116,12 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
   }
   if (out.blockedMutations?.length) emit({ type: 'blocked', actions: out.blockedMutations });
 
+  const screen = out.navAction?.label ?? 'the relevant screen';
   if (out.explanation) emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: out.explanation, uncertain: !!out.gated });
-  else if (out.gated) emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: "I'm not certain about that — let me show you the source rather than guess.", uncertain: true });
-  else if (top) emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: String(top.content) });
+  else if (!out.gated && top) emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: String(top.content) });
+  // Gated but we still navigated: show the live product, be honest about the specifics (never invent).
+  else if (out.gated && navigated) emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: `Here's ${screen} — I'm taking you to the live product. I don't have a verified source for the exact details of that, so I won't guess; want me to walk through what's on screen?`, uncertain: true });
+  else emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: "I'm not certain about that — let me show you the source rather than guess.", uncertain: true });
 
   if (out.discoveryPrompt) emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: out.discoveryPrompt, tag: 'discovery' });
 
