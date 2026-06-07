@@ -232,3 +232,13 @@ button { font-family: inherit; }
 .drawer__x:hover { color: var(--text-primary); }
 .drawer__body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; overflow-y: auto; flex: 1; }
 .drawer__ft { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border-subtle); }
+
+/* ============================================================ INLINE FORM (in content area, under header — no popups) */
+.form-shell { background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); max-width: 780px; }
+.form-shell__hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border-subtle); }
+.form-shell__title { font-weight: 800; font-size: 16px; color: var(--text-primary); }
+.form-shell__sub { font-size: 12px; color: var(--color-steel); margin-top: 2px; }
+.form-shell__x { background: none; border: none; cursor: pointer; color: var(--color-steel); font-size: 24px; line-height: 1; padding: 0 4px; }
+.form-shell__x:hover { color: var(--text-primary); }
+.form-shell__body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
+.form-shell__ft { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border-subtle); }

@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useData } from './data-context';
 import { PageHead, Icon, Pill, ModeChip, Avatar, Metric, type Go } from './shell';
-import { Drawer, Field } from './Modal';
+import { FormShell, Field } from './Modal';
 import { adminMutate } from './admin';
 
 const CUSTOMER_STAGES = ['Qualifying', 'Demo scheduled', 'Live demo', 'Follow-up', 'Evaluation', 'Closed'];
@@ -29,7 +29,7 @@ function CustomerForm({ customer, onClose }: { customer: any | null; onClose: ()
     } catch (e: any) { setErr(e?.message || 'Save failed'); setBusy(false); }
   };
   return (
-    <Drawer title={customer ? `Edit ${customer.name}` : 'New department'} onClose={onClose}
+    <FormShell title={customer ? `Edit ${customer.name}` : 'New department'} onClose={onClose}
       footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save'}</button></>}>
       <Field label="Department / account name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Procurement · Acme Corp" /></Field>
       <Field label="Segment"><input value={seg} onChange={(e) => setSeg(e.target.value)} placeholder="Enterprise · Manufacturing" /></Field>
@@ -39,7 +39,7 @@ function CustomerForm({ customer, onClose }: { customer: any | null; onClose: ()
       </div>
       <Field label="Next step"><input value={next} onChange={(e) => setNext(e.target.value)} placeholder="Exec readout · Tue" /></Field>
       {err && <div className="modal__err">{err}</div>}
-    </Drawer>
+    </FormShell>
   );
 }
 
@@ -55,8 +55,9 @@ export function Customers({ go, selected }: { go: Go; selected?: string | null }
     <div className="page scroll">
       <PageHead overline="Pipeline" title="Departments"
         desc="Departments evaluating the products. Each carries demo sessions and a stakeholder graph — a collection of roles, interests, and open items tracked per person."
-        actions={<button className="btn btn-primary" onClick={() => setEditing(null)}><Icon name="plus" size={14} /> Add department</button>} />
-      <div className="card" style={{ overflow: 'hidden' }}>
+        actions={editing === undefined ? <button className="btn btn-primary" onClick={() => setEditing(null)}><Icon name="plus" size={14} /> Add department</button> : undefined} />
+      {editing !== undefined ? <CustomerForm customer={editing} onClose={() => setEditing(undefined)} />
+        : <div className="card" style={{ overflow: 'hidden' }}>
         <table className="tbl">
           <thead><tr><th>Department</th><th>Stage</th><th>Product</th><th>Stakeholders</th><th>Sessions</th><th>Next</th><th></th></tr></thead>
           <tbody>
@@ -73,8 +74,7 @@ export function Customers({ go, selected }: { go: Go; selected?: string | null }
             ))}
           </tbody>
         </table>
-      </div>
-      {editing !== undefined && <CustomerForm customer={editing} onClose={() => setEditing(undefined)} />}
+      </div>}
     </div>
   );
 }

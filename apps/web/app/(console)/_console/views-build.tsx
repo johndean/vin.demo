@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useData } from './data-context';
 import { PageHead, Icon, Pill, ConfBar, VALIDATION, type Go } from './shell';
-import { Drawer, Field } from './Modal';
+import { FormShell, Field } from './Modal';
 import { adminMutate } from './admin';
 
 /* ============================ KNOWLEDGE ============================ */
@@ -167,16 +167,18 @@ export function DemoGraphInner({ p }: { p: any }) {
 /* ============================ ENVIRONMENTS ============================ */
 export function Environments({ go }: { go: Go }) {
   const VD = useData();
-  const [creating, setCreating] = useState(false);
+  const [editing, setEditing] = useState<any | null | undefined>(undefined); // undefined=closed, null=new, obj=edit
+  const [deleting, setDeleting] = useState<any | null>(null);
   return (
     <div className="page scroll">
       <PageHead overline="Library" title="Environments"
         desc="The interaction layer points at an environment with seeded data and a reset mechanism. Demo (non-production) is the default; pointing at a production tenant is an explicit, visible choice."
-        actions={<button className="btn btn-primary" onClick={() => setCreating(true)}><Icon name="plus" size={14} /> New environment</button>} />
-      <div className="grid cols-2">
-        {VD.products.map((p) => <EnvCard key={p.id} p={p} products={VD.products} />)}
-      </div>
-      {creating && <EnvForm env={null} products={VD.products} onClose={() => setCreating(false)} />}
+        actions={editing === undefined && !deleting ? <button className="btn btn-primary" onClick={() => setEditing(null)}><Icon name="plus" size={14} /> New environment</button> : undefined} />
+      {editing !== undefined ? <EnvForm env={editing} products={VD.products} onClose={() => setEditing(undefined)} />
+        : deleting ? <DeleteEnv env={deleting} onClose={() => setDeleting(null)} />
+        : <div className="grid cols-2">
+            {VD.products.map((p) => <EnvCard key={p.id} p={p} onEdit={() => setEditing(p)} onDelete={() => setDeleting(p)} />)}
+          </div>}
     </div>
   );
 }
@@ -207,7 +209,7 @@ function EnvForm({ env, products, onClose }: { env: any | null; products: any[];
     } catch (e: any) { setErr(e?.message || 'Save failed'); setBusy(false); }
   };
   return (
-    <Drawer title={editing ? `Edit environment · ${env.env}` : 'New environment'} subtitle={editing ? env.name : undefined} onClose={onClose}
+    <FormShell title={editing ? `Edit environment · ${env.env}` : 'New environment'} subtitle={editing ? env.name : undefined} onClose={onClose}
       footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save environment'}</button></>}>
       {!editing && <Field label="Product"><select value={productId} onChange={(e) => setProductId(e.target.value)}>{products.map((p: any) => <option key={p.id} value={p.id}>{p.domain}</option>)}</select></Field>}
       <Field label="Environment name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="demo-04" /></Field>
@@ -223,7 +225,7 @@ function EnvForm({ env, products, onClose }: { env: any | null; products: any[];
       </div>
       {isProd && <div className="modal__err" style={{ color: 'var(--color-amber, #9a6b1a)' }}>Production tenant — real data. The agent stays read-only unless explicitly raised.</div>}
       {err && <div className="modal__err">{err}</div>}
-    </Drawer>
+    </FormShell>
   );
 }
 
@@ -237,11 +239,11 @@ function DeleteEnv({ env, onClose }: { env: any; onClose: () => void }) {
     catch (e: any) { setErr(e?.message || 'Delete failed'); setBusy(false); }
   };
   return (
-    <Drawer title="Delete environment" width={420} onClose={onClose}
+    <FormShell title="Delete environment" width={420} onClose={onClose}
       footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" style={{ background: 'var(--color-danger, #a8332f)' }} onClick={del} disabled={busy}>{busy ? 'Deleting…' : 'Delete'}</button></>}>
       <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.5, color: 'var(--text-primary)' }}>Delete the <b>{env.env}</b> environment for <b>{env.name}</b>? Sessions that used it keep their history.</p>
       {err && <div className="modal__err">{err}</div>}
-    </Drawer>
+    </FormShell>
   );
 }
 
@@ -277,9 +279,7 @@ function ModeSelect({ p }: { p: any }) {
   );
 }
 
-function EnvCard({ p, products }: { p: any; products?: any[] }) {
-  const [edit, setEdit] = useState(false);
-  const [del, setDel] = useState(false);
+function EnvCard({ p, onEdit, onDelete }: { p: any; onEdit?: () => void; onDelete?: () => void }) {
   const healthy = p.envStatus === 'Healthy';
   return (
     <div className="card">
@@ -297,14 +297,14 @@ function EnvCard({ p, products }: { p: any; products?: any[] }) {
           <dt>Last reset</dt><dd>{p.lastReset}</dd>
           <dt>Refresh cadence</dt><dd>{p.refreshCadence || '—'}</dd>
         </dl>
-        <div className="flex gap-2" style={{ marginTop: 16 }}>
-          <button className="btn btn-secondary btn-sm" onClick={() => setEdit(true)}><Icon name="edit" size={13} /> Edit</button>
-          {p.connectionTarget && <a className="btn btn-ghost btn-sm" href={p.connectionTarget} target="_blank" rel="noreferrer"><Icon name="external" size={13} /> Open env</a>}
-          {p.envId && <button className="btn btn-ghost btn-sm" onClick={() => setDel(true)}><Icon name="x" size={13} /> Delete</button>}
-        </div>
+        {(onEdit || onDelete) && (
+          <div className="flex gap-2" style={{ marginTop: 16 }}>
+            {onEdit && <button className="btn btn-secondary btn-sm" onClick={onEdit}><Icon name="edit" size={13} /> Edit</button>}
+            {p.connectionTarget && <a className="btn btn-ghost btn-sm" href={p.connectionTarget} target="_blank" rel="noreferrer"><Icon name="external" size={13} /> Open env</a>}
+            {p.envId && onDelete && <button className="btn btn-ghost btn-sm" onClick={onDelete}><Icon name="x" size={13} /> Delete</button>}
+          </div>
+        )}
       </div>
-      {edit && <EnvForm env={p} products={products ?? []} onClose={() => setEdit(false)} />}
-      {del && p.envId && <DeleteEnv env={p} onClose={() => setDel(false)} />}
     </div>
   );
 }
@@ -360,7 +360,7 @@ function PersonaForm({ persona, onClose }: { persona: any | null; onClose: () =>
     } catch (e: any) { setErr(e?.message || 'Save failed'); setBusy(false); }
   };
   return (
-    <Drawer title={persona ? `Edit ${persona.name}` : 'New specialist persona'} onClose={onClose} width={600}
+    <FormShell title={persona ? `Edit ${persona.name}` : 'New specialist persona'} onClose={onClose} width={600}
       footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save persona'}</button></>}>
       <div className="flex gap-2">
         <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Integration Engineer" /></Field>
@@ -396,7 +396,7 @@ function PersonaForm({ persona, onClose }: { persona: any | null; onClose: () =>
       </Field>
       {status !== 'approved' && <div className="modal__err" style={{ color: 'var(--color-amber, #9a6b1a)' }}>Only <b>approved</b> personas can be handed off to in a live demo.</div>}
       {err && <div className="modal__err">{err}</div>}
-    </Drawer>
+    </FormShell>
   );
 }
 
@@ -410,11 +410,11 @@ function DeletePersona({ persona, onClose }: { persona: any; onClose: () => void
     catch (e: any) { setErr(e?.message || 'Delete failed'); setBusy(false); }
   };
   return (
-    <Drawer title="Delete persona" onClose={onClose} width={400}
+    <FormShell title="Delete persona" onClose={onClose} width={400}
       footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" style={{ background: 'var(--color-danger, #a8332f)' }} onClick={del} disabled={busy}>{busy ? 'Deleting…' : 'Delete'}</button></>}>
       <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.5 }}>Delete <b>{persona.name}</b>? This removes the persona permanently.</p>
       {err && <div className="modal__err">{err}</div>}
-    </Drawer>
+    </FormShell>
   );
 }
 
@@ -426,8 +426,10 @@ export function Personas({ go }: { go: Go }) {
     <div className="page scroll">
       <PageHead overline="Library" title="Personas"
         desc="Delegated specialists the consultant can hand off to mid-demo for deep questions. Each has a defined scope and brand / legal limits — they cite docs and never over-commit."
-        actions={<button className="btn btn-primary" onClick={() => setEditing(null)}><Icon name="plus" size={14} /> New persona</button>} />
-      <div className="grid cols-3">
+        actions={editing === undefined && !deleting ? <button className="btn btn-primary" onClick={() => setEditing(null)}><Icon name="plus" size={14} /> New persona</button> : undefined} />
+      {editing !== undefined ? <PersonaForm persona={editing} onClose={() => setEditing(undefined)} />
+        : deleting ? <DeletePersona persona={deleting} onClose={() => setDeleting(null)} />
+        : <div className="grid cols-3">
         {VD.personas.map((p) => (
           <div key={p.id} className="card card-pad">
             <div className="flex items-center gap-3" style={{ marginBottom: 14 }}>
@@ -445,9 +447,7 @@ export function Personas({ go }: { go: Go }) {
             </div>
           </div>
         ))}
-      </div>
-      {editing !== undefined && <PersonaForm persona={editing} onClose={() => setEditing(undefined)} />}
-      {deleting && <DeletePersona persona={deleting} onClose={() => setDeleting(null)} />}
+      </div>}
     </div>
   );
 }
