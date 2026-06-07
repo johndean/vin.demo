@@ -15,7 +15,7 @@ type TargetParams = { productId?: string; role?: string; mode?: string; url?: st
 interface DemoTarget { productId: string; host: string; mk: string; color: string; role: string; mode: string; url: string; scenario: string }
 const TARGET_ROLES = ['admin', 'manager', 'owner', 'accounting', 'employee'];
 const TARGET_MODES: { id: string; label: string }[] = [
-  { id: 'read-only', label: 'Read-only' }, { id: 'safe', label: 'Safe' }, { id: 'approval', label: 'Approval' },
+  { id: 'read-only', label: 'Read-only' }, { id: 'safe', label: 'Safe' }, { id: 'approval', label: 'Approval' }, { id: 'execution', label: 'Execution · live writes' },
 ];
 
 const CURSOR = (
@@ -266,7 +266,7 @@ const typeRefJs = (ref: number, val: string) => `(function(){ var el=document.qu
    consultant co-drives it: an engine `nav` event (navTo) navigates the same pane, so the agent walks
    the real UI and the human grabs the wheel whenever they want. Persistent partition → the login
    survives reloads/turns. Replaces the screenshot stage on the desktop. */
-function LiveBrowser({ initialUrl, navAction, driving, picker, role, controlsRef }: { initialUrl: string; navAction?: { label?: string; selectors?: string[]; url?: string; seq: number } | null; driving?: boolean; picker?: (liveUrl: string) => React.ReactNode; role?: string; controlsRef?: React.MutableRefObject<any> }) {
+function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, controlsRef }: { initialUrl: string; navAction?: { label?: string; selectors?: string[]; url?: string; seq: number } | null; driving?: boolean; picker?: (liveUrl: string) => React.ReactNode; role?: string; mode?: string; controlsRef?: React.MutableRefObject<any> }) {
   const ref = useRef<any>(null);
   const [bar, setBar] = useState(initialUrl);
   const [nav, setNav] = useState({ back: false, fwd: false, loading: false });
@@ -331,7 +331,7 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role, controlsRef
         <button className="live-nav" onClick={() => act('reload')} title="Reload" style={nav.loading ? { animation: 'spin 1s linear infinite' } : undefined}>⟳</button>
         {picker ? picker(bar) : <span className="live-bar__url" title={bar}><Icon name="lock" size={11} /> {bar}</span>}
         {role && <span className="live-role" title="The persona the AI drives as — keep it consistent with who you're logged in as">as {role}</span>}
-        <span className={`live-bar__tag ${driving ? 'driving' : ''}`} title={driving ? 'The AI consultant is navigating — click anywhere to take over' : 'You are in control — it is your live, logged-in session'}>{driving ? 'AI DRIVING' : 'LIVE · you take over'}</span>
+        <span className={`live-bar__tag ${driving ? 'driving' : ''} ${mode === 'execution' ? 'exec' : ''}`} title={mode === 'execution' ? 'EXECUTION — the agent makes real changes (clicks, types, saves) on this live target' : (driving ? 'The AI consultant is navigating — click anywhere to take over' : 'You are in control — it is your live, logged-in session')}>{mode === 'execution' ? (driving ? 'AI WRITING · execution' : 'EXECUTION · live') : (driving ? 'AI DRIVING' : 'LIVE · you take over')}</span>
       </div>
       {createElement('webview', { ref, src: initialUrl, partition: 'persist:vinlive', allowpopups: 'true', className: 'live-webview' })}
     </div>
@@ -380,7 +380,7 @@ function TargetPicker({ products, target, liveUrl, onApply }: { products: RealPr
             <div className="target__list">
               {products.length === 0 && <div className="target__empty">Loading products…</div>}
               {products.map((p) => (
-                <button key={p.id} className={`target__opt ${pid === p.id && !url ? 'on' : ''}`} onClick={() => { setPid(p.id); setUrl(''); }}>
+                <button key={p.id} className={`target__opt ${pid === p.id && !url ? 'on' : ''}`} onClick={() => { setPid(p.id); setUrl(''); setMode(p.defaultMode ?? 'read-only'); }}>
                   <span className="target__mk" style={{ background: p.color }}>{p.mk}</span>
                   <span className="target__opt-main"><b>{p.domain}</b><span>{p.env} · {p.status}</span></span>
                   {pid === p.id && !url && <Icon name="check" size={13} style={{ stroke: 'var(--cr-accent)' }} />}
@@ -397,7 +397,8 @@ function TargetPicker({ products, target, liveUrl, onApply }: { products: RealPr
               <span className="target__cfg-l">Mode</span>
               <select value={mode} onChange={(e) => setMode(e.target.value)}>{TARGET_MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select>
             </div>
-            {mode !== 'read-only' && <div className="target__warn">⚠ {mode} permits actions beyond navigate/explain — use only against an authorized environment.</div>}
+            {mode === 'execution' && <div className="target__warn">⚠ Execution makes REAL changes — the agent will click, type, and SAVE on the live target. Use only on your own demo/QA environment.</div>}
+            {(mode === 'safe' || mode === 'approval') && <div className="target__warn">⚠ {mode} permits actions beyond navigate/explain — use only against an authorized environment.</div>}
             {url && !sel && <div className="target__warn">Ad-hoc URL — not a trained product (no curated knowledge or demo graph).</div>}
             <input className="target__scenario" placeholder="Opening question (optional)…" value={scenario} onChange={(e) => setScenario(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') commit(); }} />
             <button className="target__apply" onClick={commit}>Apply &amp; restart session</button>
@@ -643,17 +644,20 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
 
   const [panelOpen, setPanelOpen] = useState(true);
   const [tab, setTab] = useState('convo');
-  const mode = 'read-only';
 
   // Operator-chosen demo target. Initialized from the real products once they load (po.vin by default).
+  // Each product carries a per-site DEFAULT execution mode (set in the web console); the operator can
+  // override it per session in the picker below.
   const real = useReal();
   const products = real?.products ?? [];
   const [target, setTarget] = useState<DemoTarget | null>(null);
   useEffect(() => {
     if (target || !products.length) return;
     const p = products.find((x) => /po\.vin|^demo/i.test(x.name)) ?? products[0];
-    setTarget({ productId: p.id, host: p.domain, mk: p.mk, color: p.color, role: 'admin', mode: 'read-only', url: '', scenario: '' });
+    setTarget({ productId: p.id, host: p.domain, mk: p.mk, color: p.color, role: 'admin', mode: p.defaultMode ?? 'read-only', url: '', scenario: '' });
   }, [products, target]);
+  // The execution mode shown in the top strip reflects the operator's chosen target (default read-only).
+  const mode = target?.mode ?? 'read-only';
   const targetParams: TargetParams | undefined = target
     ? { productId: target.productId || undefined, role: target.role, mode: target.mode, url: target.url || undefined, scenario: target.scenario || undefined, clientNav: '1' }
     : undefined;
@@ -711,7 +715,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
       for (let i = 0; i < 7; i++) {
         const page = await ctl.snapshot().catch(() => null);
         if (!page) { pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: "I can't read the page yet — make sure it's loaded (and you're logged in), then ask again.", uncertain: true }); break; }
-        const res = await api.agentStep({ goal, page, history, role: target?.role });
+        const res = await api.agentStep({ goal, page, history, role: target?.role, mode: target?.mode });
         if (!res) { pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: 'Lost the connection to the engine for a moment — try again.', uncertain: true }); break; }
         if (res.say) { pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: res.say, uncertain: res.action === 'done' && i === 0 ? false : undefined }); history.push(res.say); }
         if (res.action === 'done') break;
@@ -749,7 +753,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
           <Stage beat={beat} onResolve={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
             screenshot={engine ? live.screenshot : null} blocked={engine ? live.blocked : undefined} url={engine ? live.url : undefined}
             browser={engine && target && browserUrl
-              ? <LiveBrowser initialUrl={browserUrl} navAction={live.navAction} driving={live.running} role={target.role} controlsRef={browserCtl}
+              ? <LiveBrowser initialUrl={browserUrl} navAction={live.navAction} driving={live.running} role={target.role} mode={target.mode} controlsRef={browserCtl}
                   picker={(liveUrl) => <TargetPicker products={products} target={target} liveUrl={liveUrl} onApply={setTarget} />} />
               : undefined} />
         </div>

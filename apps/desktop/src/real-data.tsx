@@ -6,6 +6,7 @@ export interface RealProduct {
   id: string; name: string; domain: string; tagline: string; version: string; mk: string; color: string;
   chunks: number; coverage: number; demos: number; kbValidated: number; env: string; envStatus: string;
   graphNodes: number; graphFlows: number; status: string;
+  defaultMode?: string; // per-site default execution mode (read-only|safe|approval|execution), set in the web console
 }
 export interface RealKnowledge { id: string; title: string; content: string; type: string; conf: number; source: string; verified: string; ver: string; status: string }
 export interface RealCost { k: string; v: number; color: string; pct: number }

@@ -6,6 +6,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config as loadEnv } from 'dotenv';
 import { record } from './cost.js';
+import type { ExecutionMode } from './safety.js';
 
 loadEnv();
 
@@ -54,6 +55,7 @@ export interface AgentStepContext {
   elements: PageElement[]; // the interactive elements currently on screen (with stable refs)
   history: string[];       // narrations of the steps already taken this turn
   role: string;            // the persona the agent is driving as
+  mode: ExecutionMode;     // read-only/safe/approval → never commit; execution → may save/submit
 }
 /** The single next action the agent takes to drive the live demo (read-only: never commits). */
 export interface AgentStep {
@@ -204,6 +206,14 @@ class ClaudeProvider implements LlmProvider {
   async agentStep(ctx: AgentStepContext): Promise<AgentStep> {
     const done = (say: string): AgentStep => ({ action: 'done', ref: -1, value: '', say });
     const elementList = ctx.elements.map((e) => `[${e.ref}] ${e.kind ?? e.role ?? 'el'}: ${JSON.stringify(e.text)}`).join('\n');
+    const policy = ctx.mode === 'execution'
+      ? 'EXECUTION MODE — the operator authorized LIVE writes against their OWN demo environment, so you MAY ' +
+        'complete the workflow end to end, INCLUDING save/submit/create, to show it actually working. Type only ' +
+        'realistic demo values. Right before any final/destructive commit (submit/save/create/pay), narrate what ' +
+        'you are about to do in `say`. Do NOT delete/cancel/void existing records unless the goal explicitly asks.'
+      : 'READ-ONLY — you are NEVER allowed to click a control that commits/creates/submits/saves/deletes/pays/sends. ' +
+        'When the only way forward is such a commit, return done and say the human can complete it. You MAY still ' +
+        'open forms, fill fields, and walk wizard steps to demonstrate the flow up to (but not including) the commit.';
     const res = await this.client.messages.create({
       model: MODEL,
       max_tokens: 1024,
@@ -212,11 +222,10 @@ class ClaudeProvider implements LlmProvider {
         'logged-in browser. You work on ANY web product purely by reading the current screen — never assume a ' +
         'specific app. Given the goal and the interactive elements visible NOW (each with a [ref]), decide the ' +
         'SINGLE next action that best advances the demo:\n' +
-        '• click — open/navigate via an element [ref] (menus, tabs, rows, "New …" buttons that open a form).\n' +
+        '• click — open/navigate/act via an element [ref] (menus, tabs, rows, "New …" buttons, and in execution mode the commit).\n' +
         '• type — enter a realistic demo value into a field [ref] (never real/sensitive data).\n' +
-        '• done — the goal screen/state is reached, OR the only way forward is a COMMIT.\n' +
-        'READ-ONLY — you are NEVER allowed to click a control that commits/creates/submits/saves/deletes/pays/sends. ' +
-        'When the next step would be such a commit, return done and say the human can complete it. ' +
+        '• done — the goal is achieved, OR (outside execution mode) the only way forward is a commit.\n' +
+        policy + '\n' +
         'Always narrate `say` in ONE concise, friendly sentence grounded ONLY in what is on screen — never invent. ' +
         'Prefer the most direct path to the goal; do not wander.',
       messages: [{

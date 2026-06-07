@@ -33,7 +33,7 @@ import { runLiveSession, type SessionTarget } from '../../../src/core/live-sessi
 import { startInteractive, type InteractiveSession } from './interactive-session.js';
 import { startVoiceSession } from './voice-session.js';
 import { verifyToken } from './session-token.js';
-import { type ExecutionMode, classifyAction } from '../../../src/core/safety.js';
+import { type ExecutionMode, classifyAction, permits } from '../../../src/core/safety.js';
 import { getLlm } from '../../../src/core/llm.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
@@ -214,6 +214,8 @@ const server = http.createServer(async (req, res) => {
     const goal = typeof body?.goal === 'string' ? body.goal.trim() : '';
     const page = body?.page ?? {};
     const role = typeof body?.role === 'string' ? body.role : 'admin';
+    const ALLOWED: ExecutionMode[] = ['read-only', 'safe', 'approval', 'execution'];
+    const mode: ExecutionMode = ALLOWED.includes(body?.mode) ? body.mode : 'read-only';
     const history = Array.isArray(body?.history) ? body.history.filter((x: any) => typeof x === 'string').slice(-12) : [];
     const elements = Array.isArray(page?.elements)
       ? page.elements.slice(0, 120).map((e: any) => ({ ref: Number(e?.ref), text: String(e?.text ?? '').slice(0, 120), role: e?.role ? String(e.role) : undefined, kind: e?.kind ? String(e.kind) : undefined })).filter((e: any) => Number.isInteger(e.ref))
@@ -221,20 +223,20 @@ const server = http.createServer(async (req, res) => {
     if (!goal) { res.writeHead(400, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify({ error: 'no goal' })); return; }
     const finish = (step: any) => { res.writeHead(200, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify(step)); };
     try {
-      let step = await getLlm().agentStep({ goal, url: String(page.url ?? ''), title: String(page.title ?? ''), headings: Array.isArray(page.headings) ? page.headings.slice(0, 12).map(String) : [], elements, history, role });
+      let step = await getLlm().agentStep({ goal, url: String(page.url ?? ''), title: String(page.title ?? ''), headings: Array.isArray(page.headings) ? page.headings.slice(0, 12).map(String) : [], elements, history, role, mode });
       if (step.action === 'click') {
         const el = elements.find((e: any) => e.ref === step.ref);
         if (!el) {
           step = { action: 'done', ref: -1, value: '', say: step.say || 'That control is no longer on screen — take over if you like.' };
         } else {
-          // Hard guarantee (classifier decides, not the LLM): block only a CONFIRMED commit — a clear
-          // mutating verb (submit/create/save/pay/approve/delete…). Opening forms ("New …"), walking
-          // wizard steps (Next/Continue), filtering, and tabs are safe navigation the agent may do; an
-          // unrecognized button (fail-closed but NOT confident) is allowed to navigate. The human fires commits.
+          // Hard guarantee (classifier decides, not the LLM), mode-aware: a CONFIRMED commit (clear mutating
+          // verb) is blocked UNLESS the operator chose execution mode (permits mutating). Opening forms,
+          // walking wizard steps, filtering, tabs, and unrecognized buttons (fail-closed but NOT confident)
+          // are safe navigation in every mode. So read-only/safe/approval → navigate only; execution → may save.
           const cand = { tag: el.kind === 'link' ? 'a' : (el.kind === 'input' || el.kind === 'select' || el.kind === 'textarea') ? 'input' : 'button', text: el.text, role: el.role ?? null, type: null, href: el.kind === 'link' ? '#' : null, ariaLabel: null, title: null, className: null, inNav: false };
           const { cls, confident } = classifyAction(cand);
-          if (cls === 'mutating' && confident) {
-            step = { action: 'done', ref: -1, value: '', say: `The next step — “${el.text}” — commits a change, so I'll stop here. Click it yourself to finalize whenever you're ready.` };
+          if (cls === 'mutating' && confident && !permits(cls, mode).permitted) {
+            step = { action: 'done', ref: -1, value: '', say: `The next step — “${el.text}” — commits a change. In ${mode} mode I'll stop here; switch to Execution (or click it yourself) to complete it.` };
           }
         }
       }

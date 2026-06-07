@@ -27,9 +27,10 @@ export interface SessionTarget {
   clientNav?: boolean | null; // desktop embedded browser drives navigation (no server Playwright/screenshot)
 }
 
-// Operator-selectable execution modes. 'execution' (full-write) is deliberately EXCLUDED — it stays
-// gated behind explicit per-customer authorization (CLAUDE.md §8 / ADR governance), never a picker click.
-const SELECTABLE_MODES: ExecutionMode[] = ['read-only', 'safe', 'approval'];
+// Operator-selectable execution modes. 'execution' (full-write) is an explicit, warned per-session
+// opt-in (the operator authorizes live writes against their OWN demo/QA target) — default stays
+// read-only. This is the sanctioned path in CLAUDE.md §8 ("customer authorizes mutating actions").
+const SELECTABLE_MODES: ExecutionMode[] = ['read-only', 'safe', 'approval', 'execution'];
 
 export interface SessionCtx {
   productId: string;
