@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useData } from './data-context';
 import { PageHead, Icon, Pill, ConfBar, VALIDATION, type Go } from './shell';
-import { Modal, Field } from './Modal';
+import { Drawer, Field } from './Modal';
 import { adminMutate } from './admin';
 
 /* ============================ KNOWLEDGE ============================ */
@@ -289,7 +289,7 @@ function PersonaForm({ persona, onClose }: { persona: any | null; onClose: () =>
     } catch (e: any) { setErr(e?.message || 'Save failed'); setBusy(false); }
   };
   return (
-    <Modal title={persona ? `Edit ${persona.name}` : 'New specialist persona'} onClose={onClose} width={600}
+    <Drawer title={persona ? `Edit ${persona.name}` : 'New specialist persona'} onClose={onClose} width={600}
       footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save persona'}</button></>}>
       <div className="flex gap-2">
         <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Integration Engineer" /></Field>
@@ -325,7 +325,7 @@ function PersonaForm({ persona, onClose }: { persona: any | null; onClose: () =>
       </Field>
       {status !== 'approved' && <div className="modal__err" style={{ color: 'var(--color-amber, #9a6b1a)' }}>Only <b>approved</b> personas can be handed off to in a live demo.</div>}
       {err && <div className="modal__err">{err}</div>}
-    </Modal>
+    </Drawer>
   );
 }
 
@@ -339,11 +339,11 @@ function DeletePersona({ persona, onClose }: { persona: any; onClose: () => void
     catch (e: any) { setErr(e?.message || 'Delete failed'); setBusy(false); }
   };
   return (
-    <Modal title="Delete persona" onClose={onClose} width={400}
+    <Drawer title="Delete persona" onClose={onClose} width={400}
       footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" style={{ background: 'var(--color-danger, #a8332f)' }} onClick={del} disabled={busy}>{busy ? 'Deleting…' : 'Delete'}</button></>}>
       <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.5 }}>Delete <b>{persona.name}</b>? This removes the persona permanently.</p>
       {err && <div className="modal__err">{err}</div>}
-    </Modal>
+    </Drawer>
   );
 }
 
