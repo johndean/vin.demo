@@ -17,3 +17,14 @@ contextBridge.exposeInMainWorld('auth', {
 contextBridge.exposeInMainWorld('consoleData', {
   fetch: () => ipcRenderer.invoke('data:fetch'),
 });
+
+// Live demo session service: start/stop the real engine loop + receive its streamed events.
+contextBridge.exposeInMainWorld('session', {
+  start: () => ipcRenderer.invoke('session:start'),
+  stop: () => ipcRenderer.invoke('session:stop'),
+  onEvent: (cb) => {
+    const h = (_e, ev) => cb(ev);
+    ipcRenderer.on('session:event', h);
+    return () => ipcRenderer.removeListener('session:event', h);
+  },
+});

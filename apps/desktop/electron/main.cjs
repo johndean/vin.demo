@@ -1,5 +1,6 @@
 const { app, BrowserWindow, ipcMain, shell } = require('electron');
 const path = require('node:path');
+const { spawn } = require('node:child_process');
 
 let win;
 
@@ -34,6 +35,42 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+
+// Live session SERVICE (Phase 4): spawn the real engine loop (tsx src/core/live-session.ts
+// from the repo root) and stream its NDJSON events to the renderer over IPC. The engine has
+// the credentials/Playwright/DB it needs locally. Live is the default runtime; scripted BEATS
+// remain a QA toggle in the renderer.
+let sessionProc = null;
+const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
+function stopSession() { if (sessionProc) { try { sessionProc.kill(); } catch { /* */ } sessionProc = null; } }
+
+ipcMain.handle('session:start', () => {
+  stopSession();
+  const tsx = path.join(REPO_ROOT, 'node_modules', '.bin', 'tsx');
+  const env = { ...process.env, CAPTURE_SHOTS: '1' };
+  delete env.ELECTRON_RUN_AS_NODE;
+  try {
+    sessionProc = spawn(tsx, ['src/core/live-session.ts'], { cwd: REPO_ROOT, env });
+  } catch (err) {
+    win?.webContents.send('session:event', { type: 'error', message: String(err && err.message ? err.message : err) });
+    return { ok: false };
+  }
+  let buf = '';
+  sessionProc.stdout.on('data', (d) => {
+    buf += d.toString();
+    const lines = buf.split('\n');
+    buf = lines.pop() ?? '';
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try { win?.webContents.send('session:event', JSON.parse(line)); } catch { /* ignore non-JSON log lines */ }
+    }
+  });
+  sessionProc.stderr.on('data', () => { /* engine diagnostics; ignore on the wire */ });
+  sessionProc.on('close', (code) => { win?.webContents.send('session:event', { type: 'closed', code }); sessionProc = null; });
+  return { ok: true };
+});
+ipcMain.handle('session:stop', () => { stopSession(); return { ok: true }; });
+app.on('before-quit', stopSession);
 
 ipcMain.on('win:minimize', () => win?.minimize());
 ipcMain.on('win:maximize', () => { if (win?.isMaximized()) win.unmaximize(); else win?.maximize(); });

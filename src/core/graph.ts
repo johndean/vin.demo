@@ -97,7 +97,9 @@ async function driveTo(state: DemoStateT, intent: string): Promise<DriveOutcome>
     const defensive = scan.filter((s) => s.cls === 'mutating' && !s.confident && !s.permitted).length;
     // Watch mode: caption the real screen with what VIN Demo says + its trust metadata + the
     // read-only safety result, so a human watching sees a demo, not a silently-driven browser.
-    if (nav.ok) {
+    // Watch mode (SHOW_DEMO) captions the real screen; live-stream mode (CAPTURE_SHOTS) writes a
+    // fixed screenshot the control room reads. Off by default — no capture in eval/normal runs.
+    if (nav.ok && (process.env.SHOW_DEMO || process.env.CAPTURE_SHOTS)) {
       const top = state.retrieved?.[0];
       const said = top?.content ?? `Here's the ${node.intent_label} screen.`;
       const meta = [
@@ -105,7 +107,8 @@ async function driveTo(state: DemoStateT, intent: string): Promise<DriveOutcome>
         `mode: ${state.mode} — ${confirmed.length ? `blocked ${confirmed.join(', ')}` : 'no mutating action fired'}`,
       ].filter(Boolean).join('     |     ');
       await driver.narrate?.(said, meta).catch(() => {});
-      await driver.screenshot?.(`tmp/demo-shots/${node.intent_label.replace(/\W+/g, '-')}.png`, false).catch(() => {});
+      const shotPath = process.env.CAPTURE_SHOTS ? 'tmp/live/last.png' : `tmp/demo-shots/${node.intent_label.replace(/\W+/g, '-')}.png`;
+      await driver.screenshot?.(shotPath, false).catch(() => {});
     }
     return {
       navigation: nav,

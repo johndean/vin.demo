@@ -30,20 +30,29 @@ function ConfGauge({ conf }: { conf: number }) {
   );
 }
 
-function CostMeter({ cost }: { cost: number }) {
+function CostMeter({ cost, live }: { cost: number; live?: { total: number; byType: { type: string; usd: number }[] } }) {
   const real = useReal();
-  const isReal = !!real?.costBreakdown?.length;
-  const rows = isReal ? real!.costBreakdown : VD.costBreakdown;
-  const total = isReal ? real!.costBreakdown.reduce((a, c) => a + c.v, 0) : cost;
+  let rows: { k: string; v: number; color: string; pct: number }[];
+  let total: number;
+  let label: string;
+  if (live && live.byType.length) {
+    const t = live.byType.reduce((a, b) => a + (b.usd || 0), 0) || 1;
+    rows = live.byType.map((b) => ({ k: COST_LABEL[b.type] ?? b.type, v: b.usd, color: COST_COLOR[b.type] ?? '#4D6995', pct: Math.round((b.usd / t) * 100) }));
+    total = live.total; label = 'this live demo · tagged to session';
+  } else if (real?.costBreakdown?.length) {
+    rows = real.costBreakdown; total = real.costBreakdown.reduce((a, c) => a + c.v, 0); label = 'all demos · tagged to sessions';
+  } else {
+    rows = VD.costBreakdown.map((r) => ({ ...r, v: cost * r.pct / 100 })); total = cost; label = 'this demo · tagged to session';
+  }
   return (
     <div className="cost-meter">
-      <div className="cost-total"><span className="cost-total__val">${total.toFixed(2)}</span><span className="cost-total__label">{isReal ? 'all demos · tagged to sessions' : 'this demo · tagged to session'}</span></div>
+      <div className="cost-total"><span className="cost-total__val">${total.toFixed(2)}</span><span className="cost-total__label">{label}</span></div>
       <div className="cost-rows">
         {rows.map((r) => (
           <div className="cost-row" key={r.k}>
             <span className="cost-row__k"><i className="swatch" style={{ background: r.color }} />{r.k}</span>
             <span className="cost-row__bar"><i style={{ width: `${r.pct}%`, background: r.color }} /></span>
-            <span className="cost-row__v">${isReal ? r.v.toFixed(2) : (cost * r.pct / 100).toFixed(2)}</span>
+            <span className="cost-row__v">${r.v.toFixed(2)}</span>
           </div>
         ))}
       </div>
@@ -51,13 +60,13 @@ function CostMeter({ cost }: { cost: number }) {
   );
 }
 
-function Citation({ id }: { id: string | null }) {
+function Citation({ id, chunk }: { id: string | null; chunk?: any }) {
   const real = useReal();
-  if (!id) return <div className="brain-now" style={{ color: 'var(--cr-fg3)', fontSize: 12 }}>No knowledge retrieved yet for the current step.</div>;
-  // Prefer a REAL chunk from the SSOT — this demo cites po.vin's delegation knowledge.
-  const realChunk = real?.knowledge?.find((x) => /delegat|approval/i.test(`${x.title} ${x.content} ${x.source}`)) ?? real?.knowledge?.[0];
+  if (!id && !chunk) return <div className="brain-now" style={{ color: 'var(--cr-fg3)', fontSize: 12 }}>No knowledge retrieved yet for the current step.</div>;
+  // Live cite (real streamed chunk) wins; else a REAL chunk from the SSOT; else scripted.
+  const realChunk = chunk ?? real?.knowledge?.find((x) => /delegat|approval/i.test(`${x.title} ${x.content} ${x.source}`)) ?? real?.knowledge?.[0];
   if (realChunk) {
-    const t = real!.kbTypes[realChunk.type] ?? { label: realChunk.type, cls: 'pill-info' };
+    const t = real?.kbTypes?.[realChunk.type] ?? { label: realChunk.type, cls: 'pill-info' };
     const cls = realChunk.conf >= 0.85 ? 'conf-hi' : realChunk.conf >= 0.7 ? 'conf-mid' : 'conf-lo';
     const warn = realChunk.conf < 0.7 || realChunk.status !== 'validated';
     return (
@@ -90,7 +99,7 @@ function Citation({ id }: { id: string | null }) {
         <div style={{ flex: 1 }}><div className="cite__title">{k.title}</div><div className="cite__type">{t.label} · {k.source}</div></div>
       </div>
       <div className="cite__body">
-        <div className="cite__quote">&quot;{QUOTES[id] || 'Retrieved passage.'}&quot;</div>
+        <div className="cite__quote">&quot;{QUOTES[id ?? ''] || 'Retrieved passage.'}&quot;</div>
         <div className="cite__meta">
           <div className="cmeta"><span className="cmeta__k">Confidence</span><span className="cr-conf-bar"><i className={cls} style={{ width: `${k.conf * 100}%` }} /></span><span className={`cmeta__v ${warn ? 'warn' : 'ok'}`}>{Math.round(k.conf * 100)}%</span></div>
           <div className="cmeta"><span className="cmeta__k">Last verified</span><span className="cmeta__v">{k.verified}</span></div>
@@ -152,7 +161,7 @@ function LeftRail({ beat }: { beat: Beat }) {
   );
 }
 
-function RightRail({ beat, mode }: { beat: Beat; mode: string }) {
+function RightRail({ beat, mode, liveCite, liveCost }: { beat: Beat; mode: string; liveCite?: any; liveCost?: { total: number; byType: { type: string; usd: number }[] } }) {
   return (
     <div className="cr-col cr-right">
       <div className="cr-sec">
@@ -177,17 +186,17 @@ function RightRail({ beat, mode }: { beat: Beat; mode: string }) {
       </div>
       <div className="cr-sec">
         <div className="cr-sec__title">Knowledge cited</div>
-        <Citation id={beat.cite} />
+        <Citation id={beat.cite} chunk={liveCite} />
       </div>
       <div className="cr-sec" style={{ borderBottom: 'none' }}>
         <div className="cr-sec__title">Cost · live</div>
-        <CostMeter cost={beat.cost} />
+        <CostMeter cost={beat.cost} live={liveCost} />
       </div>
     </div>
   );
 }
 
-function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing }: { beat: Beat; mode: string; open: boolean; setOpen: (b: boolean) => void; tab: string; setTab: (t: string) => void; messages: Msg[]; typing: boolean }) {
+function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, liveCite, liveCost }: { beat: Beat; mode: string; open: boolean; setOpen: (b: boolean) => void; tab: string; setTab: (t: string) => void; messages: Msg[]; typing: boolean; liveCite?: any; liveCost?: { total: number; byType: { type: string; usd: number }[] } }) {
   const TABS = [
     { id: 'convo', label: 'Conversation', icon: 'sessions' },
     { id: 'brief', label: 'Brief', icon: 'customers' },
@@ -212,36 +221,40 @@ function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing }
       <div className="cr-panel__body">
         {tab === 'convo' && <Convo messages={messages} typing={typing} />}
         {tab === 'brief' && <LeftRail beat={beat} />}
-        {tab === 'reasoning' && <RightRail beat={beat} mode={mode} />}
+        {tab === 'reasoning' && <RightRail beat={beat} mode={mode} liveCite={liveCite} liveCost={liveCost} />}
       </div>
     </div>
   );
 }
 
-function Stage({ beat, onResolve }: { beat: Beat; onResolve: () => void }) {
+function Stage({ beat, onResolve, screenshot, blocked, url }: { beat: Beat; onResolve: () => void; screenshot?: string | null; blocked?: string[]; url?: string }) {
+  const live = !!screenshot;
+  const scriptedUrl = `https://${beat.screen === 'audit' ? 'demo.vin/audit' : beat.screen === 'delegation' || beat.screen === 'settings' || beat.screen === 'newdelegation' ? 'demo.vin/approvals/' + beat.screen : 'demo.vin/' + (beat.screen === 'dashboard' ? '' : beat.screen)}`;
   return (
     <div className="stage-wrap">
       <div className="stage-bar">
         <div className="stage-dots"><i /><i /><i /></div>
-        <div className="stage-bar__url"><Icon name="lock" size={12} /> https://{beat.screen === 'audit' ? 'demo.vin/audit' : beat.screen === 'delegation' || beat.screen === 'settings' || beat.screen === 'newdelegation' ? 'demo.vin/approvals/' + beat.screen : 'demo.vin/' + (beat.screen === 'dashboard' ? '' : beat.screen)}</div>
-        <span className="stage-bar__env">Demo tenant · demo-04</span>
+        <div className="stage-bar__url"><Icon name="lock" size={12} /> {url || scriptedUrl}</div>
+        <span className="stage-bar__env">{live ? 'LIVE · po.vin demo tenant' : 'Demo tenant · demo-04'}</span>
       </div>
       <div className="stage">
-        <DemoApp screen={beat.screen} />
-        {beat.hl && <div className="ai-highlight" style={{ left: `${beat.hl.x}%`, top: `${beat.hl.y}%`, width: `${beat.hl.w}%`, height: `${beat.hl.h}%` }} />}
-        {beat.cursor && <div className="ai-cursor" style={{ left: `${beat.cursor.x}%`, top: `${beat.cursor.y}%` }}>{CURSOR}</div>}
-        {beat.callout && (
+        {live
+          ? <img src={screenshot!} alt="Live product (driven by the AI consultant, read-only)" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
+          : <DemoApp screen={beat.screen} />}
+        {!live && beat.hl && <div className="ai-highlight" style={{ left: `${beat.hl.x}%`, top: `${beat.hl.y}%`, width: `${beat.hl.w}%`, height: `${beat.hl.h}%` }} />}
+        {!live && beat.cursor && <div className="ai-cursor" style={{ left: `${beat.cursor.x}%`, top: `${beat.cursor.y}%` }}>{CURSOR}</div>}
+        {!live && beat.callout && (
           <div className="ai-callout below" style={{ left: `${beat.callout.x}%`, top: `${beat.callout.y}%` }}>
             <div className="ai-callout__label">{beat.callout.label}</div>{beat.callout.text}
           </div>
         )}
-        {beat.event === 'heal' && (
+        {!live && beat.event === 'heal' && (
           <div className="heal-toast" onClick={onResolve} style={{ cursor: 'pointer' }}>
             <span className="heal-toast__spin"><Icon name="refresh" size={18} /></span>
             <div className="heal-toast__txt"><b>Self-healing navigation.</b> <span className="mono">[data-pa=delegation-tab]</span> not found — re-grounding by role + label instead of failing the demo.</div>
           </div>
         )}
-        {beat.event === 'block' && (
+        {!live && beat.event === 'block' && (
           <div className="block-toast">
             <div className="block-toast__icon"><Icon name="lock" size={22} /></div>
             <h4>Action blocked — read-only</h4>
@@ -250,6 +263,12 @@ function Stage({ beat, onResolve }: { beat: Beat; onResolve: () => void }) {
               <button className="btn btn-secondary btn-sm" onClick={onResolve} style={{ background: 'rgba(255,255,255,.1)', color: '#fff', borderColor: 'rgba(255,255,255,.25)' }}>Stay read-only</button>
               <button className="btn btn-sm" onClick={onResolve} style={{ background: '#B75D04', color: '#fff' }}>Request approval mode</button>
             </div>
+          </div>
+        )}
+        {live && blocked && blocked.length > 0 && (
+          <div style={{ position: 'absolute', left: 16, bottom: 16, zIndex: 50, display: 'flex', alignItems: 'center', gap: 8, padding: '8px 13px', borderRadius: 10, background: '#0a1622', border: '1px solid var(--cr-rec)', color: '#fff', fontSize: 12, maxWidth: '74%', boxShadow: '0 12px 28px rgba(0,0,0,.45)' }}>
+            <Icon name="lock" size={14} style={{ stroke: '#f0807d' }} />
+            <span><b style={{ color: '#f0807d' }}>{blocked.length} mutating action{blocked.length > 1 ? 's' : ''} blocked</b> (read-only): {blocked.slice(0, 4).join(', ')}{blocked.length > 4 ? '…' : ''} — never fired.</span>
           </div>
         )}
       </div>
@@ -286,23 +305,26 @@ function Convo({ messages, typing }: { messages: Msg[]; typing: boolean }) {
   );
 }
 
-function Transport({ beat, idx, playing, onPlay, onStep, onBack, onRestart, speed, onSpeed }: { beat: Beat; idx: number; playing: boolean; onPlay: () => void; onStep: () => void; onBack: () => void; onRestart: () => void; speed: number; onSpeed: () => void }) {
+function Transport({ beat, idx, playing, onPlay, onStep, onBack, onRestart, speed, onSpeed, live, liveRunning, liveDone }: { beat: Beat; idx: number; playing: boolean; onPlay: () => void; onStep: () => void; onBack: () => void; onRestart: () => void; speed: number; onSpeed: () => void; live?: boolean; liveRunning?: boolean; liveDone?: boolean }) {
   const last = idx >= BEATS.length - 1;
-  const status = playing ? 'Running the demo on autopilot' : idx === 0 ? 'Standing by — ready to run' : last ? 'Demo complete' : 'Paused — you have the controls';
+  const status = live
+    ? (liveRunning ? 'Running the live demo on po.vin' : liveDone ? 'Demo complete · live' : 'Standing by — press Run agent')
+    : (playing ? 'Running the demo on autopilot' : idx === 0 ? 'Standing by — ready to run' : last ? 'Demo complete' : 'Paused — you have the controls');
+  const running = live ? !!liveRunning : playing;
   return (
     <div className="transport">
-      <div className={`agent-status ${playing ? 'run' : ''}`}>
+      <div className={`agent-status ${running ? 'run' : ''}`}>
         <span className="agent-status__dot" />
         <div><div className="agent-status__l">AI consultant</div><div className="agent-status__s">{status}</div></div>
       </div>
       <div className="tp-btns">
-        <button className="tp-btn" onClick={onRestart} title="Start the demo over"><Icon name="restart" size={14} /></button>
-        <button className="tp-btn" onClick={onBack} title="Back one step" disabled={idx <= 0} style={{ opacity: idx <= 0 ? .4 : 1 }}><Icon name="step" size={14} style={{ transform: 'scaleX(-1)' }} /></button>
-        <button className="tp-run" onClick={onPlay} title={playing ? 'Pause the agent' : 'Let the agent run'}>
-          <Icon name={playing ? 'pause' : 'play'} size={15} className="solid" /> {playing ? 'Pause agent' : last ? 'Run again' : 'Run agent'}
+        {!live && <button className="tp-btn" onClick={onRestart} title="Start the demo over"><Icon name="restart" size={14} /></button>}
+        {!live && <button className="tp-btn" onClick={onBack} title="Back one step" disabled={idx <= 0} style={{ opacity: idx <= 0 ? .4 : 1 }}><Icon name="step" size={14} style={{ transform: 'scaleX(-1)' }} /></button>}
+        <button className="tp-run" onClick={onPlay} title={live ? (liveRunning ? 'Stop the live agent' : 'Run the live agent') : (playing ? 'Pause the agent' : 'Let the agent run')}>
+          <Icon name={running ? 'pause' : 'play'} size={15} className="solid" /> {live ? (liveRunning ? 'Stop agent' : liveDone ? 'Run again' : 'Run agent') : (playing ? 'Pause agent' : last ? 'Run again' : 'Run agent')}
         </button>
-        <button className="tp-ctl" onClick={onStep} disabled={last} title="Advance the agent one step (manual drive)"><Icon name="step" size={14} className="solid" /> Step</button>
-        <button className="tp-speed" onClick={onSpeed} title="How fast the agent advances">Pace {speed}×</button>
+        {!live && <button className="tp-ctl" onClick={onStep} disabled={last} title="Advance the agent one step (manual drive)"><Icon name="step" size={14} className="solid" /> Step</button>}
+        {!live && <button className="tp-speed" onClick={onSpeed} title="How fast the agent advances">Pace {speed}×</button>}
       </div>
       <div className="loop">
         <span className="loop__cap">Demo loop</span>
@@ -323,43 +345,105 @@ function Transport({ beat, idx, playing, onPlay, onStep, onBack, onRestart, spee
 
 function fmt(s: number) { const m = Math.floor(s / 60); const ss = s % 60; return `${String(m).padStart(2, '0')}:${String(ss).padStart(2, '0')}`; }
 
+/* ── Live engine session (Phase 4) — consume the real streamed events ── */
+interface LiveState {
+  running: boolean; done: boolean; loopIdx: number; phase: string; brain: string; sub: string; conf: number;
+  messages: Msg[]; cite: any | null; cost: number; byType: { type: string; usd: number }[];
+  screenshot: string | null; url: string; blocked: string[]; error: string | null;
+}
+const LIVE_INIT: LiveState = { running: false, done: false, loopIdx: -1, phase: 'Ready', brain: 'Live engine ready — press Run agent to drive po.vin read-only.', sub: 'awaiting start', conf: 0.9, messages: [], cite: null, cost: 0, byType: [], screenshot: null, url: '', blocked: [], error: null };
+
+function reduceLive(p: LiveState, ev: any): LiveState {
+  switch (ev.type) {
+    case 'start': return { ...LIVE_INIT, running: true, url: ev.product ? `https://${ev.product}` : '' };
+    case 'message': return { ...p, messages: [...p.messages, { side: ev.side, who: ev.who, role: ev.role, av: ev.side === 'ai' ? 'AI' : String(ev.who ?? '?')[0].toUpperCase(), color: ev.side === 'ai' ? '#002855' : '#4D6995', text: ev.text, tag: ev.tag, uncertain: ev.uncertain }] };
+    case 'beat': return { ...p, loopIdx: ev.loopIdx ?? p.loopIdx, phase: ev.phase ?? p.phase, brain: ev.brain ?? p.brain, sub: ev.sub ?? p.sub, conf: ev.conf ?? p.conf };
+    case 'cite': return { ...p, cite: ev.k };
+    case 'nav': return { ...p, screenshot: ev.screenshot ?? p.screenshot, url: ev.url ?? p.url };
+    case 'blocked': return { ...p, blocked: ev.actions ?? [] };
+    case 'cost': return { ...p, cost: ev.total ?? p.cost, byType: ev.byType ?? p.byType };
+    case 'done': return { ...p, running: false, done: true, loopIdx: 6 };
+    case 'error': return { ...p, running: false, error: ev.message ?? 'engine error' };
+    case 'closed': return { ...p, running: false };
+    default: return p;
+  }
+}
+
+function useLiveSession() {
+  const [live, setLive] = useState<LiveState>(LIVE_INIT);
+  useEffect(() => {
+    const api = (window as unknown as { session?: { onEvent(cb: (ev: any) => void): () => void } }).session;
+    if (!api?.onEvent) return;
+    return api.onEvent((ev: any) => setLive((p) => reduceLive(p, ev)));
+  }, []);
+  const start = () => { setLive({ ...LIVE_INIT, running: true }); (window as unknown as { session?: { start(): void } }).session?.start?.(); };
+  const stop = () => { (window as unknown as { session?: { stop(): void } }).session?.stop?.(); setLive((p) => ({ ...p, running: false })); };
+  return { live, start, stop };
+}
+
+const COST_LABEL: Record<string, string> = { llm: 'LLM tokens', embeddings: 'Embeddings', navigation: 'Navigation / compute', compute: 'Compute', storage: 'Storage' };
+const COST_COLOR: Record<string, string> = { llm: '#002855', navigation: '#0097A9', embeddings: '#4D6995', compute: '#007D61', storage: '#B9975B' };
+
+const SEG_BTN: React.CSSProperties = { border: 'none', background: 'transparent', color: 'var(--color-steel-hover)', fontSize: 10.5, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', padding: '4px 9px', borderRadius: 6, cursor: 'pointer' };
+const SEG_ON: React.CSSProperties = { background: '#fff', color: 'var(--color-navy)' };
+
 export default function ControlRoom() {
-  const [idx, setIdx] = useState(() => parseInt(localStorage.getItem('vd-cr-beat') || '0', 10));
+  // Runtime toggle (Settings): LIVE engine is the default; SCRIPTED is the QA/testing path.
+  const [runtime, setRuntime] = useState<'live' | 'scripted'>(() => {
+    try { return localStorage.getItem('vd-runtime') === 'scripted' ? 'scripted' : 'live'; } catch { return 'live'; }
+  });
+  const setMode = (m: 'live' | 'scripted') => { setRuntime(m); try { localStorage.setItem('vd-runtime', m); } catch { /* */ } };
+  const isLive = runtime === 'live';
+
+  // Scripted playback state (QA).
+  const [idx, setIdx] = useState(() => { try { return parseInt(localStorage.getItem('vd-cr-beat') || '0', 10); } catch { return 0; } });
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
+  const [secs, setSecs] = useState(724);
+  // Live engine session.
+  const { live, start, stop } = useLiveSession();
+
   const [panelOpen, setPanelOpen] = useState(true);
   const [tab, setTab] = useState('convo');
-  const [secs, setSecs] = useState(724);
-  const beat = BEATS[idx];
   const mode = 'read-only';
 
-  useEffect(() => { localStorage.setItem('vd-cr-beat', String(idx)); }, [idx]);
+  useEffect(() => { try { localStorage.setItem('vd-cr-beat', String(idx)); } catch { /* */ } }, [idx]);
   useEffect(() => { document.getElementById('boot')?.style.setProperty('display', 'none'); }, []);
 
+  // Scripted autoplay (scripted mode only).
   useEffect(() => {
-    if (!playing) return;
-    if (idx >= BEATS.length - 1) { setPlaying(false); return; }
-    const t = setTimeout(() => setIdx((i) => Math.min(i + 1, BEATS.length - 1)), 2600 / speed);
-    return () => clearTimeout(t);
-  }, [playing, idx, speed]);
-
+    if (!isLive && playing) {
+      if (idx >= BEATS.length - 1) { setPlaying(false); return; }
+      const t = setTimeout(() => setIdx((i) => Math.min(i + 1, BEATS.length - 1)), 2600 / speed);
+      return () => clearTimeout(t);
+    }
+  }, [isLive, playing, idx, speed]);
   useEffect(() => {
-    if (!playing) return;
-    const t = setInterval(() => setSecs((s) => s + 1), 1000);
-    return () => clearInterval(t);
-  }, [playing]);
+    if (!isLive && playing) {
+      const t = setInterval(() => setSecs((s) => s + 1), 1000);
+      return () => clearInterval(t);
+    }
+  }, [isLive, playing]);
 
-  const messages = [...SEED, ...BEATS.slice(1, idx + 1).flatMap((b) => b.push || [])];
-  const typing = playing && idx > 0 && idx < BEATS.length - 1;
+  // Unified render inputs from whichever runtime is active.
+  const scriptedBeat = BEATS[idx];
+  const liveBeat: Beat = { loopIdx: live.loopIdx, planIdx: Math.min(Math.max(live.loopIdx, 0), PLAN.length - 1), phase: live.phase, brain: live.brain, sub: live.sub, screen: 'dashboard', conf: live.conf, activeStk: 's1', cost: live.cost, cite: null, loopDone: live.done, push: [] };
+  const beat = isLive ? liveBeat : scriptedBeat;
+  const messages = isLive ? live.messages : [...SEED, ...BEATS.slice(1, idx + 1).flatMap((b) => b.push || [])];
+  const typing = isLive ? live.running : (playing && idx > 0 && idx < BEATS.length - 1);
 
   return (
     <div className="cr">
       <div className="cr-strip">
         <div className="cr-strip__brand"><img src="./assets/VIN-light.svg" alt="VIN" /><span className="cr-strip__div" />
           <div><div className="cr-strip__product">Demo</div><div className="cr-strip__sub">Control Room</div></div></div>
-        <div className="cr-strip__live"><span className="rec" /><span>Live</span></div>
-        <div className="cr-strip__meta"><b>Procurement</b> · demo.vin · Approval delegation · <b>{VD.stakeholders.length}</b> stakeholders</div>
+        <div className="cr-strip__live"><span className="rec" /><span>{isLive ? 'Live' : 'Scripted'}</span></div>
+        <div className="cr-strip__meta"><b>Procurement</b> · po.vin · Approval delegation</div>
         <div className="cr-strip__spacer" />
+        <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 8, background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.12)' }} title="Demo runtime — Live engine is the default; Scripted is for QA/testing">
+          <button style={{ ...SEG_BTN, ...(isLive ? SEG_ON : {}) }} onClick={() => setMode('live')}>Live engine</button>
+          <button style={{ ...SEG_BTN, ...(!isLive ? SEG_ON : {}) }} onClick={() => setMode('scripted')}>Scripted</button>
+        </div>
         <span className={`cr-mode ${MODE_META[mode].cls}`}><Icon name={MODE_META[mode].icon} size={12} /> {MODE_META[mode].label}</span>
         <span className="cr-clock">{fmt(secs)}</span>
         <a className="cr-icon-btn" href="https://demofor.vin" target="_blank" rel="noreferrer" title="Back to console"><Icon name="external" size={16} /></a>
@@ -367,13 +451,16 @@ export default function ControlRoom() {
 
       <div className="cr-body">
         <div className="cr-stagearea">
-          <Stage beat={beat} onResolve={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))} />
+          <Stage beat={beat} onResolve={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
+            screenshot={isLive ? live.screenshot : null} blocked={isLive ? live.blocked : undefined} url={isLive ? live.url : undefined} />
         </div>
-        <RightPanel beat={beat} mode={mode} open={panelOpen} setOpen={setPanelOpen} tab={tab} setTab={setTab} messages={messages} typing={typing} />
+        <RightPanel beat={beat} mode={mode} open={panelOpen} setOpen={setPanelOpen} tab={tab} setTab={setTab} messages={messages} typing={typing}
+          liveCite={isLive ? live.cite : undefined} liveCost={isLive ? { total: live.cost, byType: live.byType } : undefined} />
       </div>
 
       <Transport beat={beat} idx={idx} playing={playing} speed={speed}
-        onPlay={() => { if (idx >= BEATS.length - 1) { setIdx(0); setSecs(724); } setPlaying((p) => !p); }}
+        live={isLive} liveRunning={live.running} liveDone={live.done}
+        onPlay={() => { if (isLive) { if (live.running) stop(); else start(); } else { if (idx >= BEATS.length - 1) { setIdx(0); setSecs(724); } setPlaying((p) => !p); } }}
         onStep={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
         onBack={() => setIdx((i) => Math.max(i - 1, 0))}
         onRestart={() => { setIdx(0); setPlaying(false); setSecs(724); }}
