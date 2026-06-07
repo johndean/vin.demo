@@ -8,6 +8,7 @@ export interface ProductRow {
   coverage: number; chunks: number; demos: number;
   kbValidated: number; kbReview: number; kbStale: number;
   env: string; envStatus: string; lastReset: string; graphNodes: number; graphFlows: number;
+  defaultMode: string; // per-site default execution mode (read-only|safe|approval|execution)
 }
 export interface KnowledgeRow { id: string; title: string; content: string; type: string; conf: number; source: string; verified: string; ver: string; status: string }
 export interface PersonaRow { id: string; name: string; scope: string; limits: string; calls: number; brand: string; color: string }

@@ -64,7 +64,7 @@ export async function getConsoleData(): Promise<VDType> {
        e.name AS env_name, e.connection_target, e.is_production, e.created_at AS env_created
      FROM products p
      LEFT JOIN LATERAL (SELECT version_label FROM product_versions WHERE product_id=p.id AND status='active' ORDER BY created_at DESC LIMIT 1) av ON true
-     LEFT JOIN LATERAL (SELECT name, connection_target, is_production, created_at FROM environments WHERE product_id=p.id ORDER BY created_at LIMIT 1) e ON true
+     LEFT JOIN LATERAL (SELECT name, connection_target, is_production, default_mode, created_at FROM environments WHERE product_id=p.id ORDER BY created_at LIMIT 1) e ON true
      WHERE p.name <> ALL($1::text[])
      ORDER BY p.created_at`,
     [TEST_PRODUCTS],
@@ -87,6 +87,7 @@ export async function getConsoleData(): Promise<VDType> {
       envStatus: p.connection_target ? 'Healthy' : 'Reset pending',
       lastReset: relTime(p.env_created),
       graphNodes: p.graph_nodes ?? 0, graphFlows: p.graph_flows ?? 0,
+      defaultMode: p.default_mode ?? 'read-only',
     };
   });
 

@@ -177,6 +177,38 @@ export function Environments({ go }: { go: Go }) {
   );
 }
 
+const EXEC_MODES = [
+  { id: 'read-only', label: 'Read-only — navigate & explain (no writes)' },
+  { id: 'safe', label: 'Safe — + non-destructive actions' },
+  { id: 'approval', label: 'Approval — writes need confirmation' },
+  { id: 'execution', label: 'Execution — clicks, types & SAVES (real writes)' },
+];
+/* Per-site DEFAULT execution mode — what the desktop Control Room opens this product in (operator can
+   still override per session). Persists to environments.default_mode via /api/console/product-mode. */
+function ModeSelect({ p }: { p: any }) {
+  const [mode, setMode] = useState<string>(p.defaultMode ?? 'read-only');
+  const [saving, setSaving] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const change = async (m: string) => {
+    setMode(m); setSaving('saving');
+    try {
+      const res = await fetch('/api/console/product-mode', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ productId: p.id, mode: m }) });
+      setSaving(res.ok ? 'saved' : 'error');
+    } catch { setSaving('error'); }
+  };
+  return (
+    <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
+      <select value={mode} onChange={(e) => change(e.target.value)}
+        style={{ fontSize: 12, padding: '5px 8px', borderRadius: 6, border: '1px solid var(--line, #d4dae3)', background: 'var(--surface, #fff)', color: 'var(--text-primary, #1a2b45)' }}>
+        {EXEC_MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+      </select>
+      {mode === 'execution' && <Pill kind="warn">live writes</Pill>}
+      {saving === 'saving' && <span className="muted" style={{ fontSize: 11 }}>saving…</span>}
+      {saving === 'saved' && <span style={{ fontSize: 11, color: 'var(--ok, #1f7a52)' }}>saved ✓</span>}
+      {saving === 'error' && <span style={{ fontSize: 11, color: 'var(--danger, #a8332f)' }}>save failed</span>}
+    </div>
+  );
+}
+
 function EnvCard({ p }: { p: any }) {
   const healthy = p.envStatus === 'Healthy';
   return (
@@ -188,6 +220,7 @@ function EnvCard({ p }: { p: any }) {
       <div className="card-pad">
         <dl className="kv">
           <dt>Routing</dt><dd><Pill kind="info">Demo only</Pill></dd>
+          <dt>Default mode</dt><dd><ModeSelect p={p} /></dd>
           <dt>Seed dataset</dt><dd>{p.name === 'demo.vin' ? '240 requests · 18 approvers · 6 vendors' : 'Scenario fixtures loaded'}</dd>
           <dt>Reset mechanism</dt><dd>Snapshot restore</dd>
           <dt>Last reset</dt><dd>{p.lastReset}</dd>
