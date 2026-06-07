@@ -22,6 +22,7 @@
     "convo": "tsx src/core/convo.ts",
     "demo:product": "tsx src/core/demo.ts",
     "demo:watch": "SHOW_DEMO=1 tsx src/core/demo.ts",
+    "engine": "tsx apps/engine/src/index.ts",
     "eval:phase1": "tsx src/core/eval-phase1.ts",
     "eval:phase2": "tsx src/core/eval-phase2.ts",
     "eval:phase3": "tsx src/core/eval-phase3.ts",
