@@ -18,7 +18,9 @@
  * All emit the same `data: <json>\n\n` events the desktop renderer already consumes.
  *
  * Concurrency (MVP): the engine uses a singleton Chromium + one shared screenshot file, so it
- * serves ONE live session at a time; a second concurrent request gets {type:'busy'} and closes.
+ * serves ONE live session at a time. It's a single-user demo tool, so a NEW session PREEMPTS the
+ * current one (last-wins) rather than being rejected — switching Ask↔Talk↔Reel or reconnecting
+ * always succeeds, and a dropped connection can't zombie-lock later sessions (see claim/release).
  * Multi-session (per-session browser contexts / replicas) is deferred until real concurrent demand.
  */
 import http from 'node:http';
@@ -52,8 +54,30 @@ if (process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON && !process.env.GOOGLE_APPLI
   } catch (e) { console.error('[engine] failed writing GCP key:', e); }
 }
 
-let active = false; // serialize: one live session at a time (singleton browser + shared shot file)
+// Single live session at a time (singleton browser + shared shot file). This is a single-user demo
+// tool, so a NEW session PREEMPTS the old one (last-wins) instead of being rejected — that's what the
+// founder wants when switching Ask↔Talk↔Reel or reconnecting, and it prevents a dropped connection
+// (a voice WS with no clean close) from zombie-locking every later session. Each session gets a
+// monotonic id; only the current owner may release the global lock (a preempted session's late
+// teardown must not clobber the new owner).
+let activeId = 0;     // id of the session that currently owns the lock (0 = idle)
+let sessionSeq = 0;   // monotonic session counter
+let preempt: (() => void) | null = null; // tear down the current owner so a newcomer can take over
 let interactive: InteractiveSession | null = null; // the open interactive session, fed by POST /session/utterance
+
+/** Claim the single-session lock for a new session, tearing down whoever holds it. Returns this
+ *  session's id; pass it to `release(id)` when the session ends so a preempted session's late
+ *  cleanup can't release a newer owner. `teardown` is how THIS session is itself preempted later. */
+function claim(teardown: () => void): number {
+  if (preempt) { try { preempt(); } catch { /* */ } }
+  const id = ++sessionSeq;
+  activeId = id; preempt = teardown;
+  return id;
+}
+function release(id: number): void {
+  if (activeId !== id) return; // a newer session already took over — don't touch its state
+  activeId = 0; preempt = null; interactive = null;
+}
 
 /** Read and JSON-parse a small request body. */
 function readJson(req: http.IncomingMessage): Promise<any> {
@@ -116,14 +140,7 @@ const server = http.createServer(async (req, res) => {
     const emit = (ev: Record<string, unknown>) => { if (open) res.write(`data: ${JSON.stringify(ev)}\n\n`); };
     req.on('close', () => { open = false; }); // client (desktop) hung up — stop writing
 
-    if (active) { // serialize — another demo is already running; surface it, never drop silently
-      console.warn(`[engine] busy: rejected concurrent session for ${payload.email}`);
-      emit({ type: 'busy', message: 'The engine is already running a live session. Try again shortly.' });
-      res.end();
-      return;
-    }
-
-    active = true;
+    const myId = claim(() => { open = false; try { res.end(); } catch { /* */ } }); // new session preempts any prior one
     console.log(`[engine] session start for ${payload.email}`);
     try {
       await runLiveSession(emit);
@@ -131,7 +148,7 @@ const server = http.createServer(async (req, res) => {
       emit({ type: 'error', message: String(e?.message ?? e) });
       console.error('[engine] session failed:', e);
     } finally {
-      active = false;
+      release(myId);
       if (open) res.end();
       console.log(`[engine] session end for ${payload.email}`);
     }
@@ -146,21 +163,18 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache, no-transform', connection: 'keep-alive', 'x-accel-buffering': 'no', ...cors });
     let open = true;
     const emit = (ev: Record<string, unknown>) => { if (open) res.write(`data: ${JSON.stringify(ev)}\n\n`); };
-    const cleanup = () => { open = false; interactive = null; active = false; };
-    req.on('close', cleanup);
+    const myId = claim(() => { open = false; try { res.end(); } catch { /* */ } }); // new session preempts any prior one
+    req.on('close', () => release(myId));
 
-    if (active) { emit({ type: 'busy', message: 'The engine is already running a session. Try again shortly.' }); res.end(); return; }
-
-    active = true;
     console.log(`[engine] interactive session start for ${payload.email}`);
     try {
       interactive = await startInteractive(emit);
-      if (!interactive) { res.end(); cleanup(); } // not seeded — startInteractive already emitted the error
+      if (!interactive) { res.end(); release(myId); } // not seeded — startInteractive already emitted the error
       // else: keep the SSE open; POST /session/utterance drives each turn until the client disconnects
     } catch (e: any) {
       emit({ type: 'error', message: String(e?.message ?? e) });
       console.error('[engine] interactive start failed:', e);
-      res.end(); cleanup();
+      res.end(); release(myId);
     }
     return;
   }
@@ -192,12 +206,11 @@ server.on('upgrade', async (req, socket, head) => {
   if (url.pathname !== '/voice') { socket.destroy(); return; }
   const payload = await verifyToken(tokenFrom(req, url));
   if (!payload) { socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n'); socket.destroy(); return; }
-  if (active) { socket.write('HTTP/1.1 409 Conflict\r\n\r\n'); socket.destroy(); return; }
-  active = true;
   wss.handleUpgrade(req, socket, head, (ws) => {
+    const myId = claim(() => { try { ws.close(); } catch { /* */ } }); // new session preempts any prior one
     console.log(`[engine] voice session start for ${payload.email}`);
-    ws.on('close', () => { active = false; console.log(`[engine] voice session end for ${payload.email}`); });
-    startVoiceSession(ws).catch((e) => { console.error('[engine] voice session error:', e); active = false; try { ws.close(); } catch { /* */ } });
+    ws.on('close', () => { release(myId); console.log(`[engine] voice session end for ${payload.email}`); });
+    startVoiceSession(ws).catch((e) => { console.error('[engine] voice session error:', e); release(myId); try { ws.close(); } catch { /* */ } });
   });
 });
 
