@@ -7,11 +7,13 @@ import { Dashboard, Products } from './views-core';
 import { Knowledge, DemoGraphs, Environments, Personas } from './views-build';
 import { Customers, Sessions, Safety, Evals, Costs, Settings } from './views-ops';
 import { DataProvider } from './data-context';
+import { AskPanel } from './AskPanel';
 import type { VDType } from './data';
 
 export default function ConsoleApp({ data, operator }: { data: VDType; operator?: string }) {
   const [route, setRoute] = useState('dashboard');
   const [param, setParam] = useState<string | null>(null);
+  const [ask, setAsk] = useState(false);
 
   useEffect(() => {
     const h = window.location.hash.replace('#', '');
@@ -44,12 +46,13 @@ export default function ConsoleApp({ data, operator }: { data: VDType; operator?
   return (
     <DataProvider value={data}>
       <div className="app">
-        <Topbar cost={mtd} workspace={data.workspace} operator={operator} />
+        <Topbar cost={mtd} workspace={data.workspace} operator={operator} onAsk={() => setAsk(true)} />
         <div className="shell">
           <Sidebar route={route} go={go} />
           <main className="main scroll" key={route + (param || '')}>{views[route] || views.dashboard}</main>
         </div>
       </div>
+      {ask && <AskPanel onClose={() => setAsk(false)} />}
     </DataProvider>
   );
 }

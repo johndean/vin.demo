@@ -196,7 +196,7 @@ function RightRail({ beat, mode, liveCite, liveCost }: { beat: Beat; mode: strin
   );
 }
 
-function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, liveCite, liveCost }: { beat: Beat; mode: string; open: boolean; setOpen: (b: boolean) => void; tab: string; setTab: (t: string) => void; messages: Msg[]; typing: boolean; liveCite?: any; liveCost?: { total: number; byType: { type: string; usd: number }[] } }) {
+function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, onAsk, canAsk, liveCite, liveCost }: { beat: Beat; mode: string; open: boolean; setOpen: (b: boolean) => void; tab: string; setTab: (t: string) => void; messages: Msg[]; typing: boolean; onAsk?: (text: string) => void; canAsk?: boolean; liveCite?: any; liveCost?: { total: number; byType: { type: string; usd: number }[] } }) {
   const TABS = [
     { id: 'convo', label: 'Conversation', icon: 'sessions' },
     { id: 'brief', label: 'Brief', icon: 'customers' },
@@ -219,7 +219,7 @@ function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, 
         <button className="cr-panel__collapse" onClick={() => setOpen(false)} title="Collapse panel"><Icon name="chevR" size={15} /></button>
       </div>
       <div className="cr-panel__body">
-        {tab === 'convo' && <Convo messages={messages} typing={typing} />}
+        {tab === 'convo' && <Convo messages={messages} typing={typing} onAsk={onAsk} canAsk={canAsk} />}
         {tab === 'brief' && <LeftRail beat={beat} />}
         {tab === 'reasoning' && <RightRail beat={beat} mode={mode} liveCite={liveCite} liveCost={liveCost} />}
       </div>
@@ -278,9 +278,12 @@ function Stage({ beat, onResolve, screenshot, blocked, url }: { beat: Beat; onRe
 
 const ASK_CHIPS = ['How does delegation get audited?', 'What about SSO?', 'Show me out-of-office routing', 'Can you submit a real PO?'];
 
-function Convo({ messages, typing }: { messages: Msg[]; typing: boolean }) {
+function Convo({ messages, typing, onAsk, canAsk }: { messages: Msg[]; typing: boolean; onAsk?: (text: string) => void; canAsk?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
+  const [text, setText] = useState('');
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [messages.length, typing]);
+  const send = (q: string) => { const t = q.trim(); if (!t || !onAsk || !canAsk) return; onAsk(t); setText(''); };
+  const placeholder = !onAsk ? 'Switch to Ask mode to type a question' : canAsk ? 'Ask the consultant a question…' : 'Connecting to the consultant…';
   return (
     <div className="convo">
       <div className="convo__head"><Icon name="sessions" size={14} style={{ stroke: 'var(--cr-fg3)' }} /><span className="overline">Conversation · intent-driven</span></div>
@@ -298,8 +301,16 @@ function Convo({ messages, typing }: { messages: Msg[]; typing: boolean }) {
         {typing && <div className="msg ai"><span className="msg__av" style={{ background: '#002855' }}>AI</span><div className="msg__bubble" style={{ padding: 0 }}><div className="typing"><i /><i /><i /></div></div></div>}
       </div>
       <div className="convo__input">
-        {ASK_CHIPS.map((c) => <button key={c} className="ask-chip">{c}</button>)}
-        <div className="field"><input placeholder="Ask the consultant a question…" /><Icon name="send" size={16} className="solid" style={{ stroke: 'none', fill: 'var(--cr-accent)' }} /></div>
+        {ASK_CHIPS.map((c) => <button key={c} className="ask-chip" onClick={() => send(c)} disabled={!canAsk}>{c}</button>)}
+        <div className="field">
+          <input placeholder={placeholder} value={text} disabled={!canAsk}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') send(text); }} />
+          <button onClick={() => send(text)} disabled={!canAsk} title="Send"
+            style={{ background: 'none', border: 'none', padding: 0, display: 'flex', cursor: canAsk ? 'pointer' : 'default', opacity: canAsk ? 1 : 0.4 }}>
+            <Icon name="send" size={16} className="solid" style={{ stroke: 'none', fill: 'var(--cr-accent)' }} />
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -347,15 +358,17 @@ function fmt(s: number) { const m = Math.floor(s / 60); const ss = s % 60; retur
 
 /* ── Live engine session (Phase 4) — consume the real streamed events ── */
 interface LiveState {
-  running: boolean; done: boolean; loopIdx: number; phase: string; brain: string; sub: string; conf: number;
+  running: boolean; done: boolean; ready: boolean; loopIdx: number; phase: string; brain: string; sub: string; conf: number;
   messages: Msg[]; cite: any | null; cost: number; byType: { type: string; usd: number }[];
   screenshot: string | null; url: string; blocked: string[]; error: string | null;
 }
-const LIVE_INIT: LiveState = { running: false, done: false, loopIdx: -1, phase: 'Ready', brain: 'Live engine ready — press Run agent to drive po.vin read-only.', sub: 'awaiting start', conf: 0.9, messages: [], cite: null, cost: 0, byType: [], screenshot: null, url: '', blocked: [], error: null };
+const LIVE_INIT: LiveState = { running: false, done: false, ready: false, loopIdx: -1, phase: 'Ready', brain: 'Live engine ready — press Run agent to drive po.vin read-only.', sub: 'awaiting start', conf: 0.9, messages: [], cite: null, cost: 0, byType: [], screenshot: null, url: '', blocked: [], error: null };
 
 function reduceLive(p: LiveState, ev: any): LiveState {
   switch (ev.type) {
-    case 'start': return { ...LIVE_INIT, running: true, url: ev.product ? `https://${ev.product}` : '' };
+    case 'start': return { ...LIVE_INIT, running: !ev.interactive, url: ev.product ? `https://${ev.product}` : '' };
+    case 'ready': return { ...p, ready: true, running: false, phase: 'Ready', brain: 'Ask me anything about the product — I’ll answer live and show the screen.', sub: 'interactive' };
+    case 'turn_done': return { ...p, running: false };
     case 'message': return { ...p, messages: [...p.messages, { side: ev.side, who: ev.who, role: ev.role, av: ev.side === 'ai' ? 'AI' : String(ev.who ?? '?')[0].toUpperCase(), color: ev.side === 'ai' ? '#002855' : '#4D6995', text: ev.text, tag: ev.tag, uncertain: ev.uncertain }] };
     case 'beat': return { ...p, loopIdx: ev.loopIdx ?? p.loopIdx, phase: ev.phase ?? p.phase, brain: ev.brain ?? p.brain, sub: ev.sub ?? p.sub, conf: ev.conf ?? p.conf };
     case 'cite': return { ...p, cite: ev.k };
@@ -377,8 +390,10 @@ function useLiveSession() {
     return api.onEvent((ev: any) => setLive((p) => reduceLive(p, ev)));
   }, []);
   const start = () => { setLive({ ...LIVE_INIT, running: true }); (window as unknown as { session?: { start(): void } }).session?.start?.(); };
-  const stop = () => { (window as unknown as { session?: { stop(): void } }).session?.stop?.(); setLive((p) => ({ ...p, running: false })); };
-  return { live, start, stop };
+  const startInteractive = () => { setLive({ ...LIVE_INIT }); (window as unknown as { session?: { startInteractive(): void } }).session?.startInteractive?.(); };
+  const ask = (text: string, speaker?: string) => { setLive((p) => ({ ...p, running: true })); (window as unknown as { session?: { ask(t: string, s?: string): void } }).session?.ask?.(text, speaker); };
+  const stop = () => { (window as unknown as { session?: { stop(): void } }).session?.stop?.(); setLive((p) => ({ ...p, running: false, ready: false })); };
+  return { live, start, startInteractive, ask, stop };
 }
 
 const COST_LABEL: Record<string, string> = { llm: 'LLM tokens', embeddings: 'Embeddings', navigation: 'Navigation / compute', compute: 'Compute', storage: 'Storage' };
@@ -388,12 +403,15 @@ const SEG_BTN: React.CSSProperties = { border: 'none', background: 'transparent'
 const SEG_ON: React.CSSProperties = { background: '#fff', color: 'var(--color-navy)' };
 
 export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}) {
-  // Runtime toggle (Settings): LIVE engine is the default; SCRIPTED is the QA/testing path.
-  const [runtime, setRuntime] = useState<'live' | 'scripted'>(() => {
-    try { return localStorage.getItem('vd-runtime') === 'scripted' ? 'scripted' : 'live'; } catch { return 'live'; }
+  // Input mode: ASK = live interactive (type any question), REEL ('live') = canned 3-question run on
+  // the real engine, SCRIPTED = offline canned beats (QA). All three render the same panels.
+  type RT = 'ask' | 'live' | 'scripted';
+  const [runtime, setRuntime] = useState<RT>(() => {
+    try { const v = localStorage.getItem('vd-runtime'); return v === 'scripted' ? 'scripted' : v === 'ask' ? 'ask' : 'live'; } catch { return 'live'; }
   });
-  const setMode = (m: 'live' | 'scripted') => { setRuntime(m); try { localStorage.setItem('vd-runtime', m); } catch { /* */ } };
+  const setMode = (m: RT) => { setRuntime(m); try { localStorage.setItem('vd-runtime', m); } catch { /* */ } };
   const isLive = runtime === 'live';
+  const engine = runtime !== 'scripted'; // ask + reel both consume the real streamed engine state
 
   // Scripted playback state (QA).
   const [idx, setIdx] = useState(() => { try { return parseInt(localStorage.getItem('vd-cr-beat') || '0', 10); } catch { return 0; } });
@@ -401,7 +419,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   const [speed, setSpeed] = useState(1);
   const [secs, setSecs] = useState(724);
   // Live engine session.
-  const { live, start, stop } = useLiveSession();
+  const { live, start, startInteractive, ask, stop } = useLiveSession();
 
   const [panelOpen, setPanelOpen] = useState(true);
   const [tab, setTab] = useState('convo');
@@ -409,6 +427,11 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
 
   useEffect(() => { try { localStorage.setItem('vd-cr-beat', String(idx)); } catch { /* */ } }, [idx]);
   useEffect(() => { document.getElementById('boot')?.style.setProperty('display', 'none'); }, []);
+
+  // Interactive (Ask) mode: open a live session on entry, close it on leave.
+  useEffect(() => {
+    if (runtime === 'ask') { startInteractive(); return () => stop(); }
+  }, [runtime]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scripted autoplay (scripted mode only).
   useEffect(() => {
@@ -428,21 +451,24 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   // Unified render inputs from whichever runtime is active.
   const scriptedBeat = BEATS[idx];
   const liveBeat: Beat = { loopIdx: live.loopIdx, planIdx: Math.min(Math.max(live.loopIdx, 0), PLAN.length - 1), phase: live.phase, brain: live.brain, sub: live.sub, screen: 'dashboard', conf: live.conf, activeStk: 's1', cost: live.cost, cite: null, loopDone: live.done, push: [] };
-  const beat = isLive ? liveBeat : scriptedBeat;
-  const messages = isLive ? live.messages : [...SEED, ...BEATS.slice(1, idx + 1).flatMap((b) => b.push || [])];
-  const typing = isLive ? live.running : (playing && idx > 0 && idx < BEATS.length - 1);
+  const beat = engine ? liveBeat : scriptedBeat;
+  const messages = engine ? live.messages : [...SEED, ...BEATS.slice(1, idx + 1).flatMap((b) => b.push || [])];
+  const typing = engine ? live.running : (playing && idx > 0 && idx < BEATS.length - 1);
+  const canAsk = runtime === 'ask' && live.ready && !live.running; // interactive session is up and idle
+  const onAsk = (t: string) => ask(t);
 
   return (
     <div className="cr">
       <div className="cr-strip">
         <div className="cr-strip__brand"><img src="./assets/VIN-light.svg" alt="VIN" /><span className="cr-strip__div" />
           <div><div className="cr-strip__product">Demo</div><div className="cr-strip__sub">Control Room</div></div></div>
-        <div className="cr-strip__live"><span className="rec" /><span>{isLive ? 'Live' : 'Scripted'}</span></div>
+        <div className="cr-strip__live"><span className="rec" /><span>{runtime === 'scripted' ? 'Scripted' : runtime === 'ask' ? 'Ask · live' : 'Reel · live'}</span></div>
         <div className="cr-strip__meta"><b>Procurement</b> · po.vin · Approval delegation</div>
         <div className="cr-strip__spacer" />
-        <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 8, background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.12)' }} title="Demo runtime — Live engine is the default; Scripted is for QA/testing">
-          <button style={{ ...SEG_BTN, ...(isLive ? SEG_ON : {}) }} onClick={() => setMode('live')}>Live engine</button>
-          <button style={{ ...SEG_BTN, ...(!isLive ? SEG_ON : {}) }} onClick={() => setMode('scripted')}>Scripted</button>
+        <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 8, background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.12)' }} title="Input mode — Ask: type any question (live engine) · Reel: canned scenario (live engine) · Scripted: offline beats (QA)">
+          <button style={{ ...SEG_BTN, ...(runtime === 'ask' ? SEG_ON : {}) }} onClick={() => setMode('ask')}>Ask</button>
+          <button style={{ ...SEG_BTN, ...(runtime === 'live' ? SEG_ON : {}) }} onClick={() => setMode('live')}>Reel</button>
+          <button style={{ ...SEG_BTN, ...(runtime === 'scripted' ? SEG_ON : {}) }} onClick={() => setMode('scripted')}>Scripted</button>
         </div>
         <span className={`cr-mode ${MODE_META[mode].cls}`}><Icon name={MODE_META[mode].icon} size={12} /> {MODE_META[mode].label}</span>
         <span className="cr-clock">{fmt(secs)}</span>
@@ -453,15 +479,16 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
       <div className="cr-body">
         <div className="cr-stagearea">
           <Stage beat={beat} onResolve={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
-            screenshot={isLive ? live.screenshot : null} blocked={isLive ? live.blocked : undefined} url={isLive ? live.url : undefined} />
+            screenshot={engine ? live.screenshot : null} blocked={engine ? live.blocked : undefined} url={engine ? live.url : undefined} />
         </div>
         <RightPanel beat={beat} mode={mode} open={panelOpen} setOpen={setPanelOpen} tab={tab} setTab={setTab} messages={messages} typing={typing}
-          liveCite={isLive ? live.cite : undefined} liveCost={isLive ? { total: live.cost, byType: live.byType } : undefined} />
+          onAsk={runtime === 'ask' ? onAsk : undefined} canAsk={canAsk}
+          liveCite={engine ? live.cite : undefined} liveCost={engine ? { total: live.cost, byType: live.byType } : undefined} />
       </div>
 
       <Transport beat={beat} idx={idx} playing={playing} speed={speed}
-        live={isLive} liveRunning={live.running} liveDone={live.done}
-        onPlay={() => { if (isLive) { if (live.running) stop(); else start(); } else { if (idx >= BEATS.length - 1) { setIdx(0); setSecs(724); } setPlaying((p) => !p); } }}
+        live={engine} liveRunning={live.running} liveDone={live.done}
+        onPlay={() => { if (runtime === 'live') { if (live.running) stop(); else start(); } else if (runtime === 'ask') { if (live.running) stop(); else startInteractive(); } else { if (idx >= BEATS.length - 1) { setIdx(0); setSecs(724); } setPlaying((p) => !p); } }}
         onStep={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
         onBack={() => setIdx((i) => Math.max(i - 1, 0))}
         onRestart={() => { setIdx(0); setPlaying(false); setSecs(724); }}

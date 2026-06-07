@@ -52,6 +52,7 @@ export const ICONS: Record<string, string> = {
   send: 'M22 2 11 13M22 2l-7 20-4-9-9-4z',
   pin: 'M12 22s7-5.8 7-12a7 7 0 1 0-14 0c0 6.2 7 12 7 12zM12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
+  chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
 };
 
 export function Icon({ name, size = 16, fill = false, style, cls }: { name: string; size?: number; fill?: boolean; style?: React.CSSProperties; cls?: string }) {
@@ -139,7 +140,7 @@ export function PageHead({ overline, title, desc, actions, crumbs, go }: { overl
 }
 
 /* ---- Topbar ---- */
-export function Topbar({ cost, workspace, operator }: { cost: string; workspace?: { name: string; sub: string }; operator?: string }) {
+export function Topbar({ cost, workspace, operator, onAsk }: { cost: string; workspace?: { name: string; sub: string }; operator?: string; onAsk?: () => void }) {
   const router = useRouter();
   const ws = workspace ?? { name: 'VIN Demo', sub: 'workspace' };
   const opName = operator ? operator.replace(/@.*/, '') : 'operator';
@@ -177,6 +178,7 @@ export function Topbar({ cost, workspace, operator }: { cost: string; workspace?
         <span className="cost-pill__label">MTD spend</span>
         <span className="cost-pill__val">${cost}</span>
       </div>
+      <button onClick={onAsk} title="Ask VIN — live conversation" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 8, border: 'none', background: '#0861CE', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}><Icon name="chat" size={14} /> Ask VIN</button>
       <button className="topbar__icon" title="Notifications"><Icon name="bell" size={16} /><span className="dot" /></button>
       <div className="avatar" title={operator ?? 'Operator'}>{opInitials}</div>
       <button className="topbar__icon" title="Log out" onClick={logout}><Icon name="logout" size={16} /></button>

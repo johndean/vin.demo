@@ -120,14 +120,14 @@ async function pumpSSE(body) {
   }
 }
 
-async function startHostedSession() {
+async function startHostedSession(path = '/session/stream') {
   if (!sessionCookie) {
     win?.webContents.send('session:event', { type: 'error', message: 'Not signed in — log in first.' });
     return { ok: false };
   }
   sessionAbort = new AbortController();
   try {
-    const res = await fetch(`${ENGINE_BASE}/session/stream`, {
+    const res = await fetch(`${ENGINE_BASE}${path}`, {
       headers: { Cookie: sessionCookie, accept: 'text/event-stream' },
       signal: sessionAbort.signal,
     });
@@ -177,6 +177,21 @@ ipcMain.handle('session:start', async () => {
   stopSession();
   const useLocal = !process.env.VIN_DEMO_ENGINE_URL && process.env.VIN_DEMO_LOCAL_ENGINE === '1';
   return useLocal ? startLocalSession() : startHostedSession();
+});
+// Interactive session: open the hosted /session/interactive SSE; questions are sent via session:ask.
+ipcMain.handle('session:startInteractive', async () => { stopSession(); return startHostedSession('/session/interactive'); });
+ipcMain.handle('session:ask', async (_e, { text, speaker }) => {
+  if (!sessionCookie) return { ok: false, error: 'not signed in' };
+  try {
+    const res = await fetch(`${ENGINE_BASE}/session/utterance`, {
+      method: 'POST',
+      headers: { Cookie: sessionCookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ text, speaker }),
+    });
+    return { ok: res.ok, status: res.status };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
 });
 ipcMain.handle('session:stop', () => { stopSession(); return { ok: true }; });
 app.on('before-quit', stopSession);
