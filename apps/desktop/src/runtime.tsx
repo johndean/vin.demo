@@ -6,7 +6,7 @@ import { Icon, MODE_META, VALIDATION } from './shell';
 import { VD } from './data';
 import { LOOP, PLAN, QUOTES, SEED, BEATS, type Beat, type Msg } from './beats';
 import { DemoApp } from './demo-app';
-import { useReal, useDemoProduct, type RealProduct } from './real-data';
+import { useReal, useDemoProduct, type RealProduct, type RealPersona } from './real-data';
 import { VoiceClient } from './voice-client';
 
 /** What the operator can define per session, sent to the engine as query params. */
@@ -280,12 +280,52 @@ const typeRefJs = (ref: number, val: string) => `(function(){ var el=document.qu
   el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
   var o=el.style.outline; el.style.outline='3px solid #0861CE'; setTimeout(function(){ el.style.outline=o; }, 2400); return true; })()`;
 
+/* SpecialistSelect — hand the demo off to a specialist persona (the AI adopts its prompt + guardrails)
+   or back to the Lead Consultant. Always shows the ACTIVE specialist; lives in the live bar. */
+function SpecialistSelect({ personas, activeId, onSelect }: { personas: RealPersona[]; activeId: string | null; onSelect: (p: RealPersona | null) => void }) {
+  const [open, setOpen] = useState(false);
+  const active = personas.find((p) => p.id === activeId) ?? null;
+  const lead = personas.find((p) => p.lead);
+  const specialists = personas.filter((p) => !p.lead);
+  const inits = (n: string) => n.split(' ').map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+  return (
+    <div className="spec">
+      <button className={`spec__btn ${activeId ? 'on' : ''}`} onClick={() => setOpen((o) => !o)} title="Hand off to a specialist — the AI adopts their prompt + hard guardrails" style={activeId && active ? { borderColor: active.color, color: active.color } : undefined}>
+        <Icon name="spark" size={12} className="solid" style={{ stroke: 'none', fill: activeId && active ? active.color : 'var(--cr-accent)' }} />
+        {activeId && active ? active.name : (lead?.name ?? 'Lead Consultant')}
+        <Icon name="chevR" size={11} style={{ transform: 'rotate(90deg)', stroke: 'var(--cr-fg3)' }} />
+      </button>
+      {open && (
+        <>
+          <div className="target__backdrop" onClick={() => setOpen(false)} />
+          <div className="spec__menu" role="listbox">
+            <div className="target__h">Hand off to a specialist</div>
+            <button className={`spec__opt ${!activeId ? 'on' : ''}`} onClick={() => { onSelect(null); setOpen(false); }}>
+              <span className="spec__mk" style={{ background: lead?.color ?? '#002855' }}>LC</span>
+              <span className="spec__opt-main"><b>{lead?.name ?? 'Lead Consultant'}</b><span>generalist · default</span></span>
+              {!activeId && <Icon name="check" size={13} style={{ stroke: 'var(--cr-accent)' }} />}
+            </button>
+            {specialists.length === 0 && <div className="target__empty">No approved specialists for this site.</div>}
+            {specialists.map((p) => (
+              <button key={p.id} className={`spec__opt ${activeId === p.id ? 'on' : ''}`} onClick={() => { onSelect(p); setOpen(false); }}>
+                <span className="spec__mk" style={{ background: p.color }}>{inits(p.name)}</span>
+                <span className="spec__opt-main"><b>{p.name}</b><span>{p.role}</span></span>
+                {activeId === p.id && <Icon name="check" size={13} style={{ stroke: 'var(--cr-accent)' }} />}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 /* LiveBrowser — a REAL embedded Chromium pane (Electron <webview>). The operator logs into the
    product live (no stored credentials) and can take over at any moment — it's a real browser. The AI
    consultant co-drives it: an engine `nav` event (navTo) navigates the same pane, so the agent walks
    the real UI and the human grabs the wheel whenever they want. Persistent partition → the login
    survives reloads/turns. Replaces the screenshot stage on the desktop. */
-function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, controlsRef }: { initialUrl: string; navAction?: { label?: string; selectors?: string[]; url?: string; seq: number } | null; driving?: boolean; picker?: (liveUrl: string) => React.ReactNode; role?: string; mode?: string; controlsRef?: React.MutableRefObject<any> }) {
+function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, specialist, controlsRef }: { initialUrl: string; navAction?: { label?: string; selectors?: string[]; url?: string; seq: number } | null; driving?: boolean; picker?: (liveUrl: string) => React.ReactNode; role?: string; mode?: string; specialist?: React.ReactNode; controlsRef?: React.MutableRefObject<any> }) {
   const ref = useRef<any>(null);
   const [bar, setBar] = useState(initialUrl);
   const [nav, setNav] = useState({ back: false, fwd: false, loading: false });
@@ -351,6 +391,7 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, contr
         <button className="live-nav" onClick={() => act('goForward')} disabled={!nav.fwd} title="Forward">›</button>
         <button className="live-nav" onClick={() => act('reload')} title="Reload" style={nav.loading ? { animation: 'spin 1s linear infinite' } : undefined}>⟳</button>
         {picker ? picker(bar) : <span className="live-bar__url" title={bar}><Icon name="lock" size={11} /> {bar}</span>}
+        {specialist}
         {role && <span className="live-role" title="The persona the AI drives as — keep it consistent with who you're logged in as">as {role}</span>}
         <span className={`live-bar__tag ${driving ? 'driving' : ''} ${mode === 'execution' ? 'exec' : ''}`} title={mode === 'execution' ? 'EXECUTION — the agent makes real changes (clicks, types, saves) on this live target' : (driving ? 'The AI consultant is navigating — click anywhere to take over' : 'You are in control — it is your live, logged-in session')}>{mode === 'execution' ? (driving ? 'AI WRITING · execution' : 'EXECUTION · live') : (driving ? 'AI DRIVING' : 'LIVE · you take over')}</span>
       </div>
@@ -686,6 +727,16 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   // The URL the embedded browser opens: an explicit override/ad-hoc URL, else the product's domain.
   const browserUrl = target ? (target.url?.trim() ? (/^https?:\/\//.test(target.url) ? target.url : `https://${target.url.replace(/^https?:\/\//, '')}`) : `https://${target.host}`) : '';
 
+  // Active specialist persona (hand-off). Approved personas available for the current site (or unassigned).
+  const [activePersona, setActivePersona] = useState<RealPersona | null>(null);
+  const specialists = (real?.personas ?? []).filter((p) => p.status === 'approved' && (p.lead || !p.productIds.length || (target ? p.productIds.includes(target.productId) : true)));
+  const handoffSpecialist = (p: RealPersona | null) => {
+    const fromId = activePersona?.id ?? null;
+    setActivePersona(p);
+    (window as unknown as { session?: { handoff(x: any): void } }).session?.handoff?.({ fromId, toId: p?.id ?? null, trigger: 'operator' });
+    pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: p ? `Handing off to the ${p.name} — I'll focus on their scope and stay within their guardrails.` : 'Back to the Lead Consultant.' });
+  };
+
   useEffect(() => { try { localStorage.setItem('vd-cr-beat', String(idx)); } catch { /* */ } }, [idx]);
   useEffect(() => { document.getElementById('boot')?.style.setProperty('display', 'none'); }, []);
 
@@ -738,7 +789,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
       for (let i = 0; i < 14; i++) { // forms need several steps; stuck-detection (below) ends it early if it's not progressing
         const page = await ctl.snapshot().catch(() => null);
         if (!page) { say("I can't read the page yet — make sure it's loaded (and you're logged in), then ask again.", true); finished = true; break; }
-        const res = await api.agentStep({ goal, page, history, role: target?.role, mode: target?.mode });
+        const res = await api.agentStep({ goal, page, history, role: target?.role, mode: target?.mode, personaId: activePersona?.id });
         if (!res) { say('Lost the connection to the engine for a moment — try again.', true); finished = true; break; }
         if (res.say) { say(res.say, res.action === 'done' && i === 0 ? false : undefined); history.push(res.say); }
         if (res.action === 'done') { finished = true; break; }
@@ -784,7 +835,8 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
             screenshot={engine ? live.screenshot : null} blocked={engine ? live.blocked : undefined} url={engine ? live.url : undefined}
             browser={engine && target && browserUrl
               ? <LiveBrowser initialUrl={browserUrl} navAction={live.navAction} driving={live.running} role={target.role} mode={target.mode} controlsRef={browserCtl}
-                  picker={(liveUrl) => <TargetPicker products={products} target={target} liveUrl={liveUrl} onApply={setTarget} />} />
+                  picker={(liveUrl) => <TargetPicker products={products} target={target} liveUrl={liveUrl} onApply={setTarget} />}
+                  specialist={<SpecialistSelect personas={specialists} activeId={activePersona?.id ?? null} onSelect={handoffSpecialist} />} />
               : undefined} />
         </div>
         <RightPanel beat={beat} mode={mode} open={panelOpen} setOpen={setPanelOpen} tab={tab} setTab={setTab} messages={messages} typing={typing}

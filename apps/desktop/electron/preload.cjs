@@ -27,6 +27,8 @@ contextBridge.exposeInMainWorld('session', {
   ask: (text, speaker) => ipcRenderer.invoke('session:ask', { text, speaker }),
   // One step of the agentic drive loop — sends the live page + goal, gets back the next action.
   agentStep: (payload) => ipcRenderer.invoke('session:agentStep', payload),
+  // Record a specialist hand-off (the active persona for subsequent agent steps + the real metric).
+  handoff: (payload) => ipcRenderer.invoke('session:handoff', payload),
   stop: () => ipcRenderer.invoke('session:stop'),
   onEvent: (cb) => {
     const h = (_e, ev) => cb(ev);

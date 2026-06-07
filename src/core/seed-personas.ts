@@ -96,6 +96,10 @@ const ROSTER: Seed[] = [
 const ws = (await db().query<{ id: string }>('SELECT id FROM workspaces ORDER BY created_at LIMIT 1')).rows[0];
 if (!ws) throw new Error('No workspace — run `npm run seed` first.');
 
+// Clean roster: drop any persona not in the curated set (demo_sessions/handoff FKs are ON DELETE SET NULL).
+const del = await db().query('DELETE FROM personas WHERE workspace_id = $1 AND name <> ALL($2::text[])', [ws.id, ROSTER.map((p) => p.name)]);
+if (del.rowCount) console.log(`Removed ${del.rowCount} non-roster persona(s).`);
+
 let n = 0;
 for (const p of ROSTER) {
   const definition = {

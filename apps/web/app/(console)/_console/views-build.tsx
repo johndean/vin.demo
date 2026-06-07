@@ -240,38 +240,90 @@ function EnvCard({ p }: { p: any }) {
 export function EnvironmentInner({ p }: { p: any }) { return <div style={{ maxWidth: 560 }}><EnvCard p={p} /></div>; }
 
 /* ============================ PERSONAS ============================ */
-/* Create / edit a persona. Presentation fields live in the definition jsonb — all editable here. */
+const PERSONA_STATUS = ['draft', 'review', 'approved', 'retired'];
+const linesToArr = (s: string) => s.split('\n').map((x) => x.trim()).filter(Boolean);
+const commaToArr = (s: string) => s.split(',').map((x) => x.trim()).filter(Boolean);
+/* Create / edit a specialist persona — EVERY runtime field surfaced + editable. The config lives in
+   definition jsonb and IS what the engine injects when this specialist is handed off to; status is a
+   real column (only 'approved' can be activated). Site assignment scopes the specialist to products. */
 function PersonaForm({ persona, onClose }: { persona: any | null; onClose: () => void }) {
   const router = useRouter();
+  const VD = useData();
   const [name, setName] = useState(persona?.name ?? '');
-  const [scope, setScope] = useState(persona?.scope ?? '');
-  const [limits, setLimits] = useState(persona?.limits ?? '');
-  const [brand, setBrand] = useState(persona?.brand ?? 'Approved');
+  const [role, setRole] = useState(persona?.role ?? '');
+  const [status, setStatus] = useState(persona?.status ?? 'approved');
   const [color, setColor] = useState(persona?.color ?? '#002855');
-  const [calls, setCalls] = useState<number>(persona?.calls ?? 0);
+  const [systemPrompt, setSystemPrompt] = useState(persona?.systemPrompt ?? '');
+  const [scope, setScope] = useState(persona?.scope ?? '');
+  const [guardrails, setGuardrails] = useState((persona?.hardGuardrails?.length ? persona.hardGuardrails.join('\n') : persona?.limits) ?? '');
+  const [expertise, setExpertise] = useState((persona?.expertiseDomains ?? []).join(', '));
+  const [retrieval, setRetrieval] = useState((persona?.retrievalFilters ?? []).join(', '));
+  const [allowed, setAllowed] = useState((persona?.allowedActions ?? []).join(', '));
+  const [prohibited, setProhibited] = useState((persona?.prohibitedActions ?? []).join(', '));
+  const [escalation, setEscalation] = useState((persona?.escalationRules ?? []).join('\n'));
+  const [confidence, setConfidence] = useState<number>(persona?.confidenceThreshold ?? 0.7);
+  const [voiceId, setVoiceId] = useState(persona?.voiceProfileId ?? '');
+  const [sites, setSites] = useState<string[]>(persona?.productIds ?? []);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const toggleSite = (id: string) => setSites((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   const save = async () => {
     if (!name.trim()) { setErr('Name is required.'); return; }
+    if (!systemPrompt.trim()) { setErr('A system prompt is required — it’s what focuses this specialist.'); return; }
     setBusy(true); setErr('');
     try {
-      const data = { name: name.trim(), definition: { scope, limits, brand, color, calls: Number(calls) || 0 } };
+      const guards = linesToArr(guardrails);
+      const definition = {
+        role: role.trim() || name.trim(), lead: persona?.lead ?? false, color, brand: 'Approved',
+        scope, limits: guards.join(' · '), systemPrompt,
+        expertiseDomains: commaToArr(expertise), hardGuardrails: guards,
+        retrievalFilters: commaToArr(retrieval), allowedActions: commaToArr(allowed),
+        prohibitedActions: commaToArr(prohibited), escalationRules: linesToArr(escalation),
+        confidenceThreshold: Number(confidence) || 0.7, voiceProfileId: voiceId.trim() || null,
+        productIds: sites,
+      };
+      const data = { name: name.trim(), status, definition };
       if (persona?.id) await adminMutate('persona', 'update', { id: persona.id, data });
       else await adminMutate('persona', 'create', { data });
       onClose(); router.refresh();
     } catch (e: any) { setErr(e?.message || 'Save failed'); setBusy(false); }
   };
   return (
-    <Modal title={persona ? 'Edit persona' : 'New persona'} onClose={onClose}
+    <Modal title={persona ? `Edit ${persona.name}` : 'New specialist persona'} onClose={onClose} width={600}
       footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save persona'}</button></>}>
-      <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Compliance Specialist" /></Field>
-      <Field label="Scope"><textarea value={scope} onChange={(e) => setScope(e.target.value)} placeholder="Audit trails, SOC 2 evidence, retention policy…" /></Field>
-      <Field label="Brand / legal limits"><textarea value={limits} onChange={(e) => setLimits(e.target.value)} placeholder="Cites docs; never commits to roadmap or pricing." /></Field>
       <div className="flex gap-2">
-        <Field label="Brand status"><input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Approved" /></Field>
-        <Field label="Color"><input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ padding: 3, height: 38 }} /></Field>
-        <Field label="Hand-offs"><input type="number" min={0} value={calls} onChange={(e) => setCalls(Number(e.target.value))} /></Field>
+        <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Integration Engineer" /></Field>
+        <Field label="Role"><input value={role} onChange={(e) => setRole(e.target.value)} placeholder="Integration Engineer" /></Field>
+        <Field label="Status"><select value={status} onChange={(e) => setStatus(e.target.value)}>{PERSONA_STATUS.map((s) => <option key={s} value={s}>{s}</option>)}</select></Field>
+        <Field label="Color"><input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ padding: 3, height: 38, width: 48 }} /></Field>
       </div>
+      <Field label="System prompt — the runtime overlay the AI adopts when handed off to"><textarea value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} style={{ minHeight: 130 }} placeholder="You are the Integration Engineer. Focus on APIs, SSO, SCIM… Do not promise roadmap or custom development. When uncertain, cite documentation." /></Field>
+      <Field label="Scope (what this specialist covers)"><textarea value={scope} onChange={(e) => setScope(e.target.value)} placeholder="APIs, SSO, SCIM, ERP, webhooks, data flows" /></Field>
+      <Field label="Hard guardrails (one per line — never violated)"><textarea value={guardrails} onChange={(e) => setGuardrails(e.target.value)} placeholder={'Do not promise future integrations\nDo not promise custom development\nWhen uncertain, cite documentation'} /></Field>
+      <Field label="Escalation rules (one per line)"><textarea value={escalation} onChange={(e) => setEscalation(e.target.value)} placeholder={'Roadmap questions → lead consultant\nContractual terms → procurement'} /></Field>
+      <div className="flex gap-2">
+        <Field label="Expertise domains (comma)"><input value={expertise} onChange={(e) => setExpertise(e.target.value)} placeholder="APIs, Identity, Data exchange" /></Field>
+        <Field label="Retrieval filters (comma)"><input value={retrieval} onChange={(e) => setRetrieval(e.target.value)} placeholder="api-docs, integration, sso" /></Field>
+      </div>
+      <div className="flex gap-2">
+        <Field label="Allowed actions (comma)"><input value={allowed} onChange={(e) => setAllowed(e.target.value)} placeholder="navigate, explain" /></Field>
+        <Field label="Prohibited actions (comma)"><input value={prohibited} onChange={(e) => setProhibited(e.target.value)} placeholder="submit, pay, delete" /></Field>
+      </div>
+      <div className="flex gap-2">
+        <Field label="Confidence threshold (0–1)"><input type="number" min={0} max={1} step={0.05} value={confidence} onChange={(e) => setConfidence(Number(e.target.value))} /></Field>
+        <Field label="Voice profile id (optional)"><input value={voiceId} onChange={(e) => setVoiceId(e.target.value)} placeholder="consultant-f / executive-m …" /></Field>
+      </div>
+      <Field label="Assigned sites (none = available on every product)">
+        <div className="persona-sites">
+          {VD.products.map((p) => (
+            <label key={p.id} className={`persona-site ${sites.includes(p.id) ? 'on' : ''}`}>
+              <input type="checkbox" checked={sites.includes(p.id)} onChange={() => toggleSite(p.id)} />
+              <span className="persona-site__mk" style={{ background: p.color }}>{p.mk}</span>{p.domain}
+            </label>
+          ))}
+        </div>
+      </Field>
+      {status !== 'approved' && <div className="modal__err" style={{ color: 'var(--color-amber, #9a6b1a)' }}>Only <b>approved</b> personas can be handed off to in a live demo.</div>}
       {err && <div className="modal__err">{err}</div>}
     </Modal>
   );
@@ -309,7 +361,7 @@ export function Personas({ go }: { go: Go }) {
           <div key={p.id} className="card card-pad">
             <div className="flex items-center gap-3" style={{ marginBottom: 14 }}>
               <span className="avatar-sm" style={{ width: 40, height: 40, fontSize: 14, background: p.color }}>{p.name.split(' ').map((w) => w[0]).join('')}</span>
-              <div><div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{p.name}</div><Pill kind="success" dot>{p.brand}</Pill></div>
+              <div><div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{p.name}{p.lead ? ' · default' : ''}</div><Pill kind={p.status === 'approved' ? 'success' : p.status === 'retired' ? 'steel' : 'warn'} dot>{p.status}</Pill></div>
             </div>
             <div className="overline" style={{ marginBottom: 5 }}>Scope</div>
             <p className="muted" style={{ fontSize: 13, margin: '0 0 14px', lineHeight: 1.5 }}>{p.scope}</p>

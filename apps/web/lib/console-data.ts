@@ -119,11 +119,30 @@ export async function getConsoleData(): Promise<VDType> {
     };
   });
 
-  // ── personas (real config) ──
-  const personas = (await pool.query(`SELECT id, name, definition FROM personas ORDER BY name`)).rows.map((p: any, i: number) => ({
+  // ── personas (real config + REAL hand-off metric this month from persona_handoff_events) ──
+  const personas = (await pool.query(
+    `SELECT p.id, p.name, p.status, p.definition,
+            (SELECT count(*)::int FROM persona_handoff_events h
+              WHERE h.to_persona_id = p.id AND h.occurred_at >= date_trunc('month', now())) AS handoffs
+       FROM personas p ORDER BY (p.definition->>'lead')::boolean DESC NULLS LAST, p.name`,
+  )).rows.map((p: any, i: number) => ({
     id: p.id, name: p.name,
+    status: p.status ?? 'approved',
+    role: p.definition?.role ?? p.name,
+    lead: p.definition?.lead === true,
     scope: p.definition?.scope ?? '', limits: p.definition?.limits ?? '',
-    calls: p.definition?.calls ?? 0, brand: p.definition?.brand ?? 'Approved',
+    systemPrompt: p.definition?.systemPrompt ?? '',
+    expertiseDomains: arr(p.definition?.expertiseDomains),
+    hardGuardrails: arr(p.definition?.hardGuardrails),
+    retrievalFilters: arr(p.definition?.retrievalFilters),
+    allowedActions: arr(p.definition?.allowedActions),
+    prohibitedActions: arr(p.definition?.prohibitedActions),
+    escalationRules: arr(p.definition?.escalationRules),
+    confidenceThreshold: typeof p.definition?.confidenceThreshold === 'number' ? p.definition.confidenceThreshold : 0.7,
+    voiceProfileId: p.definition?.voiceProfileId ?? '',
+    productIds: arr(p.definition?.productIds), // sites this specialist is assigned to ([] = all)
+    calls: p.handoffs ?? 0, // real hand-offs this month (was a fabricated static number)
+    brand: p.definition?.brand ?? 'Approved',
     color: p.definition?.color ?? colorFor(p.name, i),
   }));
 

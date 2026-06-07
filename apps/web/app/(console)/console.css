@@ -213,3 +213,10 @@ button { font-family: inherit; }
 .fld input:focus, .fld textarea:focus, .fld select:focus { outline: none; border-color: var(--color-blue, #0861CE); box-shadow: 0 0 0 3px rgba(8,97,206,.12); }
 .fld textarea { min-height: 64px; resize: vertical; line-height: 1.5; }
 .card-actions { display: flex; gap: 7px; border-top: 1px solid var(--border-subtle); padding-top: 12px; margin-top: 14px; }
+
+/* Persona site-assignment chips */
+.persona-sites { display: flex; flex-wrap: wrap; gap: 6px; }
+.persona-site { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; padding: 5px 10px 5px 7px; border: 1px solid var(--border-subtle); border-radius: 999px; cursor: pointer; color: var(--text-primary); background: var(--surface-bg); }
+.persona-site.on { border-color: var(--color-blue, #0861CE); background: rgba(8,97,206,.08); }
+.persona-site input { margin: 0; }
+.persona-site__mk { width: 18px; height: 18px; border-radius: 5px; color: #fff; font-size: 8px; font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }

@@ -11,7 +11,12 @@ export interface ProductRow {
   defaultMode: string; // per-site default execution mode (read-only|safe|approval|execution)
 }
 export interface KnowledgeRow { id: string; title: string; content: string; type: string; conf: number; source: string; verified: string; ver: string; status: string }
-export interface PersonaRow { id: string; name: string; scope: string; limits: string; calls: number; brand: string; color: string }
+export interface PersonaRow {
+  id: string; name: string; scope: string; limits: string; calls: number; brand: string; color: string;
+  status: string; role: string; lead: boolean; systemPrompt: string; expertiseDomains: string[]; hardGuardrails: string[];
+  retrievalFilters: string[]; allowedActions: string[]; prohibitedActions: string[]; escalationRules: string[];
+  confidenceThreshold: number; voiceProfileId: string; productIds: string[];
+}
 export interface StakeholderRow { id: string; name: string; role: string; initials: string; color: string; active: boolean; interest: string; open: number; asked: number }
 export interface CustomerRow { id: string; name: string; seg: string; stage: string; product: string; sessions: number; stakeholders: number; next: string; color: string; hot: boolean }
 export interface SessionRow { id: string; customer: string; product: string; scenario: string; when: string; mode: string; status: string; dur: string; cost: number; llm: number; conf: number | null; stakeholders: number }

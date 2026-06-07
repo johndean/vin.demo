@@ -16,7 +16,7 @@ interface Spec { table: string; workspaceScoped?: boolean; fields: Record<string
 const SPECS: Record<string, Spec> = {
   // First entity (template). The presentation fields (scope/limits/brand/color/calls) live in the
   // definition jsonb, so they become real + editable here. More entities register below as we roll out.
-  persona: { table: 'personas', workspaceScoped: true, fields: { name: 'text', definition: 'json' }, del: 'hard' },
+  persona: { table: 'personas', workspaceScoped: true, fields: { name: 'text', status: 'text', definition: 'json' }, del: 'hard' },
 };
 
 function coerce(t: FieldType, v: any) {

@@ -10,12 +10,15 @@ export interface RealProduct {
 }
 export interface RealKnowledge { id: string; title: string; content: string; type: string; conf: number; source: string; verified: string; ver: string; status: string }
 export interface RealCost { k: string; v: number; color: string; pct: number }
+/* A specialist the consultant can hand off to (from the console persona roster). */
+export interface RealPersona { id: string; name: string; role: string; color: string; status: string; lead: boolean; productIds: string[] }
 export interface RealData {
   workspace?: { name: string; sub: string };
   products: RealProduct[];
   knowledge: RealKnowledge[];
   kbTypes: Record<string, { label: string; cls: string }>;
   costBreakdown: RealCost[];
+  personas?: RealPersona[];
 }
 
 const Ctx = createContext<RealData | null>(null);

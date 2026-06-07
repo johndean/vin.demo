@@ -346,3 +346,18 @@
 .pa-badge.pending { background: #fdf0d9; color: #9a6b1a; }
 .pa-badge.approved { background: #e0f2e9; color: #1f7a52; }
 .pa-th { font-size: 10.5px; font-weight: 800; text-transform: uppercase; letter-spacing: .05em; color: #94a2b5; }
+
+/* Specialist (persona) selector in the live bar — hand off to a specialist / back to lead. */
+.spec { position: relative; flex-shrink: 0; }
+.spec__btn { display: flex; align-items: center; gap: 6px; padding: 5px 9px; border: 1px solid var(--cr-line); border-radius: 999px; background: var(--cr-panel); color: var(--cr-fg2); font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.spec__btn.on { background: var(--cr-accent-soft); }
+.spec__btn:hover { border-color: var(--cr-accent-bd); }
+.spec__menu { position: absolute; top: calc(100% + 6px); right: 0; z-index: 61; width: 280px; max-height: 360px; overflow-y: auto; background: var(--cr-panel); border: 1px solid var(--cr-line); border-radius: var(--radius-md); box-shadow: var(--cr-shadow); padding: 7px; display: flex; flex-direction: column; gap: 2px; }
+.spec__opt { display: flex; align-items: center; gap: 9px; padding: 7px 8px; border: 1px solid transparent; border-radius: var(--radius-sm); background: none; cursor: pointer; text-align: left; }
+.spec__opt:hover { background: var(--cr-panel-2); }
+.spec__opt.on { background: var(--cr-accent-soft); border-color: var(--cr-accent-bd); }
+.spec__mk { width: 24px; height: 24px; flex-shrink: 0; border-radius: 6px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 9px; font-weight: 800; }
+.spec__opt-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.spec__opt-main b { font-size: 12.5px; color: var(--cr-fg); font-weight: 600; }
+.spec__opt-main span { font-size: 10.5px; color: var(--cr-fg3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spec__opt > svg { flex-shrink: 0; }

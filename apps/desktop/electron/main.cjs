@@ -232,6 +232,20 @@ ipcMain.handle('session:agentStep', async (_e, payload) => {
     return null;
   }
 });
+// Record a specialist hand-off — engine sets the active persona on the live session + logs the event.
+ipcMain.handle('session:handoff', async (_e, payload) => {
+  if (!sessionCookie) return { ok: false };
+  try {
+    const res = await fetch(`${ENGINE_BASE}/persona/handoff`, {
+      method: 'POST',
+      headers: { Cookie: sessionCookie, 'content-type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    return { ok: res.ok };
+  } catch {
+    return { ok: false };
+  }
+});
 ipcMain.handle('session:stop', () => { stopSession(); return { ok: true }; });
 app.on('before-quit', stopSession);
 
