@@ -43,6 +43,8 @@ ipcMain.on('win:close', () => win?.close());
 // seeded admin, same validation). Runs in the main process to avoid CORS. Override the
 // base with VIN_DEMO_WEB_URL for local dev.
 const AUTH_BASE = process.env.VIN_DEMO_WEB_URL || 'https://demofor.vin';
+let sessionCookie = null; // captured from /api/auth/login so the desktop can read gated data
+
 ipcMain.handle('auth:login', async (_e, { email, password }) => {
   try {
     const res = await fetch(`${AUTH_BASE}/api/auth/login`, {
@@ -50,7 +52,23 @@ ipcMain.handle('auth:login', async (_e, { email, password }) => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
+    const sc = res.headers.get('set-cookie');
+    if (res.ok && sc) sessionCookie = sc.split(';')[0]; // "vin_demo_session=<value>"
     return { ok: res.ok };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+});
+
+// Thin client: fetch the SAME real console data the web renders (the SSOT), using the
+// session cookie captured at login.
+ipcMain.handle('data:fetch', async () => {
+  try {
+    const res = await fetch(`${AUTH_BASE}/api/console/data`, {
+      headers: sessionCookie ? { Cookie: sessionCookie } : {},
+    });
+    if (!res.ok) return { ok: false, status: res.status };
+    return { ok: true, data: await res.json() };
   } catch (err) {
     return { ok: false, error: String(err && err.message ? err.message : err) };
   }

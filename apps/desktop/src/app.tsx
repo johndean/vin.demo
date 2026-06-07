@@ -1,9 +1,25 @@
-/* Desktop app shell: gate the control room behind the login (same design as the web). */
-import { useState } from 'react';
+/* Desktop app shell: gate the control room behind the login (same design as the web),
+   then fetch the REAL console data from the web SSOT (thin client) and provide it. */
+import { useState, useEffect } from 'react';
 import { Login } from './login';
 import ControlRoom from './runtime';
+import { RealDataProvider, type RealData } from './real-data';
 
 export default function App() {
   const [authed, setAuthed] = useState(false);
-  return authed ? <ControlRoom /> : <Login onDone={() => setAuthed(true)} />;
+  const [data, setData] = useState<RealData | null>(null);
+
+  useEffect(() => {
+    if (!authed) return;
+    const api = (window as unknown as { consoleData?: { fetch(): Promise<{ ok: boolean; data?: RealData }> } }).consoleData;
+    if (!api) return;
+    api.fetch().then((r) => { if (r?.ok && r.data) setData(r.data); }).catch(() => {});
+  }, [authed]);
+
+  if (!authed) return <Login onDone={() => setAuthed(true)} />;
+  return (
+    <RealDataProvider value={data}>
+      <ControlRoom />
+    </RealDataProvider>
+  );
 }

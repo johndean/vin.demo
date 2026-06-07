@@ -12,3 +12,8 @@ contextBridge.exposeInMainWorld('win', {
 contextBridge.exposeInMainWorld('auth', {
   login: (email, password) => ipcRenderer.invoke('auth:login', { email, password }),
 });
+
+// Real console data from the web SSOT (gated by the captured session cookie).
+contextBridge.exposeInMainWorld('consoleData', {
+  fetch: () => ipcRenderer.invoke('data:fetch'),
+});

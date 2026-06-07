@@ -6,6 +6,7 @@ import { Icon, MODE_META, VALIDATION } from './shell';
 import { VD } from './data';
 import { LOOP, PLAN, QUOTES, SEED, BEATS, type Beat, type Msg } from './beats';
 import { DemoApp } from './demo-app';
+import { useReal, useDemoProduct } from './real-data';
 
 const CURSOR = (
   <svg viewBox="0 0 24 24" style={{ width: 24, height: 24 }}><path d="M5 3l15 9-7 1.5L9 21z" fill="#0861CE" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" /></svg>
@@ -30,16 +31,19 @@ function ConfGauge({ conf }: { conf: number }) {
 }
 
 function CostMeter({ cost }: { cost: number }) {
-  const rows = VD.costBreakdown;
+  const real = useReal();
+  const isReal = !!real?.costBreakdown?.length;
+  const rows = isReal ? real!.costBreakdown : VD.costBreakdown;
+  const total = isReal ? real!.costBreakdown.reduce((a, c) => a + c.v, 0) : cost;
   return (
     <div className="cost-meter">
-      <div className="cost-total"><span className="cost-total__val">${cost.toFixed(2)}</span><span className="cost-total__label">this demo · tagged to session</span></div>
+      <div className="cost-total"><span className="cost-total__val">${total.toFixed(2)}</span><span className="cost-total__label">{isReal ? 'all demos · tagged to sessions' : 'this demo · tagged to session'}</span></div>
       <div className="cost-rows">
         {rows.map((r) => (
           <div className="cost-row" key={r.k}>
             <span className="cost-row__k"><i className="swatch" style={{ background: r.color }} />{r.k}</span>
             <span className="cost-row__bar"><i style={{ width: `${r.pct}%`, background: r.color }} /></span>
-            <span className="cost-row__v">${(cost * r.pct / 100).toFixed(2)}</span>
+            <span className="cost-row__v">${isReal ? r.v.toFixed(2) : (cost * r.pct / 100).toFixed(2)}</span>
           </div>
         ))}
       </div>
@@ -48,7 +52,32 @@ function CostMeter({ cost }: { cost: number }) {
 }
 
 function Citation({ id }: { id: string | null }) {
+  const real = useReal();
   if (!id) return <div className="brain-now" style={{ color: 'var(--cr-fg3)', fontSize: 12 }}>No knowledge retrieved yet for the current step.</div>;
+  // Prefer a REAL chunk from the SSOT — this demo cites po.vin's delegation knowledge.
+  const realChunk = real?.knowledge?.find((x) => /delegat|approval/i.test(`${x.title} ${x.content} ${x.source}`)) ?? real?.knowledge?.[0];
+  if (realChunk) {
+    const t = real!.kbTypes[realChunk.type] ?? { label: realChunk.type, cls: 'pill-info' };
+    const cls = realChunk.conf >= 0.85 ? 'conf-hi' : realChunk.conf >= 0.7 ? 'conf-mid' : 'conf-lo';
+    const warn = realChunk.conf < 0.7 || realChunk.status !== 'validated';
+    return (
+      <div className="cite">
+        <div className="cite__hd">
+          <span className="doc"><Icon name="file" size={12} /></span>
+          <div style={{ flex: 1 }}><div className="cite__title">{realChunk.title}</div><div className="cite__type">{t.label} · {realChunk.source}</div></div>
+        </div>
+        <div className="cite__body">
+          <div className="cite__quote">&quot;{realChunk.content}&quot;</div>
+          <div className="cite__meta">
+            <div className="cmeta"><span className="cmeta__k">Confidence</span><span className="cr-conf-bar"><i className={cls} style={{ width: `${realChunk.conf * 100}%` }} /></span><span className={`cmeta__v ${warn ? 'warn' : 'ok'}`}>{Math.round(realChunk.conf * 100)}%</span></div>
+            <div className="cmeta"><span className="cmeta__k">Last verified</span><span className="cmeta__v">{realChunk.verified}</span></div>
+            <div className="cmeta"><span className="cmeta__k">Product version</span><span className="cmeta__v">v{realChunk.ver}</span></div>
+            <div className="cmeta"><span className="cmeta__k">Validation</span><span className={`cmeta__v ${realChunk.status === 'validated' ? 'ok' : 'warn'}`}>{realChunk.status === 'validated' ? 'Validated' : realChunk.status}</span></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
   const k = VD.knowledge.find((x) => x.id === id)!;
   const t = VD.kbTypes[k.type];
   const cls = k.conf >= 0.85 ? 'conf-hi' : k.conf >= 0.7 ? 'conf-mid' : 'conf-lo';
@@ -74,15 +103,17 @@ function Citation({ id }: { id: string | null }) {
 }
 
 function LeftRail({ beat }: { beat: Beat }) {
+  const po = useDemoProduct();
   return (
     <div className="cr-col cr-left">
       <div className="cr-sec">
         <div className="cr-sec__title">Session</div>
         <dl className="cr-kv">
           <dt>Department</dt><dd>Procurement</dd>
-          <dt>Product</dt><dd>demo.vin · v3.4</dd>
+          <dt>Product</dt><dd>{po ? `${po.name} · ${po.version}` : 'po.vin'}</dd>
           <dt>Scenario</dt><dd>Approval delegation</dd>
-          <dt>Environment</dt><dd>demo-04</dd>
+          <dt>Environment</dt><dd>{po?.env || 'demo env'}</dd>
+          <dt>Knowledge</dt><dd>{po ? `${po.chunks} chunks · ${po.coverage}% coverage` : '—'}</dd>
           <dt>Objective</dt><dd style={{ fontWeight: 500, color: 'var(--cr-fg2)' }}>Audit-clean coverage when approvers are out</dd>
         </dl>
       </div>
