@@ -8,6 +8,7 @@ import { onboard, type Manifest } from './onboard.js';
 import { db } from './db.js';
 import { retrieveAndGate } from './retrieval.js';
 import { getAdapter } from './driver.js';
+import { recordEvalRun } from './eval-record.js';
 
 const m: Manifest = {
   name: 'eval-phase4-product',
@@ -42,4 +43,5 @@ const failed = checks.filter((c) => !c.pass);
 console.log('───────────────────────────────────────────────────');
 console.log(`  ${checks.length - failed.length}/${checks.length} passed — ${failed.length ? 'FAIL' : 'PASS'}`);
 console.log('═══════════════════════════════════════════════════\n');
+await recordEvalRun('phase4', checks.length - failed.length, checks.length, { failed: failed.map((c) => c.name) });
 process.exit(failed.length ? 1 : 0);

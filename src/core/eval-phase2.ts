@@ -12,6 +12,7 @@ import { getDiscovery } from './discovery.js';
 import { getStakeholders } from './stakeholders.js';
 import { gateForVector } from './retrieval.js';
 import { getEmbeddingProvider } from './embeddings.js';
+import { recordEvalRun } from './eval-record.js';
 import { db } from './db.js';
 import type { ExecutionMode } from './safety.js';
 
@@ -62,4 +63,5 @@ const failed = checks.filter((c) => !c.pass);
 console.log('───────────────────────────────────────────────────');
 console.log(`  ${checks.length - failed.length}/${checks.length} passed — ${failed.length ? 'FAIL' : 'PASS'}`);
 console.log('═══════════════════════════════════════════════════\n');
+await recordEvalRun('phase2', checks.length - failed.length, checks.length, { failed: failed.map((c) => c.name) });
 process.exit(failed.length ? 1 : 0);

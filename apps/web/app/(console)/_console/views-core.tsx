@@ -1,17 +1,18 @@
 'use client';
 /* VIN Demo console — core views: Dashboard, Products (ported from web/views-core.jsx). */
 import { useState, useEffect } from 'react';
-import { VD } from './data';
+import { useData } from './data-context';
 import { PageHead, Icon, ModeChip, Metric, Pill, type Go } from './shell';
 import { Knowledge, DemoGraphInner, EnvironmentInner } from './views-build';
 
 /* ============================ DASHBOARD ============================ */
 export function Dashboard({ go }: { go: Go }) {
+  const VD = useData();
   const { sessions, products } = VD;
   const live = sessions.find((s) => s.status === 'Live');
   return (
     <div className="page scroll">
-      <PageHead overline="Field Demos · Meridian Software"
+      <PageHead overline={`Field Demos · ${VD.workspace.name}`}
         title="Demo operations"
         desc="One orchestrated consultant loop across every product. Read-only by default, every answer cited, every demo costed."
         actions={<><button className="btn btn-secondary"><Icon name="plus" size={14} /> New product</button><button className="btn btn-primary" onClick={() => go('sessions')}><Icon name="play" size={13} /> Plan a session</button></>} />
@@ -22,7 +23,7 @@ export function Dashboard({ go }: { go: Go }) {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--color-steel-hover)', fontWeight: 800 }}>Live demo in progress</div>
             <div style={{ color: '#fff', fontSize: 18, fontWeight: 800, marginTop: 3 }}>{live.customer} — {live.scenario}</div>
-            <div style={{ color: 'var(--color-light-steel)', fontSize: 13, marginTop: 2 }}>{live.product} · {live.stakeholders} stakeholders · running {live.dur} · confidence {Math.round(live.conf * 100)}%</div>
+            <div style={{ color: 'var(--color-light-steel)', fontSize: 13, marginTop: 2 }}>{live.product} · {live.stakeholders} stakeholders · running {live.dur}{live.conf != null ? ` · confidence ${Math.round(live.conf * 100)}%` : ''}</div>
           </div>
           <ModeChip mode={live.mode} />
           {/* Control room is the separate desktop app */}
@@ -30,12 +31,19 @@ export function Dashboard({ go }: { go: Go }) {
         </div>
       )}
 
-      <div className="grid cols-4" style={{ marginBottom: 22 }}>
-        <Metric label="Demos this month" value="71" delta="+14 vs. May" dir="up" spark={[42, 48, 51, 57, 60, 66, 71]} />
-        <Metric label="Avg. confidence" value="90%" delta="+2 pts" dir="up" spark={[85, 86, 87, 86, 88, 89, 90]} />
-        <Metric label="Cost / demo" value="$1.18" delta="−$0.21" dir="up" spark={[1.6, 1.5, 1.44, 1.38, 1.3, 1.22, 1.18]} />
-        <Metric label="Recovery rate" value="87%" delta="self-healed nav" dir="flat" spark={[80, 82, 81, 84, 85, 86, 87]} />
-      </div>
+      {(() => {
+        const totalDemos = products.reduce((a, p) => a + p.demos, 0);
+        const totalChunks = products.reduce((a, p) => a + p.chunks, 0);
+        const totalSpend = VD.costBreakdown.reduce((a, c) => a + c.v, 0);
+        return (
+          <div className="grid cols-4" style={{ marginBottom: 22 }}>
+            <Metric label="Demos run" value={String(totalDemos)} delta="all-time" dir="flat" />
+            <Metric label="Products" value={String(products.length)} delta={`${products.filter((p) => p.status === 'Ready').length} ready`} dir="flat" />
+            <Metric label="Knowledge chunks" value={totalChunks.toLocaleString()} delta="trust-tagged" dir="flat" />
+            <Metric label="Cost / demo" value={totalDemos ? `$${(totalSpend / totalDemos).toFixed(2)}` : '—'} delta="across all demos" dir="flat" />
+          </div>
+        );
+      })()}
 
       <div className="grid" style={{ gridTemplateColumns: '1.55fr 1fr', marginBottom: 22 }}>
         <div className="card">
@@ -48,7 +56,7 @@ export function Dashboard({ go }: { go: Go }) {
                   <td><div className="cell-strong">{s.customer}</div><div className="cell-sub">{s.product} · {s.when}</div></td>
                   <td>{s.scenario}</td>
                   <td><ModeChip mode={s.mode} /></td>
-                  <td className="tnum">{Math.round(s.conf * 100)}%</td>
+                  <td className="tnum">{s.conf == null ? '—' : `${Math.round(s.conf * 100)}%`}</td>
                   <td className="tnum">${s.cost.toFixed(2)}</td>
                   <td>{s.status === 'Live' ? <Pill kind="danger" dot>Live</Pill> : s.status === 'Recovered' ? <Pill kind="warn">Recovered</Pill> : <Pill kind="success">Done</Pill>}</td>
                 </tr>
@@ -60,18 +68,33 @@ export function Dashboard({ go }: { go: Go }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
           <div className="card card-pad">
             <div className="overline" style={{ marginBottom: 12 }}>Attention</div>
-            <div className="banner banner-warn" style={{ marginBottom: 10 }}>
-              <Icon name="alert" size={18} style={{ color: 'var(--color-amber)' }} />
-              <div><strong>5 knowledge chunks are stale.</strong> Tied to older product versions — answers degrade to &quot;I&apos;m not certain.&quot; <a onClick={() => go('knowledge')} style={{ display: 'block', marginTop: 2 }}>Review knowledge →</a></div>
-            </div>
-            <div className="banner banner-info">
-              <Icon name="refresh" size={18} style={{ color: 'var(--color-blue)' }} />
-              <div><strong>Helmsman demo env needs reset.</strong> Seed data last refreshed 6 days ago. <a onClick={() => go('environments')} style={{ display: 'block', marginTop: 2 }}>Open environments →</a></div>
-            </div>
+            {(() => {
+              const attn = products.reduce((a, p) => a + Math.round(p.chunks * (p.kbStale + p.kbReview) / 100), 0);
+              const needReset = products.filter((p) => p.envStatus !== 'Healthy');
+              if (!attn && !needReset.length) {
+                return <div className="banner" style={{ background: '#e2f1ec', borderLeft: '4px solid var(--color-green)', color: 'var(--color-navy)' }}><Icon name="check" size={18} style={{ color: 'var(--color-green)' }} /><div><strong>All clear.</strong> Knowledge is validated and current; every environment is configured for demo-only routing.</div></div>;
+              }
+              return (
+                <>
+                  {attn > 0 && (
+                    <div className="banner banner-warn" style={{ marginBottom: needReset.length ? 10 : 0 }}>
+                      <Icon name="alert" size={18} style={{ color: 'var(--color-amber)' }} />
+                      <div><strong>{attn} knowledge chunk{attn > 1 ? 's' : ''} need attention.</strong> Below-threshold or stale chunks degrade to &quot;I&apos;m not certain.&quot; <a onClick={() => go('knowledge')} style={{ display: 'block', marginTop: 2 }}>Review knowledge →</a></div>
+                    </div>
+                  )}
+                  {needReset.length > 0 && (
+                    <div className="banner banner-info">
+                      <Icon name="refresh" size={18} style={{ color: 'var(--color-blue)' }} />
+                      <div><strong>{needReset.length} environment{needReset.length > 1 ? 's' : ''} need a reset.</strong> <a onClick={() => go('environments')} style={{ display: 'block', marginTop: 2 }}>Open environments →</a></div>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </div>
           <div className="card card-pad">
             <div className="flex between items-center" style={{ marginBottom: 12 }}><div className="overline">Cost this month</div><a className="btn btn-ghost btn-sm" onClick={() => go('costs')}>Details</a></div>
-            <div className="flex items-center gap-3" style={{ alignItems: 'baseline' }}><div style={{ fontSize: 32, fontWeight: 800, color: 'var(--color-navy)' }} className="tnum">$84.10</div><Pill kind="success" dot>under budget</Pill></div>
+            <div className="flex items-center gap-3" style={{ alignItems: 'baseline' }}><div style={{ fontSize: 32, fontWeight: 800, color: 'var(--color-navy)' }} className="tnum">${VD.costBreakdown.reduce((a, c) => a + c.v, 0).toFixed(2)}</div><span className="muted" style={{ fontSize: 12 }}>all demos</span></div>
             <div style={{ height: 8, borderRadius: 99, background: 'var(--color-light-steel)', overflow: 'hidden', margin: '12px 0 6px', display: 'flex' }}>
               {VD.costBreakdown.map((c) => <i key={c.k} style={{ width: `${c.pct}%`, background: c.color }} />)}
             </div>
@@ -118,6 +141,7 @@ function ProductCard({ p, onClick }: { p: any; onClick: () => void }) {
 
 /* ============================ PRODUCTS ============================ */
 export function Products({ go, selected }: { go: Go; selected?: string | null }) {
+  const VD = useData();
   const [sel, setSel] = useState<string | null>(selected || null);
   useEffect(() => { setSel(selected || null); }, [selected]);
   const { products } = VD;

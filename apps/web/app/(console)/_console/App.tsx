@@ -6,8 +6,10 @@ import { Topbar, Sidebar, type Go } from './shell';
 import { Dashboard, Products } from './views-core';
 import { Knowledge, DemoGraphs, Environments, Personas } from './views-build';
 import { Customers, Sessions, Safety, Evals, Costs, Settings } from './views-ops';
+import { DataProvider } from './data-context';
+import type { VDType } from './data';
 
-export default function ConsoleApp() {
+export default function ConsoleApp({ data, operator }: { data: VDType; operator?: string }) {
   const [route, setRoute] = useState('dashboard');
   const [param, setParam] = useState<string | null>(null);
 
@@ -38,13 +40,16 @@ export default function ConsoleApp() {
     settings: <Settings go={go} />,
   };
 
+  const mtd = data.costBreakdown.reduce((a, c) => a + c.v, 0).toFixed(2);
   return (
-    <div className="app">
-      <Topbar cost="84.10" />
-      <div className="shell">
-        <Sidebar route={route} go={go} />
-        <main className="main scroll" key={route + (param || '')}>{views[route] || views.dashboard}</main>
+    <DataProvider value={data}>
+      <div className="app">
+        <Topbar cost={mtd} workspace={data.workspace} operator={operator} />
+        <div className="shell">
+          <Sidebar route={route} go={go} />
+          <main className="main scroll" key={route + (param || '')}>{views[route] || views.dashboard}</main>
+        </div>
       </div>
-    </div>
+    </DataProvider>
   );
 }

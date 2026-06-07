@@ -137,7 +137,10 @@ export function PageHead({ overline, title, desc, actions, crumbs, go }: { overl
 }
 
 /* ---- Topbar ---- */
-export function Topbar({ cost }: { cost: string }) {
+export function Topbar({ cost, workspace, operator }: { cost: string; workspace?: { name: string; sub: string }; operator?: string }) {
+  const ws = workspace ?? { name: 'VIN Demo', sub: 'workspace' };
+  const opName = operator ? operator.replace(/@.*/, '') : 'operator';
+  const opInitials = (opName.split(/[.\s_-]+/).map((s) => s[0]).filter(Boolean).slice(0, 2).join('') || 'OP').toUpperCase();
   return (
     <header className="topbar">
       <div className="brand">
@@ -150,10 +153,10 @@ export function Topbar({ cost }: { cost: string }) {
         </div>
       </div>
       <div className="ws-switch">
-        <span className="ws-switch__dot">M</span>
+        <span className="ws-switch__dot">{ws.name[0]?.toUpperCase() ?? 'V'}</span>
         <div>
-          <div className="ws-switch__name">Meridian Software</div>
-          <div className="ws-switch__role">Field Demos workspace</div>
+          <div className="ws-switch__name">{ws.name}</div>
+          <div className="ws-switch__role">{ws.sub}</div>
         </div>
         <Icon name="chevD" size={11} />
       </div>
@@ -168,7 +171,7 @@ export function Topbar({ cost }: { cost: string }) {
         <span className="cost-pill__val">${cost}</span>
       </div>
       <button className="topbar__icon" title="Notifications"><Icon name="bell" size={16} /><span className="dot" /></button>
-      <div className="avatar" title="Dana Reyes — Solutions Engineer">DR</div>
+      <div className="avatar" title={operator ?? 'Operator'}>{opInitials}</div>
     </header>
   );
 }

@@ -1,11 +1,12 @@
 'use client';
 /* VIN Demo console — Pipeline + Operations views (ported from web/views-ops.jsx). */
 import { useState, useEffect } from 'react';
-import { VD } from './data';
+import { useData } from './data-context';
 import { PageHead, Icon, Pill, ModeChip, Avatar, Metric, type Go } from './shell';
 
 /* ============================ CUSTOMERS ============================ */
 export function Customers({ go, selected }: { go: Go; selected?: string | null }) {
+  const VD = useData();
   const [sel, setSel] = useState<string | null>(selected || null);
   useEffect(() => { setSel(selected || null); }, [selected]);
   const { customers } = VD;
@@ -37,6 +38,7 @@ export function Customers({ go, selected }: { go: Go; selected?: string | null }
 }
 
 function CustomerDetail({ c, go, back }: { c: any; go: Go; back: () => void }) {
+  const VD = useData();
   const { stakeholders, sessions } = VD;
   const custSessions = sessions.filter((s) => s.customer === c.name);
   return (
@@ -67,7 +69,7 @@ function CustomerDetail({ c, go, back }: { c: any; go: Go; back: () => void }) {
         <div className="card-hd"><h3>Demo sessions</h3><a className="btn btn-ghost btn-sm" onClick={() => go('sessions')}>All sessions</a></div>
         {custSessions.length ? (
           <table className="tbl"><thead><tr><th>Scenario</th><th>Product</th><th>When</th><th>Mode</th><th>Conf.</th><th>Cost</th></tr></thead>
-            <tbody>{custSessions.map((s) => (<tr key={s.id} onClick={() => go('sessions')}><td className="cell-strong">{s.scenario}</td><td className="mono" style={{ fontSize: 12 }}>{s.product}</td><td className="muted">{s.when}</td><td><ModeChip mode={s.mode} /></td><td className="tnum">{Math.round(s.conf * 100)}%</td><td className="tnum">${s.cost.toFixed(2)}</td></tr>))}</tbody>
+            <tbody>{custSessions.map((s) => (<tr key={s.id} onClick={() => go('sessions')}><td className="cell-strong">{s.scenario}</td><td className="mono" style={{ fontSize: 12 }}>{s.product}</td><td className="muted">{s.when}</td><td><ModeChip mode={s.mode} /></td><td className="tnum">{s.conf == null ? '—' : `${Math.round(s.conf * 100)}%`}</td><td className="tnum">${s.cost.toFixed(2)}</td></tr>))}</tbody>
           </table>
         ) : <div className="empty">No sessions yet — this prospect is still qualifying.</div>}
       </div>
@@ -77,6 +79,7 @@ function CustomerDetail({ c, go, back }: { c: any; go: Go; back: () => void }) {
 
 /* ============================ SESSIONS ============================ */
 export function Sessions({ go }: { go: Go }) {
+  const VD = useData();
   const { sessions } = VD;
   const live = sessions.find((s) => s.status === 'Live');
   return (
@@ -93,7 +96,7 @@ export function Sessions({ go }: { go: Go }) {
           <div className="grid cols-4" style={{ padding: 18, gap: 14 }}>
             <div><div className="overline">Scenario</div><div style={{ fontWeight: 800, marginTop: 4 }}>{live.scenario}</div></div>
             <div><div className="overline">Running</div><div style={{ fontWeight: 800, marginTop: 4 }} className="tnum">{live.dur}</div></div>
-            <div><div className="overline">Confidence</div><div style={{ fontWeight: 800, marginTop: 4 }} className="tnum">{Math.round(live.conf * 100)}%</div></div>
+            <div><div className="overline">Confidence</div><div style={{ fontWeight: 800, marginTop: 4 }} className="tnum">{live.conf == null ? '—' : `${Math.round(live.conf * 100)}%`}</div></div>
             <div><div className="overline">Mode</div><div style={{ marginTop: 6 }}><ModeChip mode={live.mode} /></div></div>
           </div>
           <div style={{ padding: '0 18px 18px' }}>
@@ -114,7 +117,7 @@ export function Sessions({ go }: { go: Go }) {
             {sessions.map((s) => (
               <tr key={s.id}>
                 <td><div className="cell-strong">{s.customer}</div><div className="cell-sub mono">{s.product} · {s.stakeholders} stakeholders</div></td>
-                <td>{s.scenario}</td><td className="muted">{s.when}</td><td className="tnum">{s.dur}</td><td><ModeChip mode={s.mode} /></td><td className="tnum">{Math.round(s.conf * 100)}%</td><td className="tnum">${s.cost.toFixed(2)}</td>
+                <td>{s.scenario}</td><td className="muted">{s.when}</td><td className="tnum">{s.dur}</td><td><ModeChip mode={s.mode} /></td><td className="tnum">{s.conf == null ? '—' : `${Math.round(s.conf * 100)}%`}</td><td className="tnum">${s.cost.toFixed(2)}</td>
                 <td>{s.status === 'Live' ? <Pill kind="danger" dot>Live</Pill> : s.status === 'Recovered' ? <Pill kind="warn">Recovered</Pill> : <Pill kind="success">Done</Pill>}</td>
               </tr>
             ))}
@@ -133,6 +136,7 @@ const MODES = [
   { id: 'execution', name: 'Execution', icon: 'lock', kind: 'execution', desc: 'Full write. Only when a customer explicitly authorizes it in their env.', allow: ['Full mutating workflows'], deny: ['— enabled per signed authorization —'] },
 ];
 export function Safety({ go }: { go: Go }) {
+  const VD = useData();
   return (
     <div className="page scroll">
       <PageHead overline="Operations" title="Safety & Execution Modes"
@@ -178,6 +182,7 @@ export function Safety({ go }: { go: Go }) {
 
 /* ============================ EVALS ============================ */
 export function Evals({ go }: { go: Go }) {
+  const VD = useData();
   const { evals } = VD;
   return (
     <div className="page scroll">
@@ -200,18 +205,23 @@ export function Evals({ go }: { go: Go }) {
         })}
       </div>
       <div className="card section-gap" style={{ overflow: 'hidden' }}>
-        <div className="card-hd"><h3>Recent eval runs</h3><span className="tag">approval-delegation suite</span></div>
-        <table className="tbl">
-          <thead><tr><th>Run</th><th>Scenario</th><th>Intent</th><th>Nav</th><th>Halluc.</th><th>Recovery</th><th>Result</th></tr></thead>
-          <tbody>
-            {([['#312', 'Approval delegation', '✓', '✓', '0', '✓', true], ['#311', 'Approval delegation + interrupt', '✓', '✓', '0', 'self-healed', true], ['#310', 'Delegation (stale KB)', '✓', '✓', 'degraded', 'n/a', true], ['#309', 'Bulk approval', '✓', 'missed step', '0', 'recovered', false], ['#308', 'Approval delegation', '✓', '✓', '0', '✓', true]] as [string, string, string, string, string, string, boolean][]).map((r, i) => (
-              <tr key={i} style={{ cursor: 'default' }}>
-                <td className="mono cell-strong">{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td>{r[3]}</td><td>{r[4]}</td><td>{r[5]}</td>
-                <td>{r[6] ? <Pill kind="success" dot>Pass</Pill> : <Pill kind="warn" dot>Review</Pill>}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="card-hd"><h3>Recent eval runs</h3><span className="tag">{VD.evalRuns.length} run{VD.evalRuns.length === 1 ? '' : 's'} recorded</span></div>
+        {VD.evalRuns.length ? (
+          <table className="tbl">
+            <thead><tr><th>Run</th><th>Suite</th><th>Passed</th><th>When</th><th>Result</th></tr></thead>
+            <tbody>
+              {VD.evalRuns.map((r) => (
+                <tr key={r.id} style={{ cursor: 'default' }}>
+                  <td className="mono cell-strong">{r.id.slice(0, 8)}</td>
+                  <td>{r.suite}</td>
+                  <td className="tnum">{r.passed}/{r.total}</td>
+                  <td className="muted">{r.when}</td>
+                  <td>{r.passed === r.total ? <Pill kind="success" dot>Pass</Pill> : <Pill kind="warn" dot>Review</Pill>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : <div className="empty">No eval runs recorded yet — run <span className="mono">npm run eval:phase1</span> (each run records here).</div>}
       </div>
     </div>
   );
@@ -219,23 +229,27 @@ export function Evals({ go }: { go: Go }) {
 
 /* ============================ COSTS ============================ */
 export function Costs({ go }: { go: Go }) {
+  const VD = useData();
   const { costBreakdown, sessions } = VD;
-  const perDemo = costBreakdown.reduce((a, c) => a + c.v, 0);
+  const total = costBreakdown.reduce((a, c) => a + c.v, 0);
+  const demos = VD.products.reduce((a, p) => a + p.demos, 0) || sessions.length;
+  const perDemo = demos ? total / demos : 0;
+  const depts = VD.customers.length;
   return (
     <div className="page scroll">
       <PageHead overline="Operations" title="Cost & Unit Economics"
         desc="Cost is telemetry, not an afterthought. Every demo emits cost events tagged to the session, so per-demo and per-department unit cost is queryable from day one. The pricing decision is a parallel business track."
         actions={<button className="btn btn-secondary"><Icon name="file" size={13} /> Export</button>} />
       <div className="grid cols-4" style={{ marginBottom: 22 }}>
-        <Metric label="Spend MTD" value="$84.10" delta="71 demos" dir="flat" />
-        <Metric label="Avg cost / demo" value={`$${perDemo.toFixed(2)}`} delta="−$0.21 vs. May" dir="up" spark={[1.6, 1.5, 1.44, 1.3, 1.22, 1.18]} />
-        <Metric label="Cost / dept" value="$11.84" delta="blended" dir="flat" />
-        <Metric label="Budget used" value="42%" delta="of $200 cap" dir="flat" />
+        <Metric label="Total spend" value={`$${total.toFixed(2)}`} delta={`${demos} demos`} dir="flat" />
+        <Metric label="Avg cost / demo" value={demos ? `$${perDemo.toFixed(2)}` : '—'} delta="all demos" dir="flat" />
+        <Metric label="Cost / dept" value={depts ? `$${(total / depts).toFixed(2)}` : '—'} delta="blended" dir="flat" />
+        <Metric label="Demos run" value={String(demos)} delta="all-time" dir="flat" />
       </div>
       <div className="grid" style={{ gridTemplateColumns: '1fr 1.3fr' }}>
         <div className="card card-pad">
-          <div className="overline" style={{ marginBottom: 14 }}>Cost per demo, by event type</div>
-          <div className="flex items-baseline gap-2" style={{ marginBottom: 14 }}><div style={{ fontSize: 34, fontWeight: 800, color: 'var(--text-primary)' }} className="tnum">${perDemo.toFixed(2)}</div><span className="muted">avg / demo</span></div>
+          <div className="overline" style={{ marginBottom: 14 }}>Spend by event type</div>
+          <div className="flex items-baseline gap-2" style={{ marginBottom: 14 }}><div style={{ fontSize: 34, fontWeight: 800, color: 'var(--text-primary)' }} className="tnum">${total.toFixed(2)}</div><span className="muted">total · tagged to sessions</span></div>
           {costBreakdown.map((c) => (
             <div key={c.k} style={{ marginBottom: 12 }}>
               <div className="flex between" style={{ fontSize: 12.5, marginBottom: 5 }}><span className="flex items-center gap-2"><i style={{ width: 10, height: 10, borderRadius: 3, background: c.color }} />{c.k}</span><span style={{ fontWeight: 700 }} className="tnum">${c.v.toFixed(2)} · {c.pct}%</span></div>
@@ -248,7 +262,7 @@ export function Costs({ go }: { go: Go }) {
           <table className="tbl">
             <thead><tr><th>Department</th><th>Scenario</th><th>Duration</th><th>LLM</th><th>Total</th></tr></thead>
             <tbody>
-              {sessions.map((s) => (<tr key={s.id} style={{ cursor: 'default' }}><td className="cell-strong">{s.customer}</td><td>{s.scenario}</td><td className="tnum muted">{s.dur}</td><td className="tnum muted">${(s.cost * 0.49).toFixed(2)}</td><td className="tnum cell-strong">${s.cost.toFixed(2)}</td></tr>))}
+              {sessions.map((s) => (<tr key={s.id} style={{ cursor: 'default' }}><td className="cell-strong">{s.customer}</td><td>{s.scenario}</td><td className="tnum muted">{s.dur}</td><td className="tnum muted">${s.llm.toFixed(2)}</td><td className="tnum cell-strong">${s.cost.toFixed(2)}</td></tr>))}
             </tbody>
           </table>
         </div>

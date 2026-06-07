@@ -2,11 +2,12 @@
 /* VIN Demo console — Library views: Knowledge, Demo Graphs, Environments, Personas
    (ported from web/views-build.jsx). */
 import { useState } from 'react';
-import { VD } from './data';
+import { useData } from './data-context';
 import { PageHead, Icon, Pill, ConfBar, VALIDATION, type Go } from './shell';
 
 /* ============================ KNOWLEDGE ============================ */
 export function Knowledge({ go, embedded, productName }: { go?: Go; embedded?: boolean; productName?: string }) {
+  const VD = useData();
   const { knowledge, kbTypes } = VD;
   const [filter, setFilter] = useState('all');
   const [sel, setSel] = useState<any>(knowledge[0]);
@@ -60,7 +61,7 @@ function ChunkPanel({ k, kbTypes }: { k: any; kbTypes: any }) {
       <div className="card-hd"><div><div className="overline">Chunk · trust metadata</div><h3 style={{ marginTop: 4, fontSize: 14, lineHeight: 1.3 }}>{k.title}</h3></div></div>
       <div className="card-pad">
         <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.6, fontStyle: 'italic', borderLeft: '2px solid var(--border-subtle)', paddingLeft: 12, margin: '0 0 18px' }}>
-          &quot;Approval delegation lets an approver temporarily reassign their approval authority to another user for a defined window. Delegated approvals retain the original approver&apos;s threshold and are fully logged.&quot;
+          &quot;{k.content}&quot;
         </p>
         <div className="trust">
           <div className="trust__row"><span className="trust__k">Confidence</span><ConfBar v={k.conf} /><span className="trust__v tnum">{conf}%</span></div>
@@ -85,6 +86,7 @@ function ChunkPanel({ k, kbTypes }: { k: any; kbTypes: any }) {
 
 /* ============================ DEMO GRAPHS ============================ */
 export function DemoGraphs({ go }: { go: Go }) {
+  const VD = useData();
   return (
     <div className="page scroll">
       <PageHead overline="Library" title="Demo Graphs"
@@ -161,6 +163,7 @@ export function DemoGraphInner({ p }: { p: any }) {
 
 /* ============================ ENVIRONMENTS ============================ */
 export function Environments({ go }: { go: Go }) {
+  const VD = useData();
   return (
     <div className="page scroll">
       <PageHead overline="Library" title="Environments"
@@ -202,6 +205,7 @@ export function EnvironmentInner({ p }: { p: any }) { return <div style={{ maxWi
 
 /* ============================ PERSONAS ============================ */
 export function Personas({ go }: { go: Go }) {
+  const VD = useData();
   return (
     <div className="page scroll">
       <PageHead overline="Library" title="Personas"

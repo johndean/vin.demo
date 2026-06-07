@@ -8,6 +8,7 @@
 import { buildGraph } from './graph.js';
 import { createDemoSession } from './session.js';
 import { beginCostSession, sessionCost } from './cost.js';
+import { recordEvalRun } from './eval-record.js';
 import type { ExecutionMode } from './safety.js';
 
 const productId = process.env.PO_VIN_PRODUCT_ID;
@@ -50,4 +51,5 @@ const failed = checks.filter((c) => !c.pass);
 console.log('───────────────────────────────────────────────────');
 console.log(`  ${checks.length - failed.length}/${checks.length} passed — ${failed.length ? 'FAIL' : 'PASS'}`);
 console.log('═══════════════════════════════════════════════════\n');
+await recordEvalRun('phase1', checks.length - failed.length, checks.length, { failed: failed.map((c) => c.name) });
 process.exit(failed.length ? 1 : 0);
