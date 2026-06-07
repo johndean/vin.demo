@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 520 190">
+
+
+<g>
+  <path class="st0" d="M255.3,80.1c-8.6,0-15.6-3-21.7-8.1h-12.1v112.9h66.2V72H277C271,77.1,263.9,80.1,255.3,80.1z"></path>
+  <path class="st0" d="M435.4,184.9L363.1,106v78.9h-59.4V29.2H366l67,65.3V29.2h59.4v155.7H435.4z"></path>
+  <path class="st0" d="M155.2,28.9l-43.8,64.6L67.6,28.9H8.2l102.7,156.9L214.3,28.9H155.2z"></path>
+  <radialGradient id="g1" cx="1090.1471" cy="-57.805" r="47.0218" gradientTransform="matrix(0.8714 0 0 0.8232 -859.2811 75.7963)" gradientUnits="userSpaceOnUse">
+    <stop offset="0" style="stop-color:#E2D8C5"></stop>
+    <stop offset="0.243" style="stop-color:#D5C4A6"></stop>
+    <stop offset="1" style="stop-color:#B8965A"></stop>
+  </radialGradient>
+  <polygon style="fill:url(#g1);" points="56.8,14.2 165.6,14.2 111.2,93.9"></polygon>
+  <radialGradient id="g2" cx="4818.8379" cy="-142.099" r="56.7801" gradientTransform="matrix(0.5831 0 0 0.5831 -2554.5547 129.8876)" gradientUnits="userSpaceOnUse">
+    <stop offset="0" style="stop-color:#E2D8C5"></stop>
+    <stop offset="0.243" style="stop-color:#D5C4A6"></stop>
+    <stop offset="1" style="stop-color:#B8965A"></stop>
+  </radialGradient>
+  <ellipse style="fill:url(#g2);" cx="255.3" cy="47" rx="33.1" ry="33.1"></ellipse>
+  <radialGradient id="g3" cx="2639.4224" cy="-246.705" r="45.4338" gradientTransform="matrix(0.7502 0 0 0.7727 -1586.0476 217.6722)" gradientUnits="userSpaceOnUse">
+    <stop offset="0" style="stop-color:#E2D8C5"></stop>
+    <stop offset="0.243" style="stop-color:#D5C4A6"></stop>
+    <stop offset="1" style="stop-color:#B8965A"></stop>
+  </radialGradient>
+  <polygon style="fill:url(#g3);" points="351.2,14.8 433,14.8 433.1,94.5"></polygon>
+  <path class="st0" d="M504.5,39.2c-2.9,0-5.3-2.4-5.3-5.3c0-2.9,2.4-5.3,5.3-5.3c2.9,0,5.3,2.3,5.3,5.3C509.8,36.9,507.4,39.2,504.5,39.2z M504.5,29.5c-2.5,0-4.5,2-4.5,4.5c0,2.5,2,4.5,4.5,4.5c2.5,0,4.5-2,4.5-4.5C509,31.5,507,29.5,504.5,29.5z M505.9,37l-1.6-2.4h-1V37h-0.8v-6h2.5c1,0,2,0.7,2,1.8c0,1.3-1.2,1.8-1.5,1.8L507,37H505.9z M504.9,31.7h-1.6v2.1h1.6c0.5,0,1.1-0.4,1.1-1C506,32.1,505.5,31.7,504.9,31.7z"></path>
+</g>
+</svg>

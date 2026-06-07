@@ -1,0 +1,14 @@
+import { createRoot } from 'react-dom/client';
+import ControlRoom from './runtime';
+
+const root = document.getElementById('root');
+if (root) createRoot(root).render(<ControlRoom />);
+
+// Wire the (frameless) titlebar traffic-light dots to the real window controls (preload).
+const api = (window as unknown as { win?: { minimize(): void; maximize(): void; close(): void } }).win;
+document.querySelectorAll<HTMLElement>('[data-win]').forEach((el) => {
+  el.addEventListener('click', () => {
+    const action = el.dataset.win as 'minimize' | 'maximize' | 'close';
+    api?.[action]?.();
+  });
+});

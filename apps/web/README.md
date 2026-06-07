@@ -2,7 +2,7 @@
 
 Next.js (App Router, TypeScript) implementation of the **login** and **operator console**
 designs, ported pixel-faithfully from `VIN Demo/` (Claude Design handoff). Hosted on
-**Railway**, gated by login, served at **demo4.vin**.
+**Railway**, gated by login, served at **demofor.vin**.
 
 ## Local dev
 
@@ -20,13 +20,13 @@ npm run dev                  # http://localhost:3000  → redirects to /login
   never live in git): `ADMIN_EMAIL` + `ADMIN_PASSWORD`, plus optional `SEED_USERS` (JSON).
 - Seeded admin for this environment: `johndean@vin.com` (password in `.env.local`, **rotate**).
 
-## Deploy to Railway (demo4.vin)
+## Deploy to Railway (demofor.vin)
 
 1. New Railway service → connect this repo, set **Root Directory** to `apps/web`.
 2. Builder = **Dockerfile** (picked up from `railway.json` / `Dockerfile`).
 3. Set env vars: `ADMIN_EMAIL`, `ADMIN_PASSWORD` (and `SEED_USERS` if needed). `PORT` is
    provided by Railway.
-4. Add the custom domain **demo4.vin** to the service and point its DNS (CNAME) at the
+4. Add the custom domain **demofor.vin** to the service and point its DNS (CNAME) at the
    Railway target.
 
 ## Structure
