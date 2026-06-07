@@ -196,3 +196,20 @@ button { font-family: inherit; }
 .gap-2 { gap: 8px; } .gap-3 { gap: 12px; } .gap-4 { gap: 16px; }
 .muted { color: var(--color-steel); }
 .tnum { font-variant-numeric: tabular-nums; }
+
+/* ============================================================ ADMIN CRUD (modal + forms) */
+.modal-ov { position: fixed; inset: 0; z-index: 100; background: rgba(0,26,58,.40); display: grid; place-items: center; padding: 24px; }
+.modal { width: min(480px, 96vw); max-height: 88vh; overflow: auto; background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: 0 24px 60px rgba(16,42,67,.28); }
+.modal__hd { display: flex; align-items: center; justify-content: space-between; padding: 15px 18px; border-bottom: 1px solid var(--border-subtle); }
+.modal__title { font-weight: 800; font-size: 15px; color: var(--text-primary); }
+.modal__x { background: none; border: none; cursor: pointer; color: var(--color-steel); font-size: 22px; line-height: 1; padding: 0 4px; }
+.modal__x:hover { color: var(--text-primary); }
+.modal__body { padding: 18px; display: flex; flex-direction: column; gap: 14px; }
+.modal__ft { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 18px; border-top: 1px solid var(--border-subtle); }
+.modal__err { color: var(--color-danger, #a8332f); font-size: 12.5px; }
+.fld { display: flex; flex-direction: column; gap: 5px; }
+.fld > label { font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--color-steel); }
+.fld input, .fld textarea, .fld select { font-family: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-bg); color: var(--text-primary); width: 100%; }
+.fld input:focus, .fld textarea:focus, .fld select:focus { outline: none; border-color: var(--color-blue, #0861CE); box-shadow: 0 0 0 3px rgba(8,97,206,.12); }
+.fld textarea { min-height: 64px; resize: vertical; line-height: 1.5; }
+.card-actions { display: flex; gap: 7px; border-top: 1px solid var(--border-subtle); padding-top: 12px; margin-top: 14px; }

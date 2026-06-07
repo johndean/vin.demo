@@ -2,8 +2,11 @@
 /* VIN Demo console — Library views: Knowledge, Demo Graphs, Environments, Personas
    (ported from web/views-build.jsx). */
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useData } from './data-context';
 import { PageHead, Icon, Pill, ConfBar, VALIDATION, type Go } from './shell';
+import { Modal, Field } from './Modal';
+import { adminMutate } from './admin';
 
 /* ============================ KNOWLEDGE ============================ */
 export function Knowledge({ go, embedded, productName }: { go?: Go; embedded?: boolean; productName?: string }) {
@@ -237,13 +240,70 @@ function EnvCard({ p }: { p: any }) {
 export function EnvironmentInner({ p }: { p: any }) { return <div style={{ maxWidth: 560 }}><EnvCard p={p} /></div>; }
 
 /* ============================ PERSONAS ============================ */
+/* Create / edit a persona. Presentation fields live in the definition jsonb — all editable here. */
+function PersonaForm({ persona, onClose }: { persona: any | null; onClose: () => void }) {
+  const router = useRouter();
+  const [name, setName] = useState(persona?.name ?? '');
+  const [scope, setScope] = useState(persona?.scope ?? '');
+  const [limits, setLimits] = useState(persona?.limits ?? '');
+  const [brand, setBrand] = useState(persona?.brand ?? 'Approved');
+  const [color, setColor] = useState(persona?.color ?? '#002855');
+  const [calls, setCalls] = useState<number>(persona?.calls ?? 0);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const save = async () => {
+    if (!name.trim()) { setErr('Name is required.'); return; }
+    setBusy(true); setErr('');
+    try {
+      const data = { name: name.trim(), definition: { scope, limits, brand, color, calls: Number(calls) || 0 } };
+      if (persona?.id) await adminMutate('persona', 'update', { id: persona.id, data });
+      else await adminMutate('persona', 'create', { data });
+      onClose(); router.refresh();
+    } catch (e: any) { setErr(e?.message || 'Save failed'); setBusy(false); }
+  };
+  return (
+    <Modal title={persona ? 'Edit persona' : 'New persona'} onClose={onClose}
+      footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : 'Save persona'}</button></>}>
+      <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="Compliance Specialist" /></Field>
+      <Field label="Scope"><textarea value={scope} onChange={(e) => setScope(e.target.value)} placeholder="Audit trails, SOC 2 evidence, retention policy…" /></Field>
+      <Field label="Brand / legal limits"><textarea value={limits} onChange={(e) => setLimits(e.target.value)} placeholder="Cites docs; never commits to roadmap or pricing." /></Field>
+      <div className="flex gap-2">
+        <Field label="Brand status"><input value={brand} onChange={(e) => setBrand(e.target.value)} placeholder="Approved" /></Field>
+        <Field label="Color"><input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ padding: 3, height: 38 }} /></Field>
+        <Field label="Hand-offs"><input type="number" min={0} value={calls} onChange={(e) => setCalls(Number(e.target.value))} /></Field>
+      </div>
+      {err && <div className="modal__err">{err}</div>}
+    </Modal>
+  );
+}
+
+function DeletePersona({ persona, onClose }: { persona: any; onClose: () => void }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const del = async () => {
+    setBusy(true); setErr('');
+    try { await adminMutate('persona', 'delete', { id: persona.id }); onClose(); router.refresh(); }
+    catch (e: any) { setErr(e?.message || 'Delete failed'); setBusy(false); }
+  };
+  return (
+    <Modal title="Delete persona" onClose={onClose} width={400}
+      footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" style={{ background: 'var(--color-danger, #a8332f)' }} onClick={del} disabled={busy}>{busy ? 'Deleting…' : 'Delete'}</button></>}>
+      <p style={{ margin: 0, fontSize: 13.5, color: 'var(--text-primary)', lineHeight: 1.5 }}>Delete <b>{persona.name}</b>? This removes the persona permanently.</p>
+      {err && <div className="modal__err">{err}</div>}
+    </Modal>
+  );
+}
+
 export function Personas({ go }: { go: Go }) {
   const VD = useData();
+  const [editing, setEditing] = useState<any | null | undefined>(undefined); // undefined = closed, null = new, object = edit
+  const [deleting, setDeleting] = useState<any | null>(null);
   return (
     <div className="page scroll">
       <PageHead overline="Library" title="Personas"
         desc="Delegated specialists the consultant can hand off to mid-demo for deep questions. Each has a defined scope and brand / legal limits — they cite docs and never over-commit."
-        actions={<button className="btn btn-primary"><Icon name="plus" size={14} /> New persona</button>} />
+        actions={<button className="btn btn-primary" onClick={() => setEditing(null)}><Icon name="plus" size={14} /> New persona</button>} />
       <div className="grid cols-3">
         {VD.personas.map((p) => (
           <div key={p.id} className="card card-pad">
@@ -256,9 +316,15 @@ export function Personas({ go }: { go: Go }) {
             <div className="overline" style={{ marginBottom: 5 }}>Limits</div>
             <p style={{ fontSize: 12.5, margin: 0, lineHeight: 1.5, color: 'var(--color-amber)', display: 'flex', gap: 7 }}><Icon name="lock" size={14} style={{ flexShrink: 0, marginTop: 2 }} /> {p.limits}</p>
             <div className="flex between" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, marginTop: 14, fontSize: 12 }}><span className="muted">Hand-offs this month</span><span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{p.calls}</span></div>
+            <div className="card-actions">
+              <button className="btn btn-secondary btn-sm" onClick={() => setEditing(p)}><Icon name="edit" size={12} /> Edit</button>
+              <button className="btn btn-ghost btn-sm" onClick={() => setDeleting(p)}><Icon name="x" size={12} /> Delete</button>
+            </div>
           </div>
         ))}
       </div>
+      {editing !== undefined && <PersonaForm persona={editing} onClose={() => setEditing(undefined)} />}
+      {deleting && <DeletePersona persona={deleting} onClose={() => setDeleting(null)} />}
     </div>
   );
 }
