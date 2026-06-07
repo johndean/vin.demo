@@ -346,7 +346,7 @@ const CONFIGS: Record<string, ProductWebConfig> = {
   },
 };
 
-export async function getAdapter(productName: string, mode: ExecutionMode): Promise<InteractionAdapter> {
+export async function getAdapter(productName: string, mode: ExecutionMode, baseUrlOverride?: string | null): Promise<InteractionAdapter> {
   const key = (productName || '').toLowerCase();
   // Config-as-data (P4.1): prefer the product's environment.adapter_config (set by self-service
   // onboarding); fall back to the code registry so the originally hand-configured products keep working.
@@ -361,5 +361,7 @@ export async function getAdapter(productName: string, mode: ExecutionMode): Prom
   } catch { /* DB unreachable → fall back to the code registry */ }
   cfg = cfg ?? CONFIGS[key];
   if (!cfg) throw new Error(`No interaction adapter (DB config or code registry) for product "${productName}"`);
+  // Operator-supplied per-session URL override: keep all login/selectors, just point at a different host.
+  if (baseUrlOverride && baseUrlOverride.trim()) cfg = { ...cfg, baseUrl: baseUrlOverride.trim() };
   return new WebAdapter(cfg, mode);
 }

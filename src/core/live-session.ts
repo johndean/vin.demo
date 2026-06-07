@@ -11,14 +11,31 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { buildGraph } from './graph.js';
 import { createDemoSession } from './session.js';
 import { beginCostSession, sessionCost } from './cost.js';
+import { db } from './db.js';
 import type { ExecutionMode } from './safety.js';
 
 export type Emit = (ev: Record<string, unknown>) => void;
 
+/** What the OPERATOR can define per session (from the desktop target picker / engine query params).
+ *  Every field is optional — omitted fields fall back to env (back-compat with the env-driven boot). */
+export interface SessionTarget {
+  productId?: string | null;  // which product to demo (UUID); falls back to PO_VIN_PRODUCT_ID
+  role?: string | null;       // persona/role to drive as (admin|manager|owner|…); falls back to PO_VIN_ROLE
+  mode?: ExecutionMode | null;// execution mode; coerced to read-only unless an allowed non-write mode
+  baseUrl?: string | null;    // optional per-session URL override for the chosen product's adapter
+  scenario?: string | null;   // optional opening question/scenario the engine asks first (entry-point concern)
+}
+
+// Operator-selectable execution modes. 'execution' (full-write) is deliberately EXCLUDED — it stays
+// gated behind explicit per-customer authorization (CLAUDE.md §8 / ADR governance), never a picker click.
+const SELECTABLE_MODES: ExecutionMode[] = ['read-only', 'safe', 'approval'];
+
 export interface SessionCtx {
   productId: string;
+  productName: string;
   role: string;
   mode: ExecutionMode;
+  baseUrl: string | null;
   sessionId: string;
   graph: ReturnType<typeof buildGraph>;
   thread: { configurable: { thread_id: string } };
@@ -31,21 +48,31 @@ async function shot(): Promise<string | null> {
   catch { return null; }
 }
 
-/** Boot a real demo session: env → product/role/mode, create the session row, build the graph + thread. */
-export async function bootSession(threadPrefix = 'live'): Promise<SessionCtx | null> {
+/** Boot a real demo session against an OPERATOR-CHOSEN target (product/role/mode/url), falling back
+ *  to env for any field the operator didn't set. Resolves the product's real name (for the adapter +
+ *  the `start` event), creates the session row, builds the graph + thread. Returns null if no product
+ *  is configured or the productId is unknown — the caller surfaces a clear error and closes. */
+export async function bootSession(threadPrefix = 'live', target: SessionTarget = {}): Promise<SessionCtx | null> {
   process.env.CAPTURE_SHOTS = '1'; // graph writes tmp/live/last.png on each navigation
   await mkdir('tmp/live', { recursive: true }).catch(() => {});
 
-  const productId = process.env.PO_VIN_PRODUCT_ID ?? null;
+  const productId = (target.productId?.trim() || process.env.PO_VIN_PRODUCT_ID) ?? null;
   if (!productId) return null;
-  const role = process.env.PO_VIN_ROLE ?? 'admin';
-  const mode: ExecutionMode = 'read-only';
+  const role = target.role?.trim() || process.env.PO_VIN_ROLE || 'admin';
+  const requested = (target.mode ?? 'read-only') as ExecutionMode;
+  const mode: ExecutionMode = SELECTABLE_MODES.includes(requested) ? requested : 'read-only';
+  const baseUrl = target.baseUrl?.trim() || null;
+
+  // Resolve (and validate) the product — its real name drives the adapter registry + the start event.
+  const p = await db().query<{ name: string }>('SELECT name FROM products WHERE id = $1', [productId]);
+  const productName = p.rows[0]?.name;
+  if (!productName) return null; // unknown product id (operator picked something not in this workspace)
 
   const session = await createDemoSession(productId, mode);
   beginCostSession(session.id);
   const graph = buildGraph();
   const thread = { configurable: { thread_id: `${threadPrefix}-${session.id}` } };
-  return { productId, role, mode, sessionId: session.id, graph, thread };
+  return { productId, productName, role, mode, baseUrl, sessionId: session.id, graph, thread };
 }
 
 /** Run ONE turn through the brain and emit its events. Same logic whether the utterance came from the
@@ -56,7 +83,7 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
 
   let out: any;
   try {
-    out = await ctx.graph.invoke({ utterance: turn.text, speaker: turn.speaker, productId: ctx.productId, sessionId: ctx.sessionId, role: ctx.role, mode: ctx.mode }, ctx.thread);
+    out = await ctx.graph.invoke({ utterance: turn.text, speaker: turn.speaker, productId: ctx.productId, sessionId: ctx.sessionId, role: ctx.role, mode: ctx.mode, baseUrl: ctx.baseUrl }, ctx.thread);
   } catch (e: any) {
     emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: `(engine error: ${e?.message ?? e})`, uncertain: true });
     return;
@@ -100,11 +127,11 @@ const REEL = [
  * The REEL: a repeatable canned run of the 3-question approval-delegation scenario through the real
  * brain. Resolves when complete; never calls process.exit (the hosted engine is long-lived).
  */
-export async function runLiveSession(emit: Emit): Promise<void> {
-  const ctx = await bootSession('live');
-  if (!ctx) { emit({ type: 'error', message: 'PO_VIN_PRODUCT_ID not set — run `npm run seed`.' }); return; }
+export async function runLiveSession(emit: Emit, target: SessionTarget = {}): Promise<void> {
+  const ctx = await bootSession('live', target);
+  if (!ctx) { emit({ type: 'error', message: 'No product configured — pick a target or set PO_VIN_PRODUCT_ID (run `npm run seed`).' }); return; }
 
-  emit({ type: 'start', product: 'po.vin', scenario: 'Approval delegation', mode: ctx.mode, loop: LOOP, sessionId: ctx.sessionId });
+  emit({ type: 'start', product: ctx.productName, scenario: 'Approval delegation', mode: ctx.mode, loop: LOOP, sessionId: ctx.sessionId });
   for (const turn of REEL) await runTurn(ctx, turn, emit);
   emit({ type: 'beat', loopIdx: 6, phase: 'Demo complete', brain: 'Scenario complete — never fired a mutating action; cost recorded to the session.', sub: 'done' });
   emit({ type: 'done' });

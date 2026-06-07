@@ -5,7 +5,7 @@
  *   • POST /session/utterance feeds a question → one `runTurn` → events stream on the open SSE.
  * Zero new reasoning: it reuses bootSession + runTurn from the core loop.
  */
-import { bootSession, runTurn, LOOP, type Emit, type SessionCtx } from '../../../src/core/live-session.js';
+import { bootSession, runTurn, LOOP, type Emit, type SessionCtx, type SessionTarget } from '../../../src/core/live-session.js';
 
 export interface InteractiveSession {
   ctx: SessionCtx;
@@ -13,13 +13,14 @@ export interface InteractiveSession {
   ask(text: string, speaker?: string): Promise<void>;
 }
 
-/** Open an interactive session, streaming its lifecycle events through `emit`. Returns null if the
- *  engine isn't seeded (PO_VIN_PRODUCT_ID missing) — the caller should close the stream. */
-export async function startInteractive(emit: Emit): Promise<InteractiveSession | null> {
-  const ctx = await bootSession('chat');
-  if (!ctx) { emit({ type: 'error', message: 'PO_VIN_PRODUCT_ID not set — run `npm run seed`.' }); return null; }
+/** Open an interactive session against the operator-chosen target, streaming its lifecycle events
+ *  through `emit`. Returns null if no product is configured (pick a target or set PO_VIN_PRODUCT_ID)
+ *  — the caller should close the stream. If the target carries an opening scenario, it's asked first. */
+export async function startInteractive(emit: Emit, target: SessionTarget = {}): Promise<InteractiveSession | null> {
+  const ctx = await bootSession('chat', target);
+  if (!ctx) { emit({ type: 'error', message: 'No product configured — pick a target or set PO_VIN_PRODUCT_ID.' }); return null; }
 
-  emit({ type: 'start', product: 'po.vin', scenario: 'Interactive', mode: ctx.mode, loop: LOOP, sessionId: ctx.sessionId, interactive: true });
+  emit({ type: 'start', product: ctx.productName, scenario: 'Interactive', mode: ctx.mode, loop: LOOP, sessionId: ctx.sessionId, interactive: true });
   emit({ type: 'ready' }); // the client may now send utterances
 
   const session: InteractiveSession = {
@@ -40,5 +41,8 @@ export async function startInteractive(emit: Emit): Promise<InteractiveSession |
       }
     },
   };
+  // Opening scenario (operator-set): ask it automatically as the first turn, so the demo opens on the
+  // operator's framing instead of waiting for input. Fire-and-forget — the answer streams on the SSE.
+  if (target.scenario?.trim()) void session.ask(target.scenario.trim());
   return session;
 }

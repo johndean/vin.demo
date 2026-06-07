@@ -22,8 +22,8 @@ contextBridge.exposeInMainWorld('consoleData', {
 
 // Live demo session service: start/stop the real engine loop + receive its streamed events.
 contextBridge.exposeInMainWorld('session', {
-  start: () => ipcRenderer.invoke('session:start'),
-  startInteractive: () => ipcRenderer.invoke('session:startInteractive'),
+  start: (target) => ipcRenderer.invoke('session:start', { target }),
+  startInteractive: (target) => ipcRenderer.invoke('session:startInteractive', { target }),
   ask: (text, speaker) => ipcRenderer.invoke('session:ask', { text, speaker }),
   stop: () => ipcRenderer.invoke('session:stop'),
   onEvent: (cb) => {

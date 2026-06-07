@@ -33,6 +33,10 @@ export const DemoState = Annotation.Root({
   sessionId: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
   role: Annotation<string>({ reducer: (_, b) => b, default: () => 'admin' }),
   mode: Annotation<ExecutionMode>({ reducer: (_, b) => b, default: () => 'read-only' }),
+  // Per-session URL override (operator picked a product but pointed its adapter at a different host,
+  // e.g. a staging URL). null → use the product's configured baseUrl. The driver merges it over the
+  // resolved ProductWebConfig; everything else (login, selectors, knowledge) is unchanged.
+  baseUrl: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
 
   // interpret node
   interpretation: Annotation<Interpretation | null>({ reducer: (_, b) => b, default: () => null }),

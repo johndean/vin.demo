@@ -10,7 +10,7 @@
  *   {type:'transcript',text,final} | {type:'audio',mime,data(base64)} | {type:'listening'} | {type:'voice',id,label}
  */
 import type { WebSocket } from 'ws';
-import { bootSession, runTurn, LOOP, type SessionCtx } from '../../../src/core/live-session.js';
+import { bootSession, runTurn, LOOP, type SessionCtx, type SessionTarget } from '../../../src/core/live-session.js';
 import { googleSTT } from './voice/stt-google.js';
 import { googleTTS } from './voice/tts-google.js';
 import { splitSentences } from './voice/segmenter.js';
@@ -19,11 +19,11 @@ import type { STTStream, VoiceProfile } from './voice/providers.js';
 
 const SAMPLE_RATE = 16000;
 
-export async function startVoiceSession(ws: WebSocket): Promise<void> {
+export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {}): Promise<void> {
   const send = (o: Record<string, unknown>) => { try { ws.send(JSON.stringify(o)); } catch { /* socket closing */ } };
 
-  const ctx: SessionCtx | null = await bootSession('voice');
-  if (!ctx) { send({ type: 'error', message: 'PO_VIN_PRODUCT_ID not set — run `npm run seed`.' }); try { ws.close(); } catch { /* */ } return; }
+  const ctx: SessionCtx | null = await bootSession('voice', target);
+  if (!ctx) { send({ type: 'error', message: 'No product configured — pick a target or set PO_VIN_PRODUCT_ID.' }); try { ws.close(); } catch { /* */ } return; }
 
   let profile: VoiceProfile = DEFAULT_PROFILE;
   let stt: STTStream | null = null;
@@ -32,7 +32,7 @@ export async function startVoiceSession(ws: WebSocket): Promise<void> {
   let ttsChain: Promise<void> = Promise.resolve();
   const speaker = 'Procurement';
 
-  send({ type: 'start', product: 'po.vin', scenario: 'Voice', mode: ctx.mode, loop: LOOP, sessionId: ctx.sessionId, interactive: true, voice: profile.id, profiles: VOICE_PROFILES.map((p) => ({ id: p.id, label: p.label })) });
+  send({ type: 'start', product: ctx.productName, scenario: 'Voice', mode: ctx.mode, loop: LOOP, sessionId: ctx.sessionId, interactive: true, voice: profile.id, profiles: VOICE_PROFILES.map((p) => ({ id: p.id, label: p.label })) });
   send({ type: 'ready' });
 
   // Speak one answer: synthesize sentence-by-sentence so audio starts on the first sentence.
@@ -72,6 +72,9 @@ export async function startVoiceSession(ws: WebSocket): Promise<void> {
       send({ type: 'turn_done' });
     }
   };
+
+  // Opening scenario (operator-set): speak the first answer automatically, on the operator's framing.
+  if (target.scenario?.trim()) void runVoiceTurn(target.scenario.trim());
 
   ws.on('message', (data: any, isBinary: boolean) => {
     if (isBinary) { if (stt) stt.write(Buffer.isBuffer(data) ? data : Buffer.from(data)); return; }

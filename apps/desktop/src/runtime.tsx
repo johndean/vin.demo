@@ -6,8 +6,17 @@ import { Icon, MODE_META, VALIDATION } from './shell';
 import { VD } from './data';
 import { LOOP, PLAN, QUOTES, SEED, BEATS, type Beat, type Msg } from './beats';
 import { DemoApp } from './demo-app';
-import { useReal, useDemoProduct } from './real-data';
+import { useReal, useDemoProduct, type RealProduct } from './real-data';
 import { VoiceClient } from './voice-client';
+
+/** What the operator can define per session, sent to the engine as query params. */
+type TargetParams = { productId?: string; role?: string; mode?: string; url?: string; scenario?: string };
+/** The committed demo target (selection + config) the control room drives against. */
+interface DemoTarget { productId: string; host: string; mk: string; color: string; role: string; mode: string; url: string; scenario: string }
+const TARGET_ROLES = ['admin', 'manager', 'owner', 'accounting', 'employee'];
+const TARGET_MODES: { id: string; label: string }[] = [
+  { id: 'read-only', label: 'Read-only' }, { id: 'safe', label: 'Safe' }, { id: 'approval', label: 'Approval' },
+];
 
 const CURSOR = (
   <svg viewBox="0 0 24 24" style={{ width: 24, height: 24 }}><path d="M5 3l15 9-7 1.5L9 21z" fill="#0861CE" stroke="#fff" strokeWidth="1.5" strokeLinejoin="round" /></svg>
@@ -228,15 +237,85 @@ function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, 
   );
 }
 
-function Stage({ beat, onResolve, screenshot, blocked, url }: { beat: Beat; onResolve: () => void; screenshot?: string | null; blocked?: string[]; url?: string }) {
+/* The demo-target picker — replaces the static address bar in engine modes. The operator picks any
+   real product (or types an ad-hoc URL), and configures role / execution-mode / opening question.
+   Applying commits a DemoTarget upstream, which restarts the live session against it. Pixel-native:
+   styled with the existing --cr-* tokens (see .target* in control-room.css). */
+function TargetPicker({ products, target, liveUrl, onApply }: { products: RealProduct[]; target: DemoTarget | null; liveUrl?: string; onApply: (t: DemoTarget) => void }) {
+  const [open, setOpen] = useState(false);
+  const [pid, setPid] = useState(target?.productId ?? '');
+  const [role, setRole] = useState(target?.role ?? 'admin');
+  const [mode, setMode] = useState(target?.mode ?? 'read-only');
+  const [url, setUrl] = useState(target?.url ?? '');
+  const [scenario, setScenario] = useState(target?.scenario ?? '');
+  // Re-seed the draft from the committed target each time the menu opens.
+  useEffect(() => { if (open && target) { setPid(target.productId); setRole(target.role); setMode(target.mode); setUrl(target.url); setScenario(target.scenario); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const sel = products.find((p) => p.id === pid);
+  const display = liveUrl || (url ? url.replace(/^https?:\/\//, '') : target?.host) || 'pick a demo target';
+  const commit = () => {
+    const p = products.find((x) => x.id === pid);
+    onApply({
+      productId: url && !p ? '' : pid,
+      host: url ? url.replace(/^https?:\/\//, '') : p?.domain ?? '',
+      mk: p?.mk ?? '∗', color: p?.color ?? '#4D6995',
+      role, mode, url: url.trim(), scenario: scenario.trim(),
+    });
+    setOpen(false);
+  };
+
+  return (
+    <div className="target">
+      <button className="target__btn" onClick={() => setOpen((o) => !o)} title="Choose the demo target — product, role, mode, opening question">
+        <Icon name="lock" size={12} />
+        <span className="target__host">{display}</span>
+        <Icon name="chevR" size={12} style={{ transform: 'rotate(90deg)', stroke: 'var(--cr-fg3)' }} />
+      </button>
+      {open && (
+        <>
+          <div className="target__backdrop" onClick={() => setOpen(false)} />
+          <div className="target__menu" role="listbox">
+            <div className="target__h">Demo target · pick a site, then configure</div>
+            <div className="target__list">
+              {products.length === 0 && <div className="target__empty">Loading products…</div>}
+              {products.map((p) => (
+                <button key={p.id} className={`target__opt ${pid === p.id && !url ? 'on' : ''}`} onClick={() => { setPid(p.id); setUrl(''); }}>
+                  <span className="target__mk" style={{ background: p.color }}>{p.mk}</span>
+                  <span className="target__opt-main"><b>{p.domain}</b><span>{p.env} · {p.status}</span></span>
+                  {pid === p.id && !url && <Icon name="check" size={13} style={{ stroke: 'var(--cr-accent)' }} />}
+                </button>
+              ))}
+            </div>
+            <div className="target__custom">
+              <Icon name="external" size={13} />
+              <input placeholder="Override URL or paste any site…" value={url} onChange={(e) => setUrl(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') commit(); }} />
+            </div>
+            <div className="target__cfg">
+              <span className="target__cfg-l">Drive as</span>
+              <select value={role} onChange={(e) => setRole(e.target.value)}>{TARGET_ROLES.map((r) => <option key={r} value={r}>{r}</option>)}</select>
+              <span className="target__cfg-l">Mode</span>
+              <select value={mode} onChange={(e) => setMode(e.target.value)}>{TARGET_MODES.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}</select>
+            </div>
+            {mode !== 'read-only' && <div className="target__warn">⚠ {mode} permits actions beyond navigate/explain — use only against an authorized environment.</div>}
+            {url && !sel && <div className="target__warn">Ad-hoc URL — not a trained product (no curated knowledge or demo graph).</div>}
+            <input className="target__scenario" placeholder="Opening question (optional)…" value={scenario} onChange={(e) => setScenario(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') commit(); }} />
+            <button className="target__apply" onClick={commit}>Apply &amp; restart session</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function Stage({ beat, onResolve, screenshot, blocked, url, picker }: { beat: Beat; onResolve: () => void; screenshot?: string | null; blocked?: string[]; url?: string; picker?: React.ReactNode }) {
   const live = !!screenshot;
   const scriptedUrl = `https://${beat.screen === 'audit' ? 'demo.vin/audit' : beat.screen === 'delegation' || beat.screen === 'settings' || beat.screen === 'newdelegation' ? 'demo.vin/approvals/' + beat.screen : 'demo.vin/' + (beat.screen === 'dashboard' ? '' : beat.screen)}`;
   return (
     <div className="stage-wrap">
       <div className="stage-bar">
         <div className="stage-dots"><i /><i /><i /></div>
-        <div className="stage-bar__url"><Icon name="lock" size={12} /> {url || scriptedUrl}</div>
-        <span className="stage-bar__env">{live ? 'LIVE · po.vin demo tenant' : 'Demo tenant · demo-04'}</span>
+        {picker ?? <div className="stage-bar__url"><Icon name="lock" size={12} /> {url || scriptedUrl}</div>}
+        <span className="stage-bar__env">{live ? 'LIVE · demo tenant' : 'Demo tenant · demo-04'}</span>
       </div>
       <div className="stage">
         {live
@@ -397,8 +476,8 @@ function useLiveSession() {
     if (!api?.onEvent) return;
     return api.onEvent((ev: any) => setLive((p) => reduceLive(p, ev)));
   }, []);
-  const start = () => { setLive({ ...LIVE_INIT, running: true }); (window as unknown as { session?: { start(): void } }).session?.start?.(); };
-  const startInteractive = () => { setLive({ ...LIVE_INIT }); (window as unknown as { session?: { startInteractive(): void } }).session?.startInteractive?.(); };
+  const start = (target?: TargetParams) => { setLive({ ...LIVE_INIT, running: true }); (window as unknown as { session?: { start(t?: TargetParams): void } }).session?.start?.(target); };
+  const startInteractive = (target?: TargetParams) => { setLive({ ...LIVE_INIT }); (window as unknown as { session?: { startInteractive(t?: TargetParams): void } }).session?.startInteractive?.(target); };
   const ask = (text: string, speaker?: string) => { setLive((p) => ({ ...p, running: true })); (window as unknown as { session?: { ask(t: string, s?: string): void } }).session?.ask?.(text, speaker); };
   const stop = () => { (window as unknown as { session?: { stop(): void } }).session?.stop?.(); setLive((p) => ({ ...p, running: false, ready: false })); };
   const pushEvent = (ev: any) => setLive((p) => reduceLive(p, ev)); // feed VoiceClient (WS) events into the same state
@@ -433,12 +512,14 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   const vcRef = useRef<VoiceClient | null>(null);
   const [voiceState, setVoiceState] = useState<string>('idle');
   const [listening, setListening] = useState(false);
-  const startVoice = async () => {
+  const startVoice = async (t?: TargetParams) => {
     reset(); setVoiceState('connecting'); setListening(false);
     const api = (window as unknown as { auth?: { voiceToken(): Promise<{ token: string | null; engineUrl: string }> } }).auth;
     const cfg = api?.voiceToken ? await api.voiceToken() : null;
     if (!cfg?.token) { setVoiceState('error'); return; }
-    const wss = String(cfg.engineUrl).replace(/^http/, 'ws') + `/voice?token=${encodeURIComponent(cfg.token)}`;
+    let wss = String(cfg.engineUrl).replace(/^http/, 'ws') + `/voice?token=${encodeURIComponent(cfg.token)}`;
+    // Append the operator's target — the engine boots the chosen product/role/mode/url for this session.
+    for (const [k, v] of Object.entries(t ?? {})) if (v) wss += `&${k}=${encodeURIComponent(v)}`;
     const vc = new VoiceClient(wss, (ev) => pushEvent(ev), (s) => setVoiceState(s));
     vcRef.current = vc; vc.connect();
   };
@@ -449,14 +530,31 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   const [tab, setTab] = useState('convo');
   const mode = 'read-only';
 
+  // Operator-chosen demo target. Initialized from the real products once they load (po.vin by default).
+  const real = useReal();
+  const products = real?.products ?? [];
+  const [target, setTarget] = useState<DemoTarget | null>(null);
+  useEffect(() => {
+    if (target || !products.length) return;
+    const p = products.find((x) => /po\.vin|^demo/i.test(x.name)) ?? products[0];
+    setTarget({ productId: p.id, host: p.domain, mk: p.mk, color: p.color, role: 'admin', mode: 'read-only', url: '', scenario: '' });
+  }, [products, target]);
+  const targetParams: TargetParams | undefined = target
+    ? { productId: target.productId || undefined, role: target.role, mode: target.mode, url: target.url || undefined, scenario: target.scenario || undefined }
+    : undefined;
+  const tkey = target ? `${target.productId}|${target.role}|${target.mode}|${target.url}|${target.scenario}` : '';
+
   useEffect(() => { try { localStorage.setItem('vd-cr-beat', String(idx)); } catch { /* */ } }, [idx]);
   useEffect(() => { document.getElementById('boot')?.style.setProperty('display', 'none'); }, []);
 
   // Ask = interactive text (IPC SSE); Talk = voice (WS via VoiceClient). Open on entry, close on leave.
+  // Re-runs when the operator changes the target (tkey) → tears the session down and reopens it on the
+  // new product/role/mode/url. Reel ('live') is manual (Run agent), so it picks up the target on demand.
   useEffect(() => {
-    if (runtime === 'ask') { startInteractive(); return () => stop(); }
-    if (runtime === 'talk') { void startVoice(); return () => stopVoice(); }
-  }, [runtime]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!target) return; // wait for the default target to resolve from real products
+    if (runtime === 'ask') { startInteractive(targetParams); return () => stop(); }
+    if (runtime === 'talk') { void startVoice(targetParams); return () => stopVoice(); }
+  }, [runtime, tkey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scripted autoplay (scripted mode only).
   useEffect(() => {
@@ -489,7 +587,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
         <div className="cr-strip__brand"><img src="./assets/VIN-light.svg" alt="VIN" /><span className="cr-strip__div" />
           <div><div className="cr-strip__product">Demo</div><div className="cr-strip__sub">Control Room</div></div></div>
         <div className="cr-strip__live"><span className="rec" /><span>{runtime === 'scripted' ? 'Scripted' : runtime === 'ask' ? 'Ask · live' : runtime === 'talk' ? 'Talk · live' : 'Reel · live'}</span></div>
-        <div className="cr-strip__meta"><b>Procurement</b> · po.vin · Approval delegation</div>
+        <div className="cr-strip__meta"><b>Procurement</b> · {(engine && target?.host) || 'po.vin'} · {target?.scenario?.trim() ? 'Custom scenario' : 'Approval delegation'}</div>
         <div className="cr-strip__spacer" />
         <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 8, background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.12)' }} title="Input mode — Ask: type · Talk: speak · Reel: canned scenario · Scripted: offline beats (QA). Ask/Talk/Reel use the live engine.">
           <button style={{ ...SEG_BTN, ...(runtime === 'ask' ? SEG_ON : {}) }} onClick={() => setMode('ask')}>Ask</button>
@@ -506,7 +604,8 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
       <div className="cr-body">
         <div className="cr-stagearea">
           <Stage beat={beat} onResolve={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
-            screenshot={engine ? live.screenshot : null} blocked={engine ? live.blocked : undefined} url={engine ? live.url : undefined} />
+            screenshot={engine ? live.screenshot : null} blocked={engine ? live.blocked : undefined} url={engine ? live.url : undefined}
+            picker={engine && target ? <TargetPicker products={products} target={target} liveUrl={live.url || undefined} onApply={setTarget} /> : undefined} />
         </div>
         <RightPanel beat={beat} mode={mode} open={panelOpen} setOpen={setPanelOpen} tab={tab} setTab={setTab} messages={messages} typing={typing}
           onAsk={(runtime === 'ask' || runtime === 'talk') ? onAsk : undefined} canAsk={canAsk}
@@ -516,7 +615,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
 
       <Transport beat={beat} idx={idx} playing={playing} speed={speed}
         live={engine} liveRunning={live.running} liveDone={live.done}
-        onPlay={() => { if (runtime === 'live') { if (live.running) stop(); else start(); } else if (runtime === 'ask') { if (live.running) stop(); else startInteractive(); } else { if (idx >= BEATS.length - 1) { setIdx(0); setSecs(724); } setPlaying((p) => !p); } }}
+        onPlay={() => { if (runtime === 'live') { if (live.running) stop(); else start(targetParams); } else if (runtime === 'ask') { if (live.running) stop(); else startInteractive(targetParams); } else { if (idx >= BEATS.length - 1) { setIdx(0); setSecs(724); } setPlaying((p) => !p); } }}
         onStep={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
         onBack={() => setIdx((i) => Math.max(i - 1, 0))}
         onRestart={() => { setIdx(0); setPlaying(false); setSecs(724); }}

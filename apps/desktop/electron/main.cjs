@@ -130,6 +130,19 @@ async function pumpSSE(body) {
   }
 }
 
+// Build the engine query string for the operator's chosen target (product/role/mode/url/scenario).
+// Only includes set fields; the engine validates/falls back. Keys match the engine's targetFrom().
+function targetQuery(target) {
+  if (!target || typeof target !== 'object') return '';
+  const qs = new URLSearchParams();
+  for (const k of ['productId', 'role', 'mode', 'url', 'scenario']) {
+    const v = target[k];
+    if (v != null && String(v).trim()) qs.set(k, String(v).trim());
+  }
+  const s = qs.toString();
+  return s ? `?${s}` : '';
+}
+
 async function startHostedSession(path = '/session/stream') {
   if (!sessionCookie) {
     win?.webContents.send('session:event', { type: 'error', message: 'Not signed in — log in first.' });
@@ -183,13 +196,13 @@ function startLocalSession() {
   return { ok: true };
 }
 
-ipcMain.handle('session:start', async () => {
+ipcMain.handle('session:start', async (_e, { target } = {}) => {
   stopSession();
   const useLocal = !process.env.VIN_DEMO_ENGINE_URL && process.env.VIN_DEMO_LOCAL_ENGINE === '1';
-  return useLocal ? startLocalSession() : startHostedSession();
+  return useLocal ? startLocalSession() : startHostedSession('/session/stream' + targetQuery(target));
 });
 // Interactive session: open the hosted /session/interactive SSE; questions are sent via session:ask.
-ipcMain.handle('session:startInteractive', async () => { stopSession(); return startHostedSession('/session/interactive'); });
+ipcMain.handle('session:startInteractive', async (_e, { target } = {}) => { stopSession(); return startHostedSession('/session/interactive' + targetQuery(target)); });
 ipcMain.handle('session:ask', async (_e, { text, speaker }) => {
   if (!sessionCookie) return { ok: false, error: 'not signed in' };
   try {

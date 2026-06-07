@@ -29,10 +29,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import 'dotenv/config';
 import { WebSocketServer } from 'ws';
-import { runLiveSession } from '../../../src/core/live-session.js';
+import { runLiveSession, type SessionTarget } from '../../../src/core/live-session.js';
 import { startInteractive, type InteractiveSession } from './interactive-session.js';
 import { startVoiceSession } from './voice-session.js';
 import { verifyToken } from './session-token.js';
+import type { ExecutionMode } from '../../../src/core/safety.js';
 
 const PORT = Number(process.env.PORT ?? 8080);
 const COOKIE_NAME = 'vin_demo_session'; // must match apps/web/middleware.ts SESSION_COOKIE
@@ -104,6 +105,13 @@ function tokenFrom(req: http.IncomingMessage, url: URL): string | null {
   return url.searchParams.get('token');
 }
 
+/** The operator-chosen demo target, parsed from query params (the desktop picker appends these).
+ *  All optional — bootSession falls back to env, validates the productId, and coerces the mode. */
+function targetFrom(url: URL): SessionTarget {
+  const g = (k: string) => url.searchParams.get(k)?.trim() || undefined;
+  return { productId: g('productId'), role: g('role'), mode: g('mode') as ExecutionMode | undefined, baseUrl: g('url'), scenario: g('scenario') };
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', `http://${req.headers.host ?? 'localhost'}`);
 
@@ -143,7 +151,7 @@ const server = http.createServer(async (req, res) => {
     const myId = claim(() => { open = false; try { res.end(); } catch { /* */ } }); // new session preempts any prior one
     console.log(`[engine] session start for ${payload.email}`);
     try {
-      await runLiveSession(emit);
+      await runLiveSession(emit, targetFrom(url));
     } catch (e: any) {
       emit({ type: 'error', message: String(e?.message ?? e) });
       console.error('[engine] session failed:', e);
@@ -168,8 +176,8 @@ const server = http.createServer(async (req, res) => {
 
     console.log(`[engine] interactive session start for ${payload.email}`);
     try {
-      interactive = await startInteractive(emit);
-      if (!interactive) { res.end(); release(myId); } // not seeded — startInteractive already emitted the error
+      interactive = await startInteractive(emit, targetFrom(url));
+      if (!interactive) { res.end(); release(myId); } // no product configured — startInteractive already emitted the error
       // else: keep the SSE open; POST /session/utterance drives each turn until the client disconnects
     } catch (e: any) {
       emit({ type: 'error', message: String(e?.message ?? e) });
@@ -210,7 +218,7 @@ server.on('upgrade', async (req, socket, head) => {
     const myId = claim(() => { try { ws.close(); } catch { /* */ } }); // new session preempts any prior one
     console.log(`[engine] voice session start for ${payload.email}`);
     ws.on('close', () => { release(myId); console.log(`[engine] voice session end for ${payload.email}`); });
-    startVoiceSession(ws).catch((e) => { console.error('[engine] voice session error:', e); release(myId); try { ws.close(); } catch { /* */ } });
+    startVoiceSession(ws, targetFrom(url)).catch((e) => { console.error('[engine] voice session error:', e); release(myId); try { ws.close(); } catch { /* */ } });
   });
 });
 

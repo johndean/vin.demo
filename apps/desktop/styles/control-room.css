@@ -132,6 +132,37 @@
 .stage-bar__url svg { width: 12px; height: 12px; stroke: var(--cr-ok); }
 .stage-bar__env { font-size: 9.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--cr-info); background: var(--cr-info-bg); border: 1px solid var(--cr-info-bd); padding: 3px 9px; border-radius: 999px; }
 
+/* Demo target picker — operator-selectable product / role / mode / URL / opening scenario. Replaces
+   the static address bar in engine modes; matches .stage-bar__url so the bar stays pixel-consistent. */
+.target { position: relative; flex: 1; display: flex; }
+.target__btn { flex: 1; display: flex; align-items: center; gap: 8px; padding: 6px 11px; background: var(--cr-bg); border: 1px solid var(--cr-line); border-radius: var(--radius-sm); font-family: var(--font-mono); font-size: 11.5px; color: var(--cr-fg2); cursor: pointer; text-align: left; transition: border-color .15s, background .15s; }
+.target__btn:hover { border-color: var(--cr-accent-bd); background: var(--cr-accent-soft); }
+.target__btn > svg:first-child { width: 12px; height: 12px; stroke: var(--cr-ok); flex-shrink: 0; }
+.target__host { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.target__backdrop { position: fixed; inset: 0; z-index: 60; }
+.target__menu { position: absolute; top: calc(100% + 6px); left: 0; z-index: 61; width: min(440px, 92vw); background: var(--cr-panel); border: 1px solid var(--cr-line); border-radius: var(--radius-md); box-shadow: var(--cr-shadow); padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.target__h { font-size: 9.5px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; color: var(--cr-fg3); padding: 4px 6px 2px; }
+.target__list { display: flex; flex-direction: column; gap: 2px; max-height: 232px; overflow-y: auto; }
+.target__empty { padding: 10px; font-size: 12px; color: var(--cr-fg3); }
+.target__opt { display: flex; align-items: center; gap: 10px; padding: 7px 9px; border: 1px solid transparent; border-radius: var(--radius-sm); background: none; cursor: pointer; text-align: left; }
+.target__opt:hover { background: var(--cr-panel-2); }
+.target__opt.on { background: var(--cr-accent-soft); border-color: var(--cr-accent-bd); }
+.target__mk { width: 26px; height: 26px; flex-shrink: 0; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 10px; font-weight: 800; }
+.target__opt-main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+.target__opt-main b { font-size: 13px; color: var(--cr-fg); font-weight: 600; }
+.target__opt-main span { font-size: 11px; color: var(--cr-fg3); }
+.target__opt > svg { width: 13px; height: 13px; flex-shrink: 0; }
+.target__custom { display: flex; align-items: center; gap: 7px; padding: 4px 9px; border: 1px solid var(--cr-line); border-radius: var(--radius-sm); background: var(--cr-bg); }
+.target__custom svg { width: 13px; height: 13px; stroke: var(--cr-fg3); flex-shrink: 0; }
+.target__custom input { width: 100%; border: none; background: none; outline: none; font-size: 12px; color: var(--cr-fg); font-family: var(--font-mono); }
+.target__cfg { display: grid; grid-template-columns: auto 1fr auto 1fr; align-items: center; gap: 6px 8px; padding: 2px 6px; }
+.target__cfg-l { font-size: 10px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--cr-fg3); }
+.target__cfg select { font-size: 12px; padding: 4px 6px; border: 1px solid var(--cr-line); border-radius: var(--radius-sm); background: var(--cr-panel); color: var(--cr-fg); }
+.target__scenario { padding: 6px 9px; border: 1px solid var(--cr-line); border-radius: var(--radius-sm); background: var(--cr-bg); font-size: 12px; color: var(--cr-fg); outline: none; }
+.target__warn { font-size: 10.5px; line-height: 1.4; color: var(--cr-warn); background: var(--cr-warn-bg); border: 1px solid var(--cr-warn-bd); border-radius: var(--radius-sm); padding: 5px 8px; }
+.target__apply { margin-top: 2px; padding: 8px; border: none; border-radius: var(--radius-sm); background: var(--cr-accent); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+.target__apply:hover { background: var(--cr-navy); }
+
 .stage { position: relative; flex: 1; min-height: 0; background: #f4f6f9; border: 1px solid var(--cr-line); border-top: none; border-radius: 0 0 var(--radius-md) var(--radius-md); overflow: hidden; }
 
 /* AI overlay */
