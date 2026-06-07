@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, session } = require('electron');
 const path = require('node:path');
 const { spawn } = require('node:child_process'); // dev-only local engine fallback (see below)
 
@@ -30,6 +30,9 @@ function createWindow() {
 }
 
 app.whenReady().then(() => {
+  // Grant microphone access to the renderer (Electron denies media by default) so voice capture works.
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'media'));
+  session.defaultSession.setPermissionCheckHandler((_wc, permission) => permission === 'media');
   createWindow();
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createWindow(); });
 });

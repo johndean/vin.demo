@@ -40,7 +40,7 @@ export class VoiceClient {
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     try {
       this.micStream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true } });
-    } catch { this.onState('error'); return; }
+    } catch { this.onEvent({ type: 'error', message: 'Microphone blocked or unavailable — allow mic access and try again.' }); this.onState('error'); return; }
     this.ac ??= new AudioContext();
     const ac = this.ac;
     await ac.resume().catch(() => {});
