@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: 'VIN Demo',
-  description: 'VIN Demo — Autonomous AI Solution Consultant. Operator console.',
+  description: 'VIN Demo — AI Guided Product Experience Platform. Operator console.',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

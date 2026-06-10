@@ -1,0 +1,600 @@
+{
+  "product": "modelcontract.software",
+  "outcomes": [
+    {
+      "title": "Reduce contract creation time",
+      "description": "By guiding staff through a structured, step-by-step agreement wizard with pre-built model clauses, practices eliminate the hours spent drafting employment agreements from scratch or adapting ad-hoc templates. The result is a ready-to-generate agreement that is consistent, complete, and role-appropriate — produced in a single sitting.",
+      "successIndicators": [
+        "Average time from initiating a new agreement to reaching the generate-ready state drops measurably",
+        "Percentage of agreements completed in a single session increases over prior period",
+        "Reduction in back-and-forth revisions requested before an agreement is signed",
+        "Staff hours spent on agreement drafting per hire reduced quarter-over-quarter",
+        "Number of agreements generated per month without involving outside legal review"
+      ]
+    },
+    {
+      "title": "Improve contract consistency",
+      "description": "Using a shared model agreement wizard means every employment agreement — regardless of who initiates it — follows the same structure, uses the same clause language, and addresses the same required terms for the practice's environment. Drift between individual drafts and one-off variations becomes a solvable, visible problem rather than an invisible risk.",
+      "successIndicators": [
+        "Percentage of agreements generated directly from the model wizard vs. modified outside it",
+        "Reduction in clause variations flagged during legal or manager review",
+        "Decrease in agreements missing required sections at the point of signature",
+        "Number of non-standard terms introduced per quarter across all agreements",
+        "Consistency score on periodic audit of executed agreements against the model template"
+      ]
+    },
+    {
+      "title": "Accelerate contract approvals",
+      "description": "When agreements arrive at the approval stage already structured, role-appropriate, and fully completed — rather than as rough drafts with gaps — reviewers spend less time correcting and more time confirming. Practices move from offer to signed agreement faster, reducing the risk of losing candidates during the delay.",
+      "successIndicators": [
+        "Average calendar days from agreement generation to final signature",
+        "Reduction in approval-stage revision cycles per agreement",
+        "Percentage of agreements approved without any amendment after the first review",
+        "Time from candidate acceptance to countersigned agreement compared to prior hiring cycles",
+        "Number of agreements held up in review queue for more than five business days"
+      ]
+    },
+    {
+      "title": "Improve contract visibility",
+      "description": "Practices gain a clear, real-time view of where every agreement stands — in progress, pending generation, under review, or executed — rather than relying on email threads and shared drives. Managers and owners can see status at a glance and act before delays become problems.",
+      "successIndicators": [
+        "Percentage of active agreements trackable by status without manual inquiry",
+        "Reduction in time spent by managers answering 'where is the contract?' questions",
+        "Number of agreements surfaced as stalled or incomplete before they affect a start date",
+        "Percentage of staff with a current, executed agreement on file at any given time",
+        "Time to retrieve a specific agreement for review or audit reduced"
+      ]
+    },
+    {
+      "title": "Reduce contract-related risk",
+      "description": "Agreements built through a model wizard cover the required terms for a veterinary employment context, reducing the likelihood of missing clauses that expose the practice to disputes, regulatory problems, or unenforceability. Risk moves from invisible (drafts made ad hoc) to managed (model-based, required-field-enforced).",
+      "successIndicators": [
+        "Reduction in agreements missing legally required employment terms identified at review",
+        "Number of employment disputes or grievances where a deficient agreement was a contributing factor",
+        "Percentage of executed agreements covering all environment-specific required sections",
+        "Decrease in instances where an agreement had to be re-executed to correct a missing term",
+        "Reduction in outside legal spend to remediate poorly drafted employment agreements"
+      ]
+    },
+    {
+      "title": "Improve compliance tracking",
+      "description": "Every agreement generated through the wizard is tied to a known model version and role type, making it straightforward to identify which employees are on current versus outdated terms as regulatory or practice-policy requirements change. Compliance becomes an auditable status rather than a best guess.",
+      "successIndicators": [
+        "Percentage of employee agreements mapped to a current, validated model version",
+        "Number of employees identified as needing an updated agreement following a model revision",
+        "Time to complete a compliance sweep across all executed agreements after a policy change",
+        "Reduction in instances where compliance status was unknown or had to be manually researched",
+        "Percentage of agreements with a documented generation date and model-version reference"
+      ]
+    },
+    {
+      "title": "Improve audit readiness",
+      "description": "When employment agreements are generated from a structured wizard with required-field enforcement and a clear generation record, practices can respond to audit requests quickly and with confidence — producing complete, consistent documentation rather than scrambling to locate and patch incomplete files.",
+      "successIndicators": [
+        "Time to produce all requested employment agreements during an HR or regulatory audit",
+        "Percentage of agreements retrievable with full generation metadata on demand",
+        "Number of agreements found to have missing required sections during a pre-audit review",
+        "Reduction in time spent assembling HR documentation packages for inspections or compliance reviews",
+        "Percentage of current employees with a complete, executed agreement on file and accessible"
+      ]
+    },
+    {
+      "title": "Improve obligation management",
+      "description": "Employment agreements carry ongoing obligations — probation periods, review dates, compensation adjustments, non-compete terms — that practices need to track and act on. Making those obligations explicit and recorded at the time of agreement generation means fewer missed deadlines and fewer surprises.",
+      "successIndicators": [
+        "Number of contractual obligation deadlines (review dates, probation end dates) missed per quarter",
+        "Percentage of agreements with active obligations surfaced for manager review before the due date",
+        "Reduction in compensation disputes tied to missed review or adjustment obligations",
+        "Time spent manually tracking open obligations across all active employment agreements",
+        "Number of employees whose agreements contain unresolved obligations past their due dates"
+      ]
+    },
+    {
+      "title": "Improve document governance",
+      "description": "Model agreements generated through a controlled wizard — with role-based access, required-field completion enforcement, and a clear record of who generated and reviewed each agreement — replace informal document management practices that leave agreements scattered, unversioned, and inaccessible to the right people.",
+      "successIndicators": [
+        "Percentage of employment agreements stored in a single governed repository vs. email or local drives",
+        "Reduction in instances of duplicate or conflicting agreement versions circulating for the same employee",
+        "Number of agreements accessible to authorized reviewers without requiring manual file-sharing steps",
+        "Time to locate a specific executed agreement when requested",
+        "Percentage of agreements generated through the wizard rather than outside-document workarounds"
+      ]
+    },
+    {
+      "title": "Reduce manual contract administration",
+      "description": "The wizard's step-by-step structure and required-field completion gate eliminate the manual effort of checking drafts for completeness, chasing missing details before generation, and reformatting agreements to match the practice's standard. Staff spend less time on document hygiene and more time on the hire.",
+      "successIndicators": [
+        "Staff hours per agreement spent on document preparation, formatting, and completeness checks",
+        "Number of agreements returned for missing information before they could be reviewed or signed",
+        "Reduction in admin time per hiring cycle attributable to agreement preparation",
+        "Percentage of agreements reaching the signature stage without any manual correction after generation",
+        "Number of manual formatting or restructuring steps required after generating an agreement"
+      ]
+    },
+    {
+      "title": "Improve version control",
+      "description": "When the model agreement is updated — to reflect a legal change, a practice-policy revision, or a new best practice — practices need a clear record of which agreements were generated under which version. Model-versioned generation means every executed agreement has a clear lineage, and outdated terms can be identified and addressed systematically.",
+      "successIndicators": [
+        "Percentage of executed agreements with a documented model-version reference",
+        "Time to identify all agreements generated under a superseded model version following an update",
+        "Reduction in agreements circulating under outdated terms after a model revision is published",
+        "Number of version-related disputes or corrections required after agreements are executed",
+        "Percentage of active employees re-papered within a target window following a model update"
+      ]
+    },
+    {
+      "title": "Improve contract accountability",
+      "description": "With a model-based wizard, it is clear who initiated each agreement, when it was generated, which model version was used, and what role it was built for — creating a record of accountability that protects the practice in disputes and makes it easier to identify where a process broke down.",
+      "successIndicators": [
+        "Percentage of agreements with a complete record of generation date, initiating role, and model version",
+        "Reduction in instances where agreement ownership or initiation history was unclear",
+        "Time to reconstruct the history of a specific agreement when a dispute arises",
+        "Number of agreements with unresolved ownership or review accountability gaps",
+        "Percentage of agreements traceable to a specific staff member and decision point"
+      ]
+    },
+    {
+      "title": "Improve approval transparency",
+      "description": "When an agreement moves from generated to reviewed to executed, each party — employer and employee — knows exactly where it stands and what is required next. Transparent status tracking replaces chasing emails and eliminates the ambiguity about whether an agreement is pending, approved, or stalled.",
+      "successIndicators": [
+        "Percentage of in-progress agreements with a clearly visible current status for all parties",
+        "Reduction in time spent by managers or HR following up on unsigned or unreviewed agreements",
+        "Number of agreements where the approval stage was delayed by status ambiguity",
+        "Average days from generation to first review action by the approving party",
+        "Percentage of employees who completed agreement review without a manual reminder"
+      ]
+    },
+    {
+      "title": "Improve renewal management",
+      "description": "Fixed-term agreements, probationary periods, and practice-defined review cycles require proactive management so that agreements are renewed, extended, or renegotiated on time — not after they lapse. Tracking renewal triggers at the point of generation prevents agreements from becoming stale without notice.",
+      "successIndicators": [
+        "Number of agreements that lapsed or expired without a timely renewal or review initiated",
+        "Percentage of upcoming renewal dates surfaced to the responsible manager with adequate lead time",
+        "Average days between a renewal trigger date and the start of a renewal agreement workflow",
+        "Reduction in employees whose agreements were operating past their stated review date",
+        "Number of renewal cycles completed without requiring back-dating or retroactive corrections"
+      ]
+    },
+    {
+      "title": "Improve supplier agreement management",
+      "description": "Beyond employment agreements, practices manage agreements with vendors, locums, referral partners, and service contractors — each with its own terms, obligations, and renewal cadence. Applying the same model-wizard discipline to these agreements reduces the risk of agreements drifting out of current terms or expiring unnoticed.",
+      "successIndicators": [
+        "Number of active supplier or contractor agreements with a documented review or renewal date",
+        "Percentage of supplier agreements generated from a controlled model vs. ad-hoc drafts",
+        "Reduction in supplier agreement lapses or rollovers without explicit renewal action",
+        "Time to locate and review a specific supplier agreement when a dispute or audit arises",
+        "Number of supplier obligations (payment terms, exclusivity, notice periods) tracked and surfaced before due dates"
+      ]
+    },
+    {
+      "title": "Reduce contract errors",
+      "description": "Required-field enforcement in the wizard means agreements cannot be generated with incomplete terms — eliminating the most common source of contract errors (missing information, wrong role type, incorrect dates) before they reach the signature stage and become expensive to correct.",
+      "successIndicators": [
+        "Number of agreements with errors or omissions identified at or after the signature stage",
+        "Reduction in agreements that required re-execution due to a correctable error in the original",
+        "Percentage of generated agreements passing a completeness check without revision",
+        "Number of agreements where an incorrect role type or environment was applied",
+        "Reduction in legal or HR time spent correcting errors in executed agreements"
+      ]
+    },
+    {
+      "title": "Improve operational governance",
+      "description": "Employment agreements are a governance control — they define terms, obligations, and expectations for the practice's workforce. When agreement creation follows a consistent, model-based process with clear records, owners and managers have the governance foundation they need to manage the practice with confidence.",
+      "successIndicators": [
+        "Percentage of staff roles covered by a current, model-generated agreement",
+        "Reduction in ad-hoc or informal employment arrangements operating without a formal agreement",
+        "Number of governance gaps (missing agreements, outdated terms, untracked obligations) identified and resolved per quarter",
+        "Time to produce a complete picture of all current employment agreements for ownership review",
+        "Percentage of agreement-related operational decisions made with documented contractual basis"
+      ]
+    },
+    {
+      "title": "Improve reporting visibility",
+      "description": "Practices need to see the state of their agreements at a glance — how many are active, how many are pending, how many have upcoming renewal dates, and where obligations are open. Reporting drawn from a single model-based agreement record replaces manual spreadsheets and guesswork.",
+      "successIndicators": [
+        "Time to generate a current status report on all active employment agreements",
+        "Percentage of agreement metrics (active, pending, expiring, obligated) available without manual data assembly",
+        "Reduction in reporting errors caused by agreements being tracked in multiple places",
+        "Number of actionable insights surfaced per reporting cycle (e.g. agreements expiring within 30 days)",
+        "Time saved per month by eliminating manual agreement tracking and status reporting"
+      ]
+    },
+    {
+      "title": "Standardize contract processes",
+      "description": "A single, agreed-upon path from initiating an agreement to generating it — driven by the model wizard — replaces the informal, person-dependent processes that produce inconsistent results and onboarding friction. New staff and managers follow the same process from day one, and the practice's standards are embedded in the tool rather than held in someone's memory.",
+      "successIndicators": [
+        "Percentage of new hires onboarded with an agreement generated through the standard model wizard",
+        "Reduction in process exceptions or workarounds documented per quarter",
+        "Time to train a new manager or HR staff member on the agreement creation process",
+        "Number of agreements created outside the standard process requiring retroactive correction",
+        "Consistency of agreement structure across roles, locations, and hiring managers"
+      ]
+    },
+    {
+      "title": "Create a single source of truth for agreements",
+      "description": "When all employment and supplier agreements are created, stored, and managed through one model-based system, the practice eliminates the fragmentation of agreements spread across email, shared drives, and individual folders. Owners, managers, and reviewers work from the same record — with confidence that what they see is current and complete.",
+      "successIndicators": [
+        "Percentage of active agreements accessible from a single, authoritative system vs. scattered storage",
+        "Reduction in instances where multiple conflicting versions of the same agreement were in circulation",
+        "Time to confirm the current terms of a specific agreement for any active staff member",
+        "Number of requests for an agreement that could not be fulfilled because the record was missing or inaccessible",
+        "Percentage of agreement-related decisions made with reference to the authoritative record rather than informal copies"
+      ]
+    }
+  ],
+  "committee": [
+    {
+      "name": "Owner / Managing Director",
+      "role": "Owner / Managing Director",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "decision_maker",
+      "sortOrder": 0,
+      "interests": [
+        "Protecting the practice from employment disputes that could have been prevented with clear, complete agreements",
+        "Knowing that every staff member has a current, signed agreement on file without having to ask",
+        "Reducing the time between making a hire decision and having a signed agreement in hand",
+        "Ensuring the model employment agreement reflects the actual terms the practice intends to offer — not a generic draft",
+        "Understanding what version of the agreement model each employee is on when policies change",
+        "Keeping the practice out of legal trouble by enforcing consistent, required-term coverage across all agreements",
+        "Having a single place to go when a staff issue requires checking what was actually agreed to",
+        "Making sure the agreement process does not depend on one person's knowledge or memory",
+        "Seeing the full state of all active, pending, and expired agreements without pulling reports manually",
+        "Understanding what the practice is committing to with locum, supplier, and contractor agreements alongside employee agreements"
+      ],
+      "decisionCriteria": [
+        "Does it actually prevent agreements from being generated with missing terms — or can staff still skip required sections?",
+        "How quickly can the practice be up and running with its first model-based agreements after setup?",
+        "Can the wizard be customized to reflect the practice's actual employment terms, not just generic placeholders?",
+        "Is there a record of every agreement ever generated — who initiated it, when, and under which model version?",
+        "What happens when the model needs to be updated — how do we identify and re-paper employees on old versions?",
+        "Is the cost justified by the reduction in legal risk and HR administration time?",
+        "Will this work for the range of roles in a veterinary practice — DVMs, technicians, receptionists, practice managers?",
+        "Can I see the status of all active and pending agreements without logging in and running a manual search every time?",
+        "What does implementation actually require from the practice — who needs to learn what, and how long does it take?",
+        "Is the model agreement up to date with current employment law requirements for the practice's state or region?",
+        "Can we manage locum and contractor agreements through the same system as employee agreements?",
+        "What is the support model if there's a problem mid-hiring cycle and an agreement needs to be corrected or regenerated?"
+      ],
+      "goals": [
+        "Have a signed, model-based employment agreement on file for every staff member within 90 days",
+        "Eliminate the practice's reliance on ad-hoc drafts and informal employment terms",
+        "Ensure any incoming employment dispute can be addressed with a clear, documented agreement record",
+        "Reduce the legal and HR overhead of maintaining current agreements as the practice grows or changes",
+        "Build a process that new managers can follow without needing the owner to supervise every hire",
+        "Know at any point in time which employees are due for a contract review or renewal",
+        "Reduce the time between an accepted offer and a signed agreement to less than two business days",
+        "Make the employment agreement process something the practice is proud of — not a known weak point",
+        "Ensure supplier and contractor agreements are managed with the same rigor as employee agreements",
+        "Have a real answer ready for any legal or compliance audit about the practice's employment documentation"
+      ],
+      "objections": [
+        "We have been using the same employment agreement template for years — why do we need a wizard if it mostly works?",
+        "I am not sure the one-time setup investment pays off given how infrequently we hire new staff",
+        "If the model wizard changes, what stops us from ending up with some employees on old terms and some on new ones?",
+        "I do not want staff to think an AI-generated agreement is less binding or less serious than one a lawyer drafted",
+        "What if the model agreement does not cover a specific term we have negotiated with a particular employee?",
+        "The practice is small — are we paying for features designed for a much larger organization?",
+        "I am worried about the practice's agreement language leaving our system and ending up somewhere we do not control",
+        "What happens if we stop subscribing — can we still access and enforce agreements that were generated through the platform?",
+        "I do not have a dedicated HR person — who owns the setup and ongoing management of this tool?",
+        "If the wizard is the only way to create agreements, what happens when we need something non-standard on a tight deadline?"
+      ],
+      "openQuestions": [
+        "When I walk through the wizard as an Employer for the first time, how much of our practice's actual terms am I entering versus accepting defaults?",
+        "Can I see a sample agreement that the wizard generates for a full-time DVM role before we commit?",
+        "How do we handle an employee who was hired before we started using the wizard — do we re-paper them through the platform?",
+        "If our employment lawyer wants to review the model agreement and suggest changes, where does that happen in the workflow?",
+        "What does the required-field enforcement look like — can I preview which fields are required for a given role type before starting?",
+        "How do I know if the model agreement is current with employment law in our state?",
+        "Can I customize the model for different role types — DVM, technician, receptionist — without creating entirely separate templates?",
+        "Is there a way to see all agreements where a specific clause or term appears, in case we need to update them after a policy change?",
+        "How does an employee access and review their agreement — do they need to create an account or can I send them a link?",
+        "What is the audit trail if an employee later claims they never agreed to a specific term in their agreement?",
+        "Can I set up a reminder so the platform notifies me when a probationary period ends or an annual review date is approaching?",
+        "If I need to add a non-compete or confidentiality clause to a specific agreement, is that supported in the wizard or does it break the model?",
+        "How many agreements can I have in progress at the same time — is there a limit based on our plan?",
+        "What does it look like to run a supplier or locum agreement through the wizard versus an employment agreement?",
+        "If an agreement is rejected or needs to be re-done, does the platform track that history or does it start fresh each time?"
+      ]
+    },
+    {
+      "name": "CEO",
+      "role": "CEO",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "decision_maker",
+      "sortOrder": 1,
+      "interests": [
+        "Making the practice competitive when recruiting by reducing the lag between offer and signed agreement",
+        "Understanding the exposure the practice carries from employment agreements drafted informally in the past",
+        "Ensuring the agreement process scales as the practice adds locations, associates, or support staff",
+        "Maintaining the practice's reputation with staff by handling employment terms professionally and consistently",
+        "Reducing the cost and distraction of employment disputes that stem from ambiguous or incomplete agreements",
+        "Getting clear visibility into which staff are on current agreement terms and which need to be brought up to date",
+        "Ensuring the practice's agreement process does not depend on one manager or admin who holds the knowledge",
+        "Making it easy to bring locum and contract staff on quickly with agreements that hold up if something goes wrong",
+        "Having a documented, auditable agreement record that the practice can point to in any employment dispute or regulatory review",
+        "Understanding how the platform stays current with employment law requirements — versus requiring the practice to self-monitor"
+      ],
+      "decisionCriteria": [
+        "Will the platform reduce the time from hire decision to signed agreement to within our target window?",
+        "Is the model employment agreement built for veterinary practice employment terms, or is it a generic SMB template we have to rework?",
+        "Does the required-field completion enforcement actually prevent incomplete agreements from being generated — or is it advisory?",
+        "How does the platform handle the range of employment types in a veterinary practice — associate DVMs, technicians, part-time, locums?",
+        "Is there a mechanism to identify and re-paper staff whose agreements predate the current model version?",
+        "What is the total cost of ownership including setup, ongoing subscription, and any customization fees?",
+        "Can the practice produce a complete, organized employment documentation package for an audit within a business day?",
+        "Does the platform give me real-time visibility into agreement status without requiring me to log in and pull reports?",
+        "What is the implementation path — do we need a consultant or IT support, or can we set this up ourselves?",
+        "Is the agreement generation process accessible to the employee as well as the employer — and what does that experience look like?",
+        "How does the platform handle a situation where we need to deviate from the model for a specific hire?",
+        "What data portability and exit options exist if we decide to move to a different solution?"
+      ],
+      "goals": [
+        "Establish a professional, consistent agreement process that reflects well on the practice as an employer",
+        "Ensure no staff member is operating under informal or incomplete employment terms",
+        "Reduce the CEO's personal involvement in reviewing and correcting individual employment agreements",
+        "Build an agreement process that supports the practice's growth without becoming a bottleneck",
+        "Close the gap between the practice's intentions as an employer and what is actually documented in agreements",
+        "Reduce the practice's legal exposure from past and future employment agreements",
+        "Make agreement status a visible, manageable metric — not something we discover only when a problem surfaces",
+        "Ensure the practice's supplier and contractor agreements are as well-managed as employee agreements",
+        "Free up management time currently spent on document chasing and agreement administration",
+        "Be able to demonstrate to any auditor or regulator that the practice's employment documentation is complete and current"
+      ],
+      "objections": [
+        "A 45-step wizard sounds like a significant time investment per agreement — what is the realistic time to complete one for a typical hire?",
+        "If we customize the model for our practice, do those customizations survive a model update or do we have to re-apply them?",
+        "We already have outside employment counsel reviewing our agreements — where does this platform fit in that relationship?",
+        "What is the change management lift for getting our practice managers and admins to use the wizard consistently?",
+        "If the wizard generates the agreement but our HR admin still makes changes in a Word document afterward, we have the same problem we started with",
+        "I am concerned about the model being generic and missing terms that are specific to veterinary employment — how is this addressed?",
+        "What happens to agreements already on file — does the platform import them or do we start over?",
+        "How confident are we that the model agreement will hold up in an employment dispute in our jurisdiction?",
+        "If the platform goes down or is unavailable, how do we create agreements in the meantime?",
+        "Is there a meaningful difference between what this platform offers and a well-maintained Word template library?"
+      ],
+      "openQuestions": [
+        "What does the Employer role experience look like through all 45 steps — is there a demo or walkthrough I can review before we sign up?",
+        "Can I see what a fully completed, generated agreement looks like for a DVM associate role specifically?",
+        "How does the wizard handle role-specific clauses — for example, a production-based compensation structure for a DVM?",
+        "If we operate in multiple states, can the wizard adjust required fields or clauses by location?",
+        "What is the process for an employee who wants to negotiate a specific term — does that happen outside the wizard, and how does it get captured?",
+        "How are agreement versions managed — if we update the model, does it flag all existing agreements that are on the old version?",
+        "Can I export all generated agreements as PDFs for our offline records?",
+        "How does the platform handle a situation where an agreement is generated but the employee never signs — does it age out or remain open?",
+        "What is the onboarding process for our existing staff who already have signed agreements elsewhere?",
+        "How do we handle a probationary employment agreement that transitions to a permanent agreement at the end of a trial period?",
+        "Does the platform support countersignature workflows, or does it generate a document that we then manage outside the platform?",
+        "What does the employee experience look like when they receive and review their agreement through the platform?",
+        "Can the practice restrict which staff members have access to initiate or view agreements?",
+        "How does the platform notify us when a renewal date or obligation deadline is approaching?",
+        "What analytics or reporting does the platform provide about our agreement process — average completion time, pending agreements, obligation status?"
+      ]
+    },
+    {
+      "name": "COO",
+      "role": "COO",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "approver",
+      "sortOrder": 2,
+      "interests": [
+        "Making the agreement process something practice managers can execute without escalating to leadership on every hire",
+        "Reducing the operational drag of chasing incomplete drafts, missing signatures, and out-of-date agreements",
+        "Ensuring that the wizard's required-field enforcement maps to the practice's actual operational standards, not just generic minimums",
+        "Getting a real-time view of which agreements are in progress, stalled, or ready for signature without manual follow-up",
+        "Making sure locum and contractor agreements go through the same controlled process as employee agreements",
+        "Reducing the time between a hire decision and the employee starting work by shortening the agreement cycle",
+        "Having a clear record of who initiated each agreement, when it was completed, and what version was used",
+        "Standardizing the agreement process across multiple practice managers or locations without over-centralizing approval",
+        "Ensuring the platform does not create new bottlenecks — agreements need to be able to move through review and signature without waiting for a specific person",
+        "Understanding what the implementation and training requirement is before committing to a rollout"
+      ],
+      "decisionCriteria": [
+        "Can practice managers run the full agreement creation process themselves without needing to escalate or involve the COO?",
+        "Does the workflow status view show me every in-progress and pending agreement across the practice without requiring individual follow-up?",
+        "What is the realistic time savings per hire compared to the current process — not best-case, but typical?",
+        "How does the platform handle a multi-reviewer approval chain — for example, manager review followed by owner sign-off?",
+        "Can required fields and model terms be configured for different role types so that a technician agreement is not identical to a DVM agreement?",
+        "What does the implementation timeline look like for a practice that needs to be operational within 30 days?",
+        "Does the platform support reminders or escalations when an agreement has been sitting in review for too long?",
+        "Is there a clear audit trail that shows when each step was completed and by whom?",
+        "How does the platform handle errors or corrections identified after an agreement has been generated but before it is signed?",
+        "What is the data retention and access policy for agreements after an employee leaves the practice?",
+        "Can we integrate the agreement completion into our onboarding checklist or HR workflow, or does it remain a separate track?",
+        "What happens when the COO or a key approver is unavailable — can approval authority be delegated within the platform?"
+      ],
+      "goals": [
+        "Reduce per-hire operational overhead on agreement creation by at least half compared to the current manual process",
+        "Eliminate the practice's reliance on shared drives and email for agreement management and status tracking",
+        "Ensure practice managers follow a consistent process for every hire regardless of role or timing pressure",
+        "Build the agreement process into onboarding so that a signed agreement is a completed checklist item, not a trailing action",
+        "Ensure all active staff agreements are accessible to authorized managers on demand",
+        "Surface renewal and obligation deadlines before they become missed commitments",
+        "Reduce the number of agreements that require correction or re-execution after the initial signing",
+        "Create a process that scales across additional locations or headcount without increasing COO-level oversight time",
+        "Make agreement status a visible operational metric reviewed in regular management meetings",
+        "Reduce the time spent by the COO personally reviewing and correcting agreement drafts before they reach the signing stage"
+      ],
+      "objections": [
+        "If we implement this but not everyone uses it consistently, we end up with two parallel processes instead of one — how do we prevent that?",
+        "The 45-step wizard sounds time-consuming for a hiring manager who is already stretched thin during a busy period",
+        "We have role-specific terms in some agreements — associate DVM splits, technician licensing support — that may not fit neatly into a model wizard",
+        "I need to see the status of all agreements at once, not just the ones I personally initiated — is that available?",
+        "If we configure the model for our practice and then the platform updates the underlying model, who is responsible for reconciling the differences?",
+        "We run locum agreements on short notice — sometimes within 24 hours — and a multi-step wizard may not be fast enough for that use case",
+        "What is the training burden for practice managers who are not technically confident?",
+        "I am concerned that required-field enforcement may block us from generating an agreement when we need to move quickly and a specific field is legitimately not yet confirmed",
+        "If an agreement needs to be amended after signing, how does that work in the platform — does it create a new version or amend the existing one?",
+        "What is the COO's ongoing administrative burden to maintain the platform — configuration updates, user management, model revisions?"
+      ],
+      "openQuestions": [
+        "Can I see a demonstration of the full Employer workflow for a practice manager initiating a DVM associate agreement — all steps?",
+        "What does the status dashboard look like for a COO view — all agreements across all managers, filterable by status and role type?",
+        "How does the platform handle a role type we use that might not be covered by the default model — for example, a practice-specific hybrid role?",
+        "If a practice manager starts an agreement and leaves it incomplete for three days, does the platform escalate or notify anyone?",
+        "Can we configure the required fields differently for a locum agreement versus a full-time employment agreement?",
+        "What does the re-execution process look like if we discover an error in a signed agreement — does the platform support a superseding version workflow?",
+        "How do we delegate approval authority when I am unavailable — can another approver be designated in the platform?",
+        "What does the employee-side experience look like — do they see the same wizard, or a simplified review interface?",
+        "Can the platform generate a summary of open obligations across all active agreements — probation end dates, review dates, pay adjustments?",
+        "How does the platform handle a partial-year agreement — for example, a DVM hired mid-year with a pro-rated review date?",
+        "What is the notification and reminder system — can I configure who gets notified and at what lead time before a renewal or obligation date?",
+        "Can managers view agreements they did not initiate — for example, a new practice manager taking over from a previous one?",
+        "What does the process look like if an employee declines to sign — does the platform track that, and what is the next step?",
+        "How does the platform handle agreements for staff in multiple locations if we expand?",
+        "Is there a bulk-import or migration path for agreements that were executed before we started using the platform?"
+      ]
+    },
+    {
+      "name": "Comptroller",
+      "role": "Comptroller",
+      "influence": "medium",
+      "riskLevel": "medium",
+      "decisionAuthority": "approver",
+      "sortOrder": 3,
+      "interests": [
+        "Understanding the subscription cost and whether it is predictable — per user, per agreement, or a flat fee",
+        "Verifying that the agreement records the practice will rely on for payroll, benefits, and compensation decisions are accurate and complete",
+        "Ensuring that compensation terms captured in the agreement wizard match what is entered in the payroll system",
+        "Getting a clear view of total contract-related spend — including any legal review fees the platform is expected to reduce",
+        "Understanding the financial obligation terms embedded in agreements generated through the platform — particularly termination pay, notice periods, and review cycles that trigger compensation changes",
+        "Making sure there is an audit trail for every agreement that a third-party auditor or accountant would accept as sufficient",
+        "Reducing the instances where a compensation dispute requires the practice to produce an employment agreement that turns out to be inconsistent with payroll records",
+        "Understanding the cost per agreement at current hiring volume to evaluate whether the ROI is defensible",
+        "Knowing what happens to agreement data if the practice cancels its subscription — is the data exportable and in what format?",
+        "Ensuring the platform does not introduce financial commitments or billing surprises outside the agreed subscription terms"
+      ],
+      "decisionCriteria": [
+        "Is the pricing model predictable and budget-able without per-agreement overage fees that are difficult to forecast?",
+        "Does the agreement wizard capture compensation terms — salary, hourly rate, production split — in a standardized, auditable format?",
+        "Is there an exportable record of every generated agreement with generation date, model version, and signatory confirmation?",
+        "What does the platform cost per year at our current hiring volume, and what does that number look like if we double headcount?",
+        "Are the financial obligation terms in the model agreement — notice periods, severance, review triggers — consistent with what the practice can actually support?",
+        "Does the platform produce documentation sufficient to defend a compensation or termination decision in an employment dispute?",
+        "What are the cancellation and data-portability terms — can we export all agreement records before ending the subscription?",
+        "Is the billing transparent — can I see exactly what we are paying for and reconcile it against our usage?",
+        "Does the platform require any third-party integrations that would introduce additional ongoing costs?",
+        "Can the practice reduce outside legal review costs by using the model wizard — and by how much, realistically?",
+        "Is there a free trial or pilot period that allows the practice to validate the platform before committing to an annual fee?",
+        "What is the implementation cost — is setup included or billed separately?"
+      ],
+      "goals": [
+        "Understand the full cost of the platform before the purchase decision is made — no surprises after signing",
+        "Reduce the practice's outside legal spend on employment agreement drafting and review by using a validated model",
+        "Ensure that compensation terms recorded in employment agreements are consistent with actual payroll commitments",
+        "Build a complete, auditable record of employment agreements that supports year-end HR and financial reporting",
+        "Reduce the financial risk exposure from poorly documented employment terms — particularly around termination and notice obligations",
+        "Make sure the platform fits within the practice's operating budget without requiring a special budget request",
+        "Eliminate the cost of re-executing agreements due to errors in original drafts",
+        "Understand what financial obligations the practice is committing to — at volume — when it rolls out model-based agreements",
+        "Establish a predictable agreement process cost that can be included in practice management overhead",
+        "Reduce the time spent by finance staff reconciling compensation terms from agreements against payroll records"
+      ],
+      "objections": [
+        "The subscription cost may not be justified for the volume of agreements we generate — what is the break-even point at our hiring rate?",
+        "If we are already paying employment counsel for annual agreement reviews, I need to understand what costs this replaces versus adds to",
+        "I am concerned about data residency — where are our agreement records stored, and who has access to them?",
+        "What happens to our agreements if the company is acquired or shuts down — do we lose access to records we need for ongoing employment?",
+        "If we pay for an annual subscription and the model does not meet our needs after six months, what are the exit terms?",
+        "The platform captures compensation terms, but what is the process for ensuring those terms are reflected correctly in payroll after an agreement is signed?",
+        "I need to see the pricing page and billing terms before this gets to a purchase decision — not a quote, the actual public or contract terms",
+        "How does the platform handle currency or local tax compliance if we expand to a different market?",
+        "Is there an additional cost for customizing the model agreement, or is that included?",
+        "What financial reporting does the platform provide that would actually save the practice money or time?"
+      ],
+      "openQuestions": [
+        "What is the exact pricing model — per seat, per agreement generated, or a flat practice fee?",
+        "Is there a cost difference between an Employer account and an Employee account if both require access?",
+        "Can I export all generated agreements in a format that works with our document management system?",
+        "What does the audit log look like — does it record who generated, reviewed, and signed each agreement with timestamps?",
+        "If a compensation term changes mid-year and an agreement is amended, does the platform create a versioned record of both the original and the amendment?",
+        "What are the data retention terms — how long does the platform keep agreement records after an employee terminates?",
+        "Can the platform provide a summary of all financial obligations embedded in active agreements — notice periods, severance, compensation review triggers?",
+        "What is the process for disputing a billing charge if we believe we were charged for something we did not use?",
+        "Is the model agreement reviewed by employment counsel, and is that review disclosed — can we see when it was last updated?",
+        "If we have a year where we generate zero agreements because there are no new hires, do we still pay the full subscription?",
+        "What does the cancellation and data-export process look like — can you walk me through exactly what we get and in what format?",
+        "Does the platform offer any reporting on the cost savings attributable to using the model wizard versus prior outside-legal spend?",
+        "If we add a second practice location, does that require an additional subscription or is it covered under the existing account?",
+        "Are there implementation or onboarding fees on top of the subscription, or is setup included?",
+        "What financial controls exist to prevent an unauthorized staff member from generating an agreement that commits the practice to terms the owner has not approved?"
+      ]
+    },
+    {
+      "name": "Finance Manager",
+      "role": "Finance Manager",
+      "influence": "medium",
+      "riskLevel": "medium",
+      "decisionAuthority": "influencer",
+      "sortOrder": 4,
+      "interests": [
+        "Reconciling compensation terms committed in employment agreements against what is entered in the payroll system",
+        "Understanding the total cost of the platform relative to the legal and administrative spend it is expected to reduce",
+        "Ensuring that financial obligation terms in the model agreement — wage rates, review triggers, notice periods — are captured accurately before agreements are generated",
+        "Making sure the practice does not unknowingly commit to financial terms in an agreement that differ from what management approved",
+        "Getting visibility into upcoming financial obligations triggered by agreements — annual review cycles, compensation adjustments, probation end dates",
+        "Ensuring that agreement records can be retrieved quickly during payroll audits or compensation disputes without disrupting the finance team",
+        "Understanding how agreement amendments are recorded when a compensation term changes mid-term",
+        "Reducing the manual effort of cross-checking employment agreement terms against payroll and HR records each period",
+        "Making sure the subscription cost fits within the allocated HR operations budget without a separate capital request",
+        "Confirming that the practice's agreement records satisfy what the accountants need at year-end without additional preparation"
+      ],
+      "decisionCriteria": [
+        "Does the wizard capture compensation terms — base salary, hourly rate, production percentage — in a structured, auditable format that can be reconciled against payroll?",
+        "Is the subscription pricing predictable enough to include in the annual operations budget without uncertainty?",
+        "Can the finance team pull an agreement record on demand during a payroll audit without requesting access from IT or operations?",
+        "Does the platform provide a record of when a compensation term was set, changed, or renewed — with a clear version history?",
+        "Are the financial obligation terms in the model agreement — notice periods, review triggers, overtime provisions — realistic for the practice's actual payroll commitments?",
+        "Can the platform summarize upcoming financial obligations across all active agreements — for example, agreements with review dates in the next 60 days?",
+        "Is the data export format compatible with our accounting and payroll systems?",
+        "What is the realistic reduction in outside legal fees from using the model agreement versus our current drafting process?",
+        "Is there a clear separation between the agreement generation process and the payroll entry process — and does the platform support that handoff?",
+        "Does the platform's billing model allow the finance team to accurately forecast the annual cost of agreement management?"
+      ],
+      "goals": [
+        "Ensure that every active employee's compensation terms are accurately reflected in both their signed agreement and the payroll system",
+        "Reduce the finance team's time spent cross-checking agreement terms against payroll records during audits or disputes",
+        "Eliminate the instances where a compensation adjustment was documented in payroll but never reflected in an updated employment agreement",
+        "Get advance visibility into upcoming financial obligations triggered by agreements so they can be budgeted for",
+        "Reduce the administrative overhead of assembling employment agreement records for year-end accounting or tax preparation",
+        "Make sure the platform's cost is clearly attributable to reduced legal or HR administration spend in the practice's financial reporting",
+        "Ensure the finance team has read access to agreement records without being involved in the agreement creation or approval workflow",
+        "Reduce the risk of an undocumented financial commitment in an employment agreement that creates an unexpected payroll obligation",
+        "Support the Comptroller's approval of the platform by providing a clear cost-benefit analysis from the finance perspective",
+        "Establish a process for recording agreement amendments so the financial record stays current when terms change"
+      ],
+      "objections": [
+        "If the agreement wizard captures a compensation figure that is later corrected in payroll, there is no clear process for updating the agreement — we just create another version of the same problem",
+        "The finance team is not in the agreement creation workflow — if we need a compensation review date alert, we need to be notified separately from the operational agreement team",
+        "I am not confident that the model agreement's financial terms are current with our state's wage and hour requirements — who validates that?",
+        "The platform adds a subscription cost without a clear line showing which existing costs it replaces",
+        "If the platform stores agreement records with compensation data, that is sensitive information — I need to understand the access controls",
+        "We currently produce an annual employment agreement summary for the accountants — does the platform make that easier or does it create a parallel report to maintain?",
+        "I need the compensation terms in the generated agreement to be in a format I can use directly — not something I have to reformat into a spreadsheet",
+        "If we have a dispute with an employee about their compensation, I need to be able to pull the exact agreement they signed — including the version of the model — within minutes",
+        "The finance team's involvement in the agreement process is currently limited — adding a new tool creates a workflow change we have to plan for",
+        "What is the process for amending a compensation term mid-term — does the wizard support an amendment workflow or do we have to regenerate the whole agreement?"
+      ],
+      "openQuestions": [
+        "Can I see what the compensation section of a generated DVM associate agreement looks like — specifically how base salary and production split are captured?",
+        "Does the platform provide any notification when an agreement contains a compensation review date that is coming up within the next 60 days?",
+        "Can the finance team be set up as read-only viewers of all generated agreements without being in the creation or approval workflow?",
+        "If a compensation term in an existing agreement needs to be updated, what is the amendment process — does it create a new version or overwrite the original?",
+        "What does the export look like — can I export a table of all active agreements with key compensation fields in a spreadsheet format?",
+        "How does the platform handle an agreement that references a compensation structure that changes based on a contingency — for example, production over a threshold?",
+        "If we are audited by the state labor board and need to produce compensation records, what does the platform give us and how quickly?",
+        "Can the platform generate a summary of financial obligations embedded in all active agreements — notice periods, severance provisions, review trigger dates?",
+        "What is the billing cycle — monthly or annual — and is there a discount for paying annually?",
+        "Does the platform track when a compensation amendment was executed versus when the original agreement was signed, so the record shows the full history?",
+        "Can I configure the platform to alert the finance team specifically when a new agreement is generated that includes a compensation figure above a threshold?",
+        "How does the platform handle a situation where the employee signs the agreement but the compensation figure entered was incorrect — is there a correction workflow?",
+        "What access controls prevent a practice manager from generating an agreement with compensation terms that have not been approved by the owner or finance team?",
+        "Is there a report that shows all agreements expiring or up for renewal in the next quarter — organized by employee and financial obligation?",
+        "Can I see the history of model versions used to generate agreements — so I can tell the accountants which version of the agreement model was in effect at a given point in time?"
+      ]
+    }
+  ]
+}

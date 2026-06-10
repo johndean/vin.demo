@@ -90,6 +90,22 @@ ipcMain.handle('data:fetch', async () => {
   }
 });
 
+// Write through the web console's table-driven admin endpoint (saving/updating/archiving demo tours).
+ipcMain.handle('admin:mutate', async (_e, body) => {
+  if (!sessionCookie) return { ok: false, error: 'not signed in' };
+  try {
+    const res = await fetch(`${AUTH_BASE}/api/console/admin`, {
+      method: 'POST',
+      headers: { Cookie: sessionCookie, 'content-type': 'application/json' },
+      body: JSON.stringify(body || {}),
+    });
+    const json = await res.json().catch(() => ({}));
+    return res.ok ? { ok: true, id: json?.id } : { ok: false, error: json?.error || `HTTP ${res.status}` };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+});
+
 // ── Live session SERVICE ───────────────────────────────────────────────────────────────────────
 // DEFAULT (and the only path in the packaged app): stream the real engine loop from the HOSTED
 // service over an auth-gated SSE connection. The credentials, Chromium, and engine all live
@@ -204,6 +220,27 @@ ipcMain.handle('session:start', async (_e, { target } = {}) => {
 });
 // Interactive session: open the hosted /session/interactive SSE; questions are sent via session:ask.
 ipcMain.handle('session:startInteractive', async (_e, { target } = {}) => { stopSession(); return startHostedSession('/session/interactive' + targetQuery(target)); });
+// Scripted workflow runner: open the hosted /session/scripted SSE for a chosen workflow — the engine walks
+// its screens in fixed order (NO LLM), streaming a screenshot + caption per step. Advanced via session:advance.
+ipcMain.handle('session:startScripted', async (_e, { target, workflowId } = {}) => {
+  stopSession();
+  const q = targetQuery(target);
+  const wf = workflowId ? `${q ? '&' : '?'}workflowId=${encodeURIComponent(workflowId)}` : '';
+  return startHostedSession('/session/scripted' + q + wf);
+});
+ipcMain.handle('session:advance', async (_e, { dir, index } = {}) => {
+  if (!sessionCookie) return { ok: false, error: 'not signed in' };
+  try {
+    const res = await fetch(`${ENGINE_BASE}/session/advance`, {
+      method: 'POST',
+      headers: { Cookie: sessionCookie, 'content-type': 'application/json' },
+      body: JSON.stringify({ dir, index }),
+    });
+    return { ok: res.ok, status: res.status };
+  } catch (err) {
+    return { ok: false, error: String(err && err.message ? err.message : err) };
+  }
+});
 ipcMain.handle('session:ask', async (_e, { text, speaker }) => {
   if (!sessionCookie) return { ok: false, error: 'not signed in' };
   try {

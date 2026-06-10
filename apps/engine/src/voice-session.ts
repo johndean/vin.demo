@@ -16,6 +16,9 @@ import { googleTTS } from './voice/tts-google.js';
 import { splitSentences } from './voice/segmenter.js';
 import { profileById, DEFAULT_PROFILE, VOICE_PROFILES } from './voice/profiles.js';
 import type { STTStream, VoiceProfile } from './voice/providers.js';
+import { loadPersona } from '../../../src/core/persona.js';
+import { beginCostSession, recordVoice } from '../../../src/core/cost.js';
+import { journeyWalkPlan, startJourneyRun, completeJourneyRun } from '../../../src/core/journeys.js';
 
 const SAMPLE_RATE = 16000;
 
@@ -24,12 +27,16 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
 
   const ctx: SessionCtx | null = await bootSession('voice', target);
   if (!ctx) { send({ type: 'error', message: 'No product configured — pick a target or set PO_VIN_PRODUCT_ID.' }); try { ws.close(); } catch { /* */ } return; }
+  beginCostSession(ctx.sessionId); // attribute this voice session's LLM + STT/TTS costs to it
 
-  let profile: VoiceProfile = DEFAULT_PROFILE;
+  // If a specialist is active (hand-off), speak in its configured voice; else the default profile.
+  const bootPersona = await loadPersona(ctx.personaId);
+  let profile: VoiceProfile = bootPersona?.voiceProfileId ? profileById(bootPersona.voiceProfileId) : DEFAULT_PROFILE;
   let stt: STTStream | null = null;
   let answering = false;
   let interrupted = false;        // barge-in flag: stop emitting TTS for the current answer
   let ttsChain: Promise<void> = Promise.resolve();
+  let sttBytes = 0;               // LINEAR16 @16kHz mono bytes for the current utterance → STT audio seconds
   const speaker = 'Procurement';
 
   send({ type: 'start', product: ctx.productName, scenario: 'Voice', mode: ctx.mode, loop: LOOP, sessionId: ctx.sessionId, interactive: true, voice: profile.id, profiles: VOICE_PROFILES.map((p) => ({ id: p.id, label: p.label })) });
@@ -41,6 +48,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
       if (interrupted) return;
       try {
         const { audio, mime } = await googleTTS.synthesize(sentence, profile);
+        void recordVoice('tts', sentence.length, { voice: profile.id }); // TTS billed by characters synthesized
         if (interrupted) return;
         if (audio.length) send({ type: 'audio', mime, data: audio.toString('base64') });
       } catch (e: any) {
@@ -73,20 +81,58 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     }
   };
 
-  // Opening scenario (operator-set): speak the first answer automatically, on the operator's framing.
-  if (target.scenario?.trim()) void runVoiceTurn(target.scenario.trim());
+  // ── Journey WALK (voice-led, operator-paced) — the desktop sends {type:'journey_next'} to advance one
+  // step; the engine drives the live product to that screen and SPEAKS the step's warm narration. A mic
+  // question is an off-script turn (runVoiceTurn → consumes NO journey step, the graph gates on
+  // journeyAdvance), after which the desktop resumes with journey_next. The engine owns completion so the
+  // client knows when to stop advancing. Operator-paced (one step per control) avoids racing two invokes
+  // on the same thread — walk steps and questions are serialized by `answering`.
+  const walk = ctx.journeyId ? await journeyWalkPlan(ctx.journeyId).catch(() => null) : null;
+  const walkPlan = walk?.plan ?? [];
+  let walkStep = 0;
+  let walkRun: { runId: string } | null = null;
+  if (ctx.journeyId && walkPlan.length) {
+    send({ type: 'journey_start', journey: walk!.journey.name, goal: walk!.journey.businessGoal ?? '', steps: walkPlan.length, sessionId: ctx.sessionId });
+    walkRun = await startJourneyRun(ctx.journeyId, ctx.sessionId).catch(() => null);
+  } else if (ctx.journeyId) {
+    send({ type: 'journey_unwalkable', message: 'This journey has no walkable steps yet — author its workflow(s) first.' });
+  }
+  const runWalkStep = async () => {
+    if (!walkPlan.length) return;
+    if (answering) { send({ type: 'busy', message: 'One moment — finishing this step.' }); return; }
+    if (walkStep >= walkPlan.length) { send({ type: 'journey_complete', steps: walkPlan.length }); return; }
+    const idx = walkStep;
+    answering = true; interrupted = false;
+    try {
+      send({ type: 'journey_step', index: idx, total: walkPlan.length, kind: walkPlan[idx].stepKind, node: walkPlan[idx].nodeLabel ?? null });
+      await runTurn(ctx, { speaker: 'Presenter', text: walkPlan[idx].caption ?? 'next', advance: true }, voiceEmit);
+      await ttsChain;
+      walkStep = idx + 1;
+      if (walkStep >= walkPlan.length) { if (walkRun) await completeJourneyRun(walkRun.runId, 'completed').catch(() => {}); send({ type: 'journey_complete', steps: walkPlan.length }); }
+    } catch (e: any) {
+      send({ type: 'error', message: String(e?.message ?? e) });
+    } finally {
+      answering = false; send({ type: 'turn_done' });
+    }
+  };
+
+  // Open the demo: a pinned journey AUTO-plays its first step (voice-led); otherwise an operator-set
+  // opening scenario is asked. Subsequent steps are driven by the client's {type:'journey_next'}.
+  if (ctx.journeyId && walkPlan.length) void runWalkStep();
+  else if (target.scenario?.trim()) void runVoiceTurn(target.scenario.trim());
 
   ws.on('message', (data: any, isBinary: boolean) => {
-    if (isBinary) { if (stt) stt.write(Buffer.isBuffer(data) ? data : Buffer.from(data)); return; }
+    if (isBinary) { if (stt) { const b = Buffer.isBuffer(data) ? data : Buffer.from(data); stt.write(b); sttBytes += b.length; } return; }
     let msg: any; try { msg = JSON.parse(data.toString()); } catch { return; }
     switch (msg?.type) {
       case 'mic_start':
         interrupted = true; // user is talking → cut off any current TTS (barge-in)
         if (stt) { try { stt.end(); } catch { /* */ } }
+        sttBytes = 0; // meter this utterance's audio for STT cost
         stt = googleSTT.open({
           sampleRate: SAMPLE_RATE,
           onInterim: (t) => send({ type: 'transcript', text: t, final: false }),
-          onFinal: (t) => { send({ type: 'transcript', text: t, final: true }); stt = null; if (t) void runVoiceTurn(t); },
+          onFinal: (t) => { send({ type: 'transcript', text: t, final: true }); stt = null; void recordVoice('stt', sttBytes / 32000, {}); sttBytes = 0; if (t) void runVoiceTurn(t); },
           onError: (e) => { send({ type: 'stt_error', message: e.message }); stt = null; },
         });
         send({ type: 'listening' });
@@ -103,6 +149,9 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
         break;
       case 'text': // typing is allowed in the voice panel too
         void runVoiceTurn(String(msg.text ?? ''));
+        break;
+      case 'journey_next': // advance the pinned journey one step (voice-led walk; operator-paced)
+        void runWalkStep();
         break;
     }
   });

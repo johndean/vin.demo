@@ -71,6 +71,7 @@ export class VoiceClient {
 
   setVoice(id: string) { try { this.ws?.send(JSON.stringify({ type: 'voice', id })); } catch { /* */ } }
   sendText(text: string) { try { this.ws?.send(JSON.stringify({ type: 'text', text })); } catch { /* */ } }
+  next() { try { this.ws?.send(JSON.stringify({ type: 'journey_next' })); } catch { /* */ } } // advance the voice-led journey walk one step
   close() { this.stopMic(); this.stopPlayback(); try { this.ws?.close(); } catch { /* */ } try { void this.ac?.close(); } catch { /* */ } this.ac = null; }
 
   private async play(b64: string) {

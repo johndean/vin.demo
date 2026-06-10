@@ -1,0 +1,607 @@
+{
+  "product": "expense.vin",
+  "outcomes": [
+    {
+      "title": "Reduce expense approval delays",
+      "description": "Cut the time reports sit idle at the manager and accounting review stages so employees are not chasing approvals and finance is not firefighting at month-end. Fewer reports aging past the 48-hour SLA targets means faster close and higher staff trust in the process.",
+      "successIndicators": [
+        "Average manager-review stage time drops below the 48-hour SLA target measured on the SLA & Cycle Time dashboard",
+        "Percentage of in-flight reports showing an SLA breach falls week over week",
+        "Number of reports that have waited more than five business days at manager review reaches zero",
+        "On-time rate for the accounting review stage reaches ≥90% monthly"
+      ]
+    },
+    {
+      "title": "Accelerate reimbursements",
+      "description": "Reduce the end-to-end time from report submission to the employee receiving payment so out-of-pocket expenses do not sit unresolved for weeks. Faster reimbursement cycles reduce staff dissatisfaction and limit the working-capital burden on individual employees.",
+      "successIndicators": [
+        "Average total cycle time from submission to Reimbursed status falls below a defined target (e.g., ten business days) as tracked on the SLA & Cycle Time dashboard",
+        "Reimbursement Queue backlog (reports in Approved or Queued status not yet paid) stays below a set threshold at any point in the month",
+        "Payment batch creation-to-posting cycle completes within 72-hour SLA target",
+        "Number of reports that stall in the Queued for Reimbursement stage beyond three days reaches zero",
+        "Employee complaints or finance help-desk tickets about missing reimbursements decrease measurably quarter over quarter"
+      ]
+    },
+    {
+      "title": "Improve expense visibility",
+      "description": "Give finance and management a real-time, accurate picture of where every submitted expense report stands — from draft through reimbursed — so no report is invisible and no spend is a surprise at close. FX-normalized totals across the Accounting Dashboard and Spend Analytics mean leaders see the full picture, not just what has been coded.",
+      "successIndicators": [
+        "100% of in-flight reports visible and status-tracked in the Accounting Dashboard at any point in the month",
+        "Spend Analytics materialized views refreshed and reviewed at least weekly by the finance team",
+        "Zero reports discovered during month-end close that were not reflected in the accounting dashboard during the period",
+        "Department managers can view their team spend on the Department Activity screen without requesting a report from finance",
+        "Finance can produce a full filtered report register CSV in under five minutes on request"
+      ]
+    },
+    {
+      "title": "Reduce manual expense administration",
+      "description": "Eliminate the spreadsheets, email threads, and manual status-chasing that consume finance and manager time today by routing every report through a structured, automated workflow. Policy checks run automatically at submission, GL coding happens inline on the Review Queue, and payment batches replace manual bank entry.",
+      "successIndicators": [
+        "Hours per week spent by accounting staff manually following up on report status drops by a measurable amount after go-live",
+        "Zero expense reports tracked outside expense.vin (no parallel spreadsheets or email approvals)",
+        "GL coding completed inline during the accounting review stage for ≥95% of lines without offline spreadsheet work",
+        "Payment batch preparation time (from queue selection to NACHA export) drops below a defined target",
+        "Number of finance staff manually emailing managers about overdue approvals reaches zero"
+      ]
+    },
+    {
+      "title": "Improve policy compliance",
+      "description": "Ensure every submitted expense automatically runs against the organization's meal, lodging, airfare, entertainment, and receipt rules before a manager ever sees the report. Blocking policies stop non-compliant submissions; warning policies surface issues at review — so finance spends time on exceptions, not hunting violations.",
+      "successIndicators": [
+        "Percentage of submitted reports with at least one blocking policy violation (missing receipt ≥$25, missing FX rate) trends toward zero as employees learn the rules",
+        "Policy-violation count visible in Spend Analytics decreases month over month",
+        "Ratio of warning-level flags (meals, lodging, airfare, entertainment) that are waived with a valid reason versus waived without reason tracked in Controls & Compliance",
+        "Zero reports approved with an unresolved blocking exception (enforced by the system)",
+        "Employee clarification-request rate for receipt and policy issues drops as staff internalize submission requirements"
+      ]
+    },
+    {
+      "title": "Strengthen financial controls",
+      "description": "Enforce separation of duties and the approval matrix consistently on every report without relying on manual oversight: no one approves their own report, no one reimburses their own claim, and over-threshold reports always trigger executive co-approval. Controls run at the system level, not the honor system.",
+      "successIndicators": [
+        "Zero reports approved by the same person who submitted them (SoD violation rate = 0%)",
+        "100% of reports totaling $2,500 or more routed through executive co-approval before reaching accounting review",
+        "SoD & policy violations rollup in Controls & Compliance shows zero open SoD breaches at month-end",
+        "Payment batches posted by a different user than the preparer on 100% of batches (separation of duties enforced)",
+        "Fraud monitor panel in Controls & Compliance shows no unreviewed high-risk flags at close"
+      ]
+    },
+    {
+      "title": "Improve audit readiness",
+      "description": "Maintain a complete, tamper-evident record of every report, approval, adjustment, and payment so audits can be satisfied quickly without reconstructing history from emails and spreadsheets. The hash-chained audit log and one-click CSV export mean the organization is audit-ready every day, not just when an audit is announced.",
+      "successIndicators": [
+        "Audit log integrity check in the Platform Overview (Admin) and Controls & Compliance shows a clean hash-chain verdict at all times",
+        "Time to produce a complete expense audit package for a given period drops to under one hour",
+        "100% of expense transactions have a corresponding immutable audit-log entry visible in the Audit Log screen",
+        "External auditor findings related to missing documentation or unverifiable approvals reach zero",
+        "Audit CSV export (including Hash column) validated against the on-screen trail with zero discrepancies"
+      ]
+    },
+    {
+      "title": "Reduce expense fraud risk",
+      "description": "Surface duplicate receipts, duplicate submissions, and anomalous spend patterns before they reach payment, so that fraud is caught in the workflow rather than discovered in a post-hoc review. The fraud monitor, exception queue, and immutable audit trail together create a layered detection environment.",
+      "successIndicators": [
+        "Duplicate-receipt exceptions flagged and resolved or waived in the Exception Queue before payment on 100% of cases",
+        "Fraud monitor panel in Controls & Compliance reviewed and cleared at least monthly with documented dispositions",
+        "Zero reports paid that contained an open duplicate-submission exception",
+        "Number of after-the-fact fraud discoveries (not caught by the exception queue) trends toward zero",
+        "All exception waivers recorded with a reason and visible in the audit trail for post-hoc review"
+      ]
+    },
+    {
+      "title": "Improve cash flow visibility",
+      "description": "Give finance a forward-looking view of committed but unpaid expense liability — reports that are approved or queued but not yet reimbursed — so cash-flow forecasts reflect actual obligations rather than only booked payments. FX-normalized totals mean multi-currency spend is visible in a single USD view.",
+      "successIndicators": [
+        "Total approved-and-queued expense liability visible at any point from the Reimbursement Queue and Accounting Dashboard without manual reconciliation",
+        "Finance team can forecast the next payment batch total before building it based on the current Approved queue",
+        "Month-end accrual for unpaid approved expenses matches the Reimbursement Queue total within 1%",
+        "FX-normalized spend totals in Spend Analytics reconcile to general-ledger postings with no unexplained variance",
+        "Surprise approved-expense liabilities (discovered after period close) reach zero"
+      ]
+    },
+    {
+      "title": "Improve finance team productivity",
+      "description": "Let accounting staff process more reports with less effort by giving them a structured review queue, inline GL coding, a dedicated exception worklist, and one-click payment batch creation — instead of toggling between spreadsheets, email, and a general ledger. The goal is more reports processed per staff-hour at higher quality.",
+      "successIndicators": [
+        "Average number of reports processed per accounting FTE per week increases measurably post go-live",
+        "Time spent on exception resolution (per report) falls as the Exception Queue surfaces and tracks flags systematically",
+        "Finance staff are able to complete a full month-end close cycle on schedule without overtime",
+        "Accounting staff report (in periodic check-ins) that manual steps and context-switching have decreased",
+        "Payment batch preparation and NACHA export completed in a single session without external tools"
+      ]
+    },
+    {
+      "title": "Reduce month-end processing effort",
+      "description": "Compress the time and scramble required to close a period by keeping the expense pipeline current throughout the month — so accounting teams are not catching up on a backlog when the books need to close. Period lock and close controls in the admin configuration ensure no late postings slip through.",
+      "successIndicators": [
+        "All expense reports submitted in the current period reach Reimbursed or a terminal status before the period close date without a dedicated crunch",
+        "Accounting period lock and close executed on schedule for 100% of periods with no retroactive reopen requests",
+        "Exception backlog on the Accounting Dashboard reaches zero at least three business days before period close each month",
+        "Number of reports still in Manager Review on the last day of the period falls below a defined threshold",
+        "Time to produce a full period-end expense export (All Reports CSV, filtered to the period) drops below fifteen minutes"
+      ]
+    },
+    {
+      "title": "Improve expense accountability",
+      "description": "Create a clear record of who submitted what, who approved it, who adjusted it, and when — so every expense decision has an identifiable owner and managers are accountable for their teams' spend. The workflow timeline on every report and the immutable audit log make accountability structural, not aspirational.",
+      "successIndicators": [
+        "Every approved report has at least one named manager-stage approver recorded in the Workflow Timeline",
+        "Zero reports where the approving manager is unknown or unrecorded at month-end",
+        "Department Activity screen shows per-member spend that managers review and can attest to each period",
+        "All adjustments made by accounting staff include a reason and are visible in the per-report audit trail",
+        "Rejected reports include a documented rejection reason traceable to the accountable approver"
+      ]
+    },
+    {
+      "title": "Standardize expense workflows",
+      "description": "Replace ad-hoc, inconsistent approval and reimbursement practices with a single defined process — manager review, (executive co-approval for high-value reports), accounting review, and payment — that every expense follows regardless of department or submitter. Categories, GL mappings, and policies are configured once and applied universally.",
+      "successIndicators": [
+        "100% of expense reports processed through the structured New Report Wizard → manager → accounting → reimbursement workflow with zero off-system approvals",
+        "All expense categories and their GL defaults configured and active in the admin configuration with no ad-hoc category requests",
+        "Policy enforcement (block and warn rules) applied uniformly across all departments with no manual exceptions outside the waiver process",
+        "New staff can submit a complete, compliant report without finance intervention within their first pay period",
+        "Zero reports processed via email approval or external spreadsheet after go-live"
+      ]
+    },
+    {
+      "title": "Improve receipt and document management",
+      "description": "Ensure every expense with a receipt requirement has an attached, retrievable document before the report reaches finance — eliminating the back-and-forth over missing receipts and giving auditors access to source documents without hunting through email. Blocking policy checks at submission enforce the receipt threshold rule, and signed receipt URLs make retrieval immediate.",
+      "successIndicators": [
+        "Percentage of lines in receipt-required categories that arrive at accounting review without a receipt attachment drops to zero",
+        "Receipt-missing exceptions in the Exception Queue reach zero for reports over the $25 receipt-required threshold",
+        "Finance can retrieve any receipt for any approved report in under two minutes using the Receipts tab on the Report Detail",
+        "Clarification requests sent back to employees specifically for missing receipts decrease by a measurable percentage post go-live",
+        "Audit sample requests for receipt documentation are fulfilled from expense.vin without requiring email retrieval"
+      ]
+    },
+    {
+      "title": "Improve reporting accuracy",
+      "description": "Produce financial reports — spend by category, by department, by period — that match the general ledger because every line has a GL code assigned at the accounting review stage and FX conversion is applied consistently at submission. Eliminating manual data aggregation eliminates the transcription errors that make reports unreliable.",
+      "successIndicators": [
+        "Spend Analytics totals (FX-normalized) reconcile to general-ledger period-end postings within 1% without manual adjustment",
+        "Zero report lines reach Approved status without an assigned GL account (enforced by Approve & code gating)",
+        "Monthly spend-by-category and spend-by-department reports generated directly from expense.vin without offline rework",
+        "Variance between accrued expense liability (from Reimbursement Queue) and actual cash outflow narrows to within policy tolerance",
+        "Finance team confidence in the accuracy of monthly expense reports (measured by reduction in after-the-fact restatements) improves measurably year over year"
+      ]
+    },
+    {
+      "title": "Reduce reimbursement disputes",
+      "description": "Eliminate the employee complaints and finance back-and-forth that arise when reimbursement amounts differ from what was submitted — by making policy adjustments visible, documented, and communicated through the workflow rather than handled informally. Employees see their reimbursement tracking screen; adjustments have recorded reasons.",
+      "successIndicators": [
+        "Number of employee inquiries to finance about reimbursement status or amount drops measurably post go-live",
+        "All accounting adjustments to approved amounts include a recorded reason visible to the submitting employee via the Workflow Timeline",
+        "Employee clarification-request round trips (report returned → resubmitted) average fewer than 1.2 per report per period",
+        "Reimbursement Tracking screen used by employees to self-serve payment status, reducing email inquiries",
+        "Disputed reimbursements escalated above the finance manager level reach zero per quarter"
+      ]
+    },
+    {
+      "title": "Increase approval efficiency",
+      "description": "Reduce the number of touches and decisions required to move a report from submission to approved by presenting managers and finance staff with clean, policy-checked, well-documented reports rather than incomplete submissions. Reports that arrive with receipts attached, amounts within policy, and a clear business purpose need minimal back-and-forth.",
+      "successIndicators": [
+        "Average number of clarification round trips per report per period falls below 0.3",
+        "Percentage of reports approved by the manager on first review (no clarification sent) reaches ≥85%",
+        "Percentage of reports approved by accounting on first pass (no exception blocking approval) reaches ≥90%",
+        "Manager approval actions taken within 24 hours of submission increase as a percentage of total approvals",
+        "Exception queue backlog at the accounting stage trends down as policy enforcement at submission improves"
+      ]
+    },
+    {
+      "title": "Reduce operating costs",
+      "description": "Lower the total cost of processing an expense — staff time, error correction, duplicate payments, and audit remediation — by replacing manual, error-prone processes with a structured, automated workflow. Separation-of-duties enforcement eliminates the cost of fraud discovery; blocking policy checks eliminate costly retroactive adjustments.",
+      "successIndicators": [
+        "Finance staff hours spent per expense report (from receipt to reimbursement) falls measurably post go-live",
+        "Duplicate payment attempts reach zero (blocked by the already-reimbursed duplicate payment prevention)",
+        "Cost of external audit preparation attributable to expense documentation work decreases year over year",
+        "No after-the-fact fraud-related write-offs traceable to controls that expense.vin enforces",
+        "Total cost of processing (staff time + error remediation + audit) per report measurably lower at 12-month review than pre-implementation baseline"
+      ]
+    },
+    {
+      "title": "Improve financial governance",
+      "description": "Give leadership a documented, enforceable framework for how expenses are authorized, coded, reviewed, and paid — including an approval matrix with dollar-band thresholds, a separation-of-duties ruleset, and a locked-down configuration environment. Governance is not a policy document; it is the system's operating behavior.",
+      "successIndicators": [
+        "Approval matrix (under-$500, $500–$2,500, $2,500-and-above bands) followed on 100% of reports with zero manual overrides outside the documented admin-override process",
+        "Controls & Compliance screen reviewed by the comptroller or finance manager at least monthly with documented sign-off",
+        "All policy enforcement settings (block/warn, receipt thresholds, category rules) reviewed and confirmed accurate at each accounting-period open",
+        "Governance configuration changes (policy edits, GL changes, period locks) traceable to a named admin in the Audit Log",
+        "Year-end governance review (approval matrix, SoD rules, active policies) completable from expense.vin configuration without external documentation"
+      ]
+    },
+    {
+      "title": "Create complete expense audit trails",
+      "description": "Capture every state change, approval decision, adjustment, and payment in an immutable, hash-chained ledger that gives auditors and management a verifiable, tamper-evident history of every expense report from submission to close. No event is hidden, no entry can be altered, and the full trail is exportable to CSV with a hash column for offline verification.",
+      "successIndicators": [
+        "Audit log hash-chain integrity check passes at 100% at every admin-initiated review with zero broken entries",
+        "Every report detail screen shows a complete Workflow Timeline from submission through final payment with named actors and timestamps",
+        "Audit CSV export (Versions & Audit tab plus Audit Log export) satisfies external auditor evidence requests without supplemental documentation in 100% of sample requests",
+        "Zero audit findings citing missing, incomplete, or unverifiable expense records attributable to gaps in the audit trail",
+        "Time to reconstruct the full history of any individual expense report (approvals, adjustments, exceptions, payment) from the Audit Log falls below ten minutes"
+      ]
+    }
+  ],
+  "committee": [
+    {
+      "name": "Owner / Managing Director",
+      "role": "Owner / Managing Director",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "decision_maker",
+      "sortOrder": 0,
+      "interests": [
+        "Knowing the business is not being exposed to expense fraud or duplicate payments without anyone noticing",
+        "Ensuring reimbursements are fast enough that staff do not feel financially punished for doing their jobs",
+        "Having a clear answer if an employee asks why their expense was adjusted or rejected",
+        "Confidence that large expense reports get a second set of eyes before finance pays them",
+        "Understanding the monthly expense run rate without asking the comptroller to pull a spreadsheet",
+        "Reducing the owner-level firefighting that happens every month-end when expense processing backs up",
+        "Making sure the approval process cannot be short-circuited — no one approves their own expenses",
+        "Seeing that managers are actually reviewing their teams' expenses in a timely way",
+        "Keeping the admin overhead on the finance team proportionate — this cannot consume a headcount",
+        "Knowing that if there is ever a dispute or audit, there is a clear paper trail without reconstruction effort",
+        "Ensuring the platform does not require IT support or a consultant to operate day-to-day",
+        "Making the investment case clearly — what does this cost versus what are we spending on manual process today"
+      ],
+      "decisionCriteria": [
+        "Does the system prevent anyone from approving or paying their own expense without any configuration tricks?",
+        "Will the finance team actually use this, or will they work around it in spreadsheets within three months?",
+        "Can I see a real-time summary of how much the business owes in pending reimbursements at any moment?",
+        "Is the approval matrix actually enforced by the software, or is it just a policy document attached to the tool?",
+        "Does the system catch duplicate receipts or suspicious submissions before payment, not after?",
+        "How long will it realistically take to get the team onboarded and processing real reports?",
+        "What happens when a manager is out — are their pending approvals visible and actionable?",
+        "Does the audit trail hold up to an IRS or external auditor's scrutiny with real hash verification?",
+        "Is the pricing predictable and proportionate to the size of a business with fewer than 100 employees?",
+        "Can the comptroller configure and administer the system without calling for support every month?"
+      ],
+      "goals": [
+        "Eliminate the owner-level exposure that comes from having no systematic fraud or duplicate-payment controls",
+        "Give employees confidence that their out-of-pocket expenses will be reimbursed on a predictable schedule",
+        "Remove month-end expense chaos as a recurring source of leadership stress",
+        "Ensure that any expense I approve or any expense the comptroller approves is backed by a documented, retrievable record",
+        "Make it possible for a future auditor to reconstruct the full history of any expense report in under ten minutes",
+        "Get the finance team off spreadsheets and email threads for expense processing entirely",
+        "Establish clear dollar-band thresholds so high-value expenses automatically get an executive review",
+        "Reduce the number of employee reimbursement complaints that escalate to me personally",
+        "Know at a glance whether the business is running within its expense policy or drifting",
+        "Build a controls environment that grows with the business without requiring an IT project every time a policy changes",
+        "Demonstrate to lenders, investors, or acquirers that the business has documented, enforced financial controls",
+        "Ensure managers are held accountable for their teams' expense spend — not just finance"
+      ],
+      "objections": [
+        "Our finance team is two people — will this create more work for them during the transition than it saves?",
+        "We have been running on spreadsheets and email approvals for years; I am not convinced the pain is worth the switch cost",
+        "What happens if the comptroller configures a policy incorrectly — is there a way to audit that change?",
+        "The team is not technical; if this requires any setup beyond what the comptroller can handle, it will fail",
+        "I worry about the learning curve for employees who submit expenses infrequently — will they fight the new submission process?",
+        "Can I run this in parallel with our current process for a period before fully switching over?",
+        "What does the implementation actually look like — who does the work and how long does it take?",
+        "If a manager is on vacation, does their approval queue just sit there? What is the delegation story?",
+        "Is there a QuickBooks sync or do we still have to manually post the GL entries to the ledger?",
+        "Are the fraud-detection features real, or is it just a label on a filter we have to manually review?",
+        "How do you handle foreign-currency expenses for staff who travel internationally?",
+        "What if we need to change a policy mid-year — can the comptroller do that without a support ticket?"
+      ],
+      "openQuestions": [
+        "Walk me through what a $3,500 expense looks like — who sees it, in what order, before it gets paid?",
+        "If an employee submits a report with a meal expense of $120, what exactly happens — does the system block it, flag it, or let it through?",
+        "Show me what the owner sees when they want to know the total expense liability sitting in the pipeline right now",
+        "How does the system prevent the same receipt from being submitted twice — where does that check happen and who sees the flag?",
+        "What does the hash-chained audit trail actually look like if an auditor asks to verify a specific report?",
+        "If the comptroller adjusts an approved expense line downward, what does the employee see and when?",
+        "Can a manager approve a report over the $2,500 threshold and bypass the executive co-approval step, or does the system stop that?",
+        "What happens to an approval queue when a manager is out — is there a delegation mechanism in this build?",
+        "Is there a QuickBooks or accounting-system integration, or does finance still post GL entries manually?",
+        "Show me the separation-of-duties controls — specifically what prevents someone from paying their own expense",
+        "How do I know the policy rules are actually enforced and not just advisory — can the comptroller show me a test submission that blocks?",
+        "What is the realistic implementation timeline from signing to first live expense report processed?",
+        "If we need to add a new expense category mid-year, how does the comptroller do that without disrupting in-flight reports?",
+        "Can I run a spend report by department for the current year without asking finance to pull data?",
+        "What does the Controls & Compliance screen show and how often does someone need to look at it?"
+      ]
+    },
+    {
+      "name": "CEO",
+      "role": "CEO",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "decision_maker",
+      "sortOrder": 1,
+      "interests": [
+        "Ensuring the company's financial controls are defensible in a fundraising, acquisition, or audit scenario",
+        "Reducing the time leadership spends on expense administration that should be handled operationally",
+        "Knowing that expense spend is tracked and reportable by department so budget accountability is real",
+        "Eliminating personal liability exposure from informal, undocumented approval chains",
+        "Ensuring the executive co-approval step for large reports is actually enforced, not optional",
+        "Making reimbursement predictable and fast enough that employee morale is not affected",
+        "Understanding what fraction of expenses require exceptions or waivers versus pass cleanly",
+        "Ensuring the business scales its expense process without adding headcount proportionally",
+        "Having a clear record that demonstrates operational rigor to external stakeholders",
+        "Ensuring the system does not create a shadow-IT problem where departments work around it",
+        "Wanting visibility into the top expense categories and whether spend is tracking to budget",
+        "Being confident that no single employee can push through a large fraudulent expense without multiple checkpoints"
+      ],
+      "decisionCriteria": [
+        "Does the approval matrix enforce dollar-band thresholds automatically so large expenses always reach an executive?",
+        "Can the business produce a clean, verifiable audit trail for any period within hours if needed for due diligence?",
+        "Will this eliminate the need for informal email-approval chains that create undocumented financial decisions?",
+        "Is the total cost of ownership — software plus implementation plus ongoing admin — clearly lower than the current manual cost?",
+        "Does the comptroller or finance manager have full administrative control without needing outside support?",
+        "Can I see a per-department spend summary without requesting a finance report?",
+        "Are separation-of-duties controls real and enforced, not just described in a policy?",
+        "Does the system produce a NACHA ACH file that our bank can actually process, or is it CSV only?",
+        "What is the vendor's track record with businesses our size — is this built for SMBs or a large-enterprise tool with SMB pricing?",
+        "Can we configure policies to match how we actually operate, not a generic template?"
+      ],
+      "goals": [
+        "Build the kind of documented, enforced financial-controls environment that withstands investor or acquirer scrutiny",
+        "Remove expense management as a recurring distraction for the CEO and senior leadership team",
+        "Create a system where every large expense has a documented, multi-step approval path that an auditor can follow",
+        "Ensure department heads are held accountable for their expense budgets with real data, not anecdotal estimates",
+        "Reduce the cycle time between expense submission and employee reimbursement to a competitive standard",
+        "Eliminate the fraud and duplicate-payment risk that comes from manual, email-based approval chains",
+        "Make expense reporting a routine operational activity rather than a month-end crisis",
+        "Ensure the system scales without requiring a dedicated expense-management hire",
+        "Produce clean, accurate expense data that flows into the monthly financial package without rework",
+        "Establish a controls baseline that makes the next audit faster and less expensive to complete"
+      ],
+      "objections": [
+        "We have looked at expense tools before and the implementation always takes longer than promised — what is realistic here?",
+        "If my comptroller configures a policy incorrectly, how quickly will we know and how do we fix it?",
+        "The executive co-approval requirement sounds right, but I want to see how it actually routes a $3,000 report before I believe it",
+        "Does finance have to manually post every expense to the general ledger, or is there a real accounting-system integration?",
+        "I am concerned about the change-management burden — employees who travel infrequently will resist a new submission process",
+        "What happens to reports that were submitted or approved informally before go-live — is there a migration path?",
+        "Will the system support our international staff who submit expenses in euros and Canadian dollars?",
+        "Can we add a new approval band (for example, a $10,000 board-level threshold) without a configuration project?",
+        "What is the vendor's data-retention and security posture — where are documents and the audit trail stored?",
+        "If the comptroller leaves, how hard is it for a replacement to take over administration?"
+      ],
+      "openQuestions": [
+        "Walk me through how a $5,000 conference expense gets from submission to payment — every stage and every person",
+        "What does the executive co-approval screen actually look like — what information does the approver see before they act?",
+        "Show me the audit trail for a report that was adjusted by finance — does it show who changed it, by how much, and why?",
+        "How does the fraud monitor work — what signals does it use and who reviews the findings?",
+        "Can I export a department-level expense summary for Q1 right now, or does that require a finance build?",
+        "What is the separation-of-duties enforcement model — specifically, what happens if the same person tries to prepare and post a payment batch?",
+        "How are multi-currency expenses normalized for the management reports — what rate is used and when is it applied?",
+        "If an employee submits a duplicate expense — same receipt, different report — where does the system catch it?",
+        "What does the Controls & Compliance screen tell me that the regular dashboards do not?",
+        "Can the comptroller change an enforcement policy from warn to block without an outside configuration step?",
+        "Show me what an employee sees when their expense is adjusted — is the reason visible to them?",
+        "What would the audit package look like if a CPA asked for all expense documentation for last quarter?",
+        "Is the NACHA export format accepted by major banks without modification?",
+        "How does the system handle an accounting period that needs to be reopened after close — who can do it and is it audited?",
+        "What is the vendor's uptime and support commitment for a business with a hard month-end close deadline?"
+      ]
+    },
+    {
+      "name": "COO",
+      "role": "COO",
+      "influence": "high",
+      "riskLevel": "medium",
+      "decisionAuthority": "approver",
+      "sortOrder": 2,
+      "interests": [
+        "Ensuring operational managers actually review and approve their team expenses promptly, not days after the deadline",
+        "Understanding how the delegation feature works so coverage is maintained when managers are traveling or on leave",
+        "Reducing the volume of employee questions to HR and operations about reimbursement status",
+        "Ensuring the expense process is consistent across every department, not interpreted differently by each manager",
+        "Having a clear view of which teams are running high expense volumes and whether they are within budget",
+        "Making sure the new-report wizard is simple enough that frontline staff will actually use it correctly",
+        "Eliminating the recurring month-end scramble where operations has to chase finance for reimbursement status",
+        "Ensuring mileage reimbursement is handled at the correct IRS rate without manual calculation",
+        "Seeing that clarification requests are documented and traceable, not handled informally via text message",
+        "Knowing that managers who are frequently out can hand off approval authority in a documented, auditable way",
+        "Ensuring the advance-received field is handled correctly so employees are not over-reimbursed",
+        "Making sure part-time or infrequent submitters can figure out the wizard without a training session"
+      ],
+      "decisionCriteria": [
+        "Is the manager approval workflow simple enough that a manager with 10 direct reports can process a queue of five reports in under 20 minutes?",
+        "Does the SLA dashboard give operations visibility into which managers are consistently missing the 48-hour review target?",
+        "Can a manager hand off approval authority to a peer for a vacation week in a way that is audited and reversible?",
+        "Does the employee-facing submission wizard require any training, or is it self-explanatory?",
+        "Is the clarification workflow clear — does the employee know exactly what is needed and who asked?",
+        "Can operations pull a department-level spend report without a finance request?",
+        "Does the system handle advances correctly — does the employee see the net reimbursable rather than the gross?",
+        "Are manager approval actions limited to what is appropriate — can a manager accidentally approve something outside their authority?",
+        "How does the SLA breach alert reach the manager — is it surfaced on their dashboard or only in the accounting view?",
+        "Will the system work for staff who submit expenses only once or twice a year, not daily users?"
+      ],
+      "goals": [
+        "Establish a standard, documented expense process that every department follows without coaching",
+        "Ensure managers approve their team reports within the 48-hour SLA without operations having to remind them",
+        "Eliminate employee reimbursement complaints reaching operations rather than being resolved through the system",
+        "Give managers real-time visibility into their team's expense activity via the Department Activity screen",
+        "Ensure delegation is a real operational tool, not just a field in a form — managers on leave need coverage",
+        "Reduce the number of expense reports that bounce back to employees for missing information",
+        "Make the advance-received and net-reimbursable calculation visible and trusted by employees",
+        "Ensure mileage trips are calculated at the correct IRS rate automatically, without a separate calculation",
+        "Give operations the ability to see in-flight reports across all departments without needing accounting access",
+        "Make onboarding new employees to the expense submission process a self-service activity"
+      ],
+      "objections": [
+        "If a manager is out and their queue is full, is there a way for operations to reassign or escalate — or does the queue just age?",
+        "The delegation feature is noted as stored but not yet routing live approvals — that is a gap we would need resolved before relying on it",
+        "Will employees on mobile be able to submit reports and attach receipts, or is this desktop-only?",
+        "Some of our managers are not comfortable with new software — is there a way to ease the transition without a full training program?",
+        "The Department Activity screen sounds useful but I want to confirm it shows spend in real time, not just month-end data",
+        "What happens to an in-progress report when an accounting period closes — is the employee notified or does it fail silently?",
+        "If an employee submits an expense in a foreign currency and the FX rate is not on file, does the report block or warn?",
+        "We have staff in multiple states — how does the mileage rate work and is it one rate or state-specific?",
+        "Can a manager see reports from their direct reports that are still in draft — or only once submitted?",
+        "How are employees notified when their report is approved, returned for clarification, or reimbursed — is there an email trigger?"
+      ],
+      "openQuestions": [
+        "Show me what a manager sees on their dashboard when they have three reports waiting — what information is visible before they open one?",
+        "Walk me through a clarification request — what does the manager type, what does the employee see, and how does the report come back?",
+        "How does the mileage step of the wizard work — does the employee enter addresses or just miles, and is the IRS rate displayed?",
+        "What does the Department Activity screen show me as COO if I want to compare spend across four departments this month?",
+        "Show me what happens when a manager tries to approve their own expense — is it blocked before they even see the report?",
+        "If a manager has been out for two weeks and their queue has five aged reports, how does operations get visibility and who can act?",
+        "What does the delegation screen look like and what happens to the delegated approvals in the audit trail?",
+        "Can I see which managers have a pattern of approving reports right at or after the SLA deadline?",
+        "If an employee submits a report with the wrong period dates and the period is already closed, what happens and who is notified?",
+        "Show me the employee-facing reimbursement tracking screen — what does the employee see after their report is approved?",
+        "How does the advance-received field work — if an employee got a $200 advance on a $350 report, what do they see as net reimbursable?",
+        "Can a manager approve a report that has a warning-level policy flag — for example, a $90 meal — or is it blocked?",
+        "What does the Workflow Timeline tab show on the Report Detail, and who can see it?",
+        "If we want to add a new category mid-year, how does that affect reports already in flight that used the old category?",
+        "Is there an email or in-app notification when a report has been waiting at manager review for more than 24 hours?"
+      ]
+    },
+    {
+      "name": "Comptroller",
+      "role": "Comptroller",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "approver",
+      "sortOrder": 3,
+      "interests": [
+        "Ensuring every expense line has a correct GL account assigned before accounting approval — no un-coded lines reaching the ledger",
+        "Having a reliable, structured exception queue so no duplicate receipt or policy violation slips through unreviewed",
+        "The ability to lock and close accounting periods from within the platform so no late postings corrupt a closed period",
+        "A clear separation-of-duties model that the system enforces, not the staff honor system — particularly for payment batches",
+        "Knowing that the payment batch workflow requires a different user to post than the user who prepared it",
+        "The ability to export a NACHA ACH file directly from expense.vin for bank processing without a separate formatting step",
+        "A hash-chained audit trail that an external auditor can verify independently without calling the vendor",
+        "Confidence that adjustments made by accounting to approved lines are attributed, time-stamped, and retrievable",
+        "The ability to waive an exception with a documented reason and have that waiver appear in the audit trail",
+        "A controls screen that surfaces SoD violations, budget variances, and fraud signals in one place",
+        "The ability to configure category codes, default GL accounts, and policy enforcement levels without a support ticket",
+        "Knowing that FX-conversion rates are explicitly set and applied consistently — not inferred or estimated"
+      ],
+      "decisionCriteria": [
+        "Is GL coding done inline on the Review Queue screen, or does it require a separate export-edit-reimport step?",
+        "Does the Approve & code button enforce that every line has a GL before the approval goes through?",
+        "Can I configure blocking versus warning policy enforcement — and change that setting myself from the admin configuration?",
+        "Does the NACHA export produce a standard ACH file, and has it been tested with a real bank?",
+        "Is the separation-of-duties enforcement absolute — no configuration option to disable it?",
+        "Can I lock and close an accounting period and have the system prevent late line postings against it?",
+        "Does the exception queue show me every open flag across all in-flight reports in one view, not one report at a time?",
+        "Is the audit trail export a true hash-chained CSV — can I verify it independently without the vendor?",
+        "Can I configure FX rates with effective dates so the correct rate is applied to transactions in the right period?",
+        "Does the system support cost-center coding on expense lines, or only GL accounts?"
+      ],
+      "goals": [
+        "Close each accounting period on schedule with zero un-coded expense lines reaching the general ledger",
+        "Produce a fully verified, hash-chained audit trail export that satisfies a CPA audit without supplemental documentation",
+        "Eliminate duplicate payment risk by having the system block re-payment attempts at the reimbursement queue level",
+        "Establish a documented, system-enforced separation-of-duties model for the full expense-to-payment cycle",
+        "Configure and own the full policy ruleset — categories, GL defaults, enforcement levels — without vendor dependency",
+        "Reduce the exception backlog to zero at least three business days before each period close",
+        "Produce a NACHA ACH file from expense.vin that the bank processes without reformatting",
+        "Ensure every accounting adjustment has a reason, a named actor, and a timestamp in the audit trail",
+        "Have a single screen (Controls & Compliance) that gives a defensible, point-in-time governance posture",
+        "Make the month-end expense close a routine, schedulable task rather than an all-hands scramble",
+        "Ensure that FX rates are explicitly managed so foreign-currency reports convert correctly and consistently",
+        "Train one backup finance user to cover the review queue and reimbursement queue during my absence"
+      ],
+      "objections": [
+        "Is there a live QuickBooks or accounting-system integration, or do I still manually post GL entries after exporting?",
+        "The admin configuration notes say the approval-matrix editor is read-only in the UI — how do I change the dollar-band thresholds?",
+        "If I close an accounting period and an employee's report has a date in that period, does the system block the submission or just warn?",
+        "The exception queue in seed mode shows per-violation detail but in live mode it is per-report aggregate — is there a plan to expose line-level exceptions in live?",
+        "The delegation feature is stored and audited but not yet routing live approvals — that means a delegated approver does not actually receive queued reports in live mode?",
+        "Can the fraud monitor surface specific line-level signals (e.g., weekend purchases, vendor outliers) or only report-level aggregates?",
+        "How are receipt files stored and how long are signed receipt URLs valid — will an auditor reviewing a six-month-old report be able to open the receipt?",
+        "If I need to archive a category, what happens to in-flight reports that have lines using that category?",
+        "Is cost-center coding on expense lines fully live, or is it a partial implementation I should not rely on yet?",
+        "What happens to an unposted payment batch if the person who prepared it leaves — can a different user take over?"
+      ],
+      "openQuestions": [
+        "Show me the Review Queue — when I open a report from the queue, where exactly do I assign the GL to each line?",
+        "What prevents me from clicking Approve & code when one line still has no GL assigned?",
+        "Walk me through creating a payment batch — select approved reports, create, post with a different user, export NACHA — show me each step",
+        "If the batch preparer and the poster are the same user, where exactly does the system block that?",
+        "Show me the exception queue — if I have 12 open flags across eight reports, what does the view look like and how do I work through them?",
+        "If I waive a duplicate-receipt exception, where does the waiver reason appear in the audit trail?",
+        "Show me the Controls & Compliance screen — which panels are live and which are noted as needing line-level data?",
+        "How do I lock an accounting period — where is the control, and what happens to a report with a line date in that period after it is locked?",
+        "Walk me through adding a new GL account code, mapping it to a category, and setting the enforcement level for that category's receipt threshold",
+        "Show me the audit-log CSV export — does it include the Hash column and how do I verify the chain independently?",
+        "If finance adjusts an approved line down by $50, what exactly does the audit trail record and what does the employee see?",
+        "How do I add an FX rate for EUR to USD with an effective date — and what happens to a report submitted before that rate was entered?",
+        "What does the executive co-approval bar on the Accounting Dashboard show — which reports are in it and what does co-approval actually do?",
+        "Is cost-center coding on lines available in live mode today, or is it partial?",
+        "If a payment batch is created but not yet posted, who can see it and how do I identify which reports are in it?"
+      ]
+    },
+    {
+      "name": "Finance Manager",
+      "role": "Finance Manager",
+      "influence": "medium",
+      "riskLevel": "medium",
+      "decisionAuthority": "champion",
+      "sortOrder": 4,
+      "interests": [
+        "Processing the accounting review queue efficiently so reports do not age past the 48-hour SLA target",
+        "Having a structured exception worklist so duplicate receipts and missing receipts are resolved before they block payment",
+        "Understanding how the mileage rate is calculated so I can explain discrepancies to employees without digging through IRS tables",
+        "Being able to search the All Reports register quickly when an employee asks for the status of a specific report",
+        "Knowing exactly what information the employee sees in their reimbursement tracking screen so I can answer their questions correctly",
+        "Having a reliable payment batch workflow that makes my role in the two-step post-and-pay process clear",
+        "Being the person who can explain to employees why an expense was flagged or adjusted, backed by a traceable audit entry",
+        "Understanding the difference between a blocking and a warning policy exception so I can triage the queue accurately",
+        "Making sure FX-rate conversions are applied correctly on foreign-currency reports — I am the one employees call when amounts look wrong",
+        "Having enough familiarity with the admin configuration to answer basic questions about category rules without pulling in the comptroller",
+        "Ensuring the Spend Analytics data I use in monthly reports is current and reconciles to what we have processed",
+        "Being confident that a report I approve and code has a complete, correct record in the audit trail"
+      ],
+      "decisionCriteria": [
+        "Can I work through the review queue, assign GL accounts, resolve exceptions, and approve a report entirely within expense.vin without switching to another system?",
+        "Is the exception queue clear enough that I can distinguish blocking exceptions (must resolve) from warning flags (review and decide)?",
+        "Does the Spend Analytics materialized-view refresh give me an up-to-date picture — how stale can the data be?",
+        "Can I search the All Reports register by employee name or report number fast enough to answer a live employee phone call?",
+        "Is the payment batch workflow intuitive enough that I can build and submit a batch confidently without supervision?",
+        "Does the system clearly show me which lines still need a GL account when I am coding a multi-line report?",
+        "Can I see a report's full workflow timeline — every approval, clarification, and adjustment — without exporting a CSV?",
+        "Is the mileage calculation visible to me on the report so I can verify the IRS rate applied without a separate lookup?",
+        "Does the clarification workflow allow me to send a specific, actionable note to the employee — not just a generic flag?",
+        "Can I view the reimbursement tracking screen to understand what the employee sees about their payment status?"
+      ],
+      "goals": [
+        "Work through the accounting review queue each day without reports aging into SLA breach on my watch",
+        "Resolve all open exceptions in the exception queue at least three business days before period close",
+        "Build and submit the weekly payment batch with the comptroller posting, so reimbursements hit employees on a predictable schedule",
+        "Answer employee reimbursement status questions in under two minutes using the All Reports register and Reimbursement Queue",
+        "Produce a clean Spend Analytics report at the end of each period that the comptroller can submit without rework",
+        "Ensure every report I approve has all lines correctly coded to GL accounts — no line left un-coded",
+        "Handle my portion of month-end close (exception clearance, final queue processing, batch submission) without overtime",
+        "Understand every exception type well enough to resolve or waive it correctly without escalating to the comptroller for routine flags",
+        "Give employees a reliable, honest answer about when their reimbursement will be processed",
+        "Become the internal champion who onboards new submitters and managers to the workflow"
+      ],
+      "objections": [
+        "If I need to adjust an approved line amount, does that reopen the report to full accounting review — meaning I have to re-approve it?",
+        "The exception queue note says synthetic seed exceptions have no live ID — does that mean I cannot resolve all exceptions from the exception queue in live mode?",
+        "When a report comes back from clarification and gets resubmitted, does it restart at manager review or come straight to accounting?",
+        "If I forget to assign a GL to one line and try to approve, will the system tell me which specific line is missing the account?",
+        "The cost-center field on the expense line is noted as live-mode-only partial — should I be assigning cost centers today or waiting?",
+        "Can I see the receipt attachment inside expense.vin without downloading it — or do I have to download each file to review?",
+        "If the Spend Analytics materialized views have not been refreshed since Monday and today is Thursday, will the numbers I report be current?",
+        "What happens if I accidentally build a payment batch with a report that was already reimbursed — does the system catch that?",
+        "When I send a clarification request, does the employee receive a notification right away or only when they log in?",
+        "Is there a way to see how long each report has been sitting in my queue so I can prioritize the oldest ones first?"
+      ],
+      "openQuestions": [
+        "Show me what my accounting review queue looks like with a mix of clean and flagged reports — how do I see which ones have open exceptions?",
+        "Walk me through assigning a GL account to every line on a five-line report and then clicking Approve & code — what does the confirmation look like?",
+        "If a report has a missing-receipt exception on one line and a duplicate-receipt flag on another, show me how I resolve both before approving",
+        "Show me what the employee sees on their Reimbursement Tracking screen after I queue their report for payment",
+        "Walk me through building a payment batch — selecting reports, creating the batch, then showing me what the comptroller sees to post it",
+        "If I adjust an approved line amount, show me exactly what gets recorded in the audit trail and what the employee sees",
+        "How do I find a specific report by employee name in the All Reports register — show me the search and filter options",
+        "Show me the Spend Analytics screen — which panels are live materialized views and how do I refresh them?",
+        "If a clarification note I sent to an employee is vague, can I update it after sending — or is it locked once the report is returned?",
+        "Show me the Workflow Timeline tab on a report that went through clarification — does it show the clarification note and the timestamp?",
+        "What does the SLA & Cycle Time dashboard show me about my own queue performance — can I see my average review time?",
+        "If a foreign-currency report has no FX rate on file, where exactly is the block surfaced — at submission, at manager review, or when I try to approve?",
+        "Show me the receipt viewer — can I open a receipt attached to a report directly in the browser, or do I have to download it?",
+        "How do I know when a report I returned for clarification has been resubmitted — is there a notification or do I check the queue?",
+        "If I close the month and a report dated in that period arrives one day later, what exactly happens — show me the error and who sees it?"
+      ]
+    }
+  ]
+}

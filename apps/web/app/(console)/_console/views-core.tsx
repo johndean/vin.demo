@@ -1,9 +1,12 @@
 'use client';
 /* VIN Demo console — core views: Dashboard, Products (ported from web/views-core.jsx). */
 import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useData } from './data-context';
-import { PageHead, Icon, ModeChip, Metric, Pill, type Go } from './shell';
+import { PageHead, Icon, ModeChip, Metric, Pill, Unavailable, type Go } from './shell';
 import { Knowledge, DemoGraphInner, EnvironmentInner } from './views-build';
+import { FormShell, Field } from './Modal';
+import { adminMutate } from './admin';
 
 /* ============================ DASHBOARD ============================ */
 export function Dashboard({ go }: { go: Go }) {
@@ -15,7 +18,7 @@ export function Dashboard({ go }: { go: Go }) {
       <PageHead overline={`Field Demos · ${VD.workspace.name}`}
         title="Demo operations"
         desc="One orchestrated consultant loop across every product. Read-only by default, every answer cited, every demo costed."
-        actions={<><button className="btn btn-secondary"><Icon name="plus" size={14} /> New product</button><button className="btn btn-primary" onClick={() => go('sessions')}><Icon name="play" size={13} /> Plan a session</button></>} />
+        actions={<><Unavailable label="New product" icon="plus" why="Product onboarding is manual until the adapter contract is stable across 3 products (see Settings → deferral register)." /><button className="btn btn-primary" onClick={() => go('sessions')}><Icon name="sessions" size={13} /> View sessions</button></>} />
 
       {live && (
         <div className="card hatch" style={{ background: 'var(--color-navy)', border: 'none', marginBottom: 20, padding: '18px 22px', display: 'flex', alignItems: 'center', gap: 18, position: 'relative', overflow: 'hidden' }}>
@@ -23,11 +26,11 @@ export function Dashboard({ go }: { go: Go }) {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--color-steel-hover)', fontWeight: 800 }}>Live demo in progress</div>
             <div style={{ color: '#fff', fontSize: 18, fontWeight: 800, marginTop: 3 }}>{live.customer} — {live.scenario}</div>
-            <div style={{ color: 'var(--color-light-steel)', fontSize: 13, marginTop: 2 }}>{live.product} · {live.stakeholders} stakeholders · running {live.dur}{live.conf != null ? ` · confidence ${Math.round(live.conf * 100)}%` : ''}</div>
+            <div style={{ color: 'var(--color-light-steel)', fontSize: 13, marginTop: 2 }}>{live.product} · {live.stakeholders} stakeholders · running {live.dur}</div>
           </div>
           <ModeChip mode={live.mode} />
-          {/* Control room is the separate desktop app */}
-          <a className="btn btn-on-dark" href="#" style={{ background: '#fff', color: 'var(--color-navy)' }}><Icon name="external" size={13} /> Open control room</a>
+          {/* The Control Room is the separate desktop app — not a web link. Honest, non-clickable chip. */}
+          <span className="btn btn-on-dark" style={{ background: 'rgba(255,255,255,.14)', color: '#fff', cursor: 'default' }} title="The live Control Room runs in the VIN Desktop app"><Icon name="external" size={13} /> Control Room · desktop app</span>
         </div>
       )}
 
@@ -49,14 +52,13 @@ export function Dashboard({ go }: { go: Go }) {
         <div className="card">
           <div className="card-hd"><h3>Recent demo sessions</h3><a className="btn btn-ghost btn-sm" onClick={() => go('sessions')}>View all <Icon name="arrow" size={13} /></a></div>
           <table className="tbl">
-            <thead><tr><th>Department</th><th>Scenario</th><th>Mode</th><th>Conf.</th><th>Cost</th><th>Status</th></tr></thead>
+            <thead><tr><th>Department</th><th>Scenario</th><th>Mode</th><th>Cost</th><th>Status</th></tr></thead>
             <tbody>
               {sessions.slice(0, 5).map((s) => (
                 <tr key={s.id} onClick={() => go('sessions')}>
                   <td><div className="cell-strong">{s.customer}</div><div className="cell-sub">{s.product} · {s.when}</div></td>
                   <td>{s.scenario}</td>
                   <td><ModeChip mode={s.mode} /></td>
-                  <td className="tnum">{s.conf == null ? '—' : `${Math.round(s.conf * 100)}%`}</td>
                   <td className="tnum">${s.cost.toFixed(2)}</td>
                   <td>{s.status === 'Live' ? <Pill kind="danger" dot>Live</Pill> : s.status === 'Recovered' ? <Pill kind="warn">Recovered</Pill> : <Pill kind="success">Done</Pill>}</td>
                 </tr>
@@ -70,22 +72,22 @@ export function Dashboard({ go }: { go: Go }) {
             <div className="overline" style={{ marginBottom: 12 }}>Attention</div>
             {(() => {
               const attn = products.reduce((a, p) => a + Math.round(p.chunks * (p.kbStale + p.kbReview) / 100), 0);
-              const needReset = products.filter((p) => p.envStatus !== 'Healthy');
-              if (!attn && !needReset.length) {
-                return <div className="banner" style={{ background: '#e2f1ec', borderLeft: '4px solid var(--color-green)', color: 'var(--color-navy)' }}><Icon name="check" size={18} style={{ color: 'var(--color-green)' }} /><div><strong>All clear.</strong> Knowledge is validated and current; every environment is configured for demo-only routing.</div></div>;
+              const noEndpoint = products.filter((p) => !p.connectionTarget);
+              if (!attn && !noEndpoint.length) {
+                return <div className="banner" style={{ background: '#e2f1ec', borderLeft: '4px solid var(--color-green)', color: 'var(--color-navy)' }}><Icon name="check" size={18} style={{ color: 'var(--color-green)' }} /><div><strong>All clear.</strong> Knowledge is validated and current; every product has a demo endpoint configured.</div></div>;
               }
               return (
                 <>
                   {attn > 0 && (
-                    <div className="banner banner-warn" style={{ marginBottom: needReset.length ? 10 : 0 }}>
+                    <div className="banner banner-warn" style={{ marginBottom: noEndpoint.length ? 10 : 0 }}>
                       <Icon name="alert" size={18} style={{ color: 'var(--color-amber)' }} />
                       <div><strong>{attn} knowledge chunk{attn > 1 ? 's' : ''} need attention.</strong> Below-threshold or stale chunks degrade to &quot;I&apos;m not certain.&quot; <a onClick={() => go('knowledge')} style={{ display: 'block', marginTop: 2 }}>Review knowledge →</a></div>
                     </div>
                   )}
-                  {needReset.length > 0 && (
+                  {noEndpoint.length > 0 && (
                     <div className="banner banner-info">
-                      <Icon name="refresh" size={18} style={{ color: 'var(--color-blue)' }} />
-                      <div><strong>{needReset.length} environment{needReset.length > 1 ? 's' : ''} need a reset.</strong> <a onClick={() => go('environments')} style={{ display: 'block', marginTop: 2 }}>Open environments →</a></div>
+                      <Icon name="environment" size={18} style={{ color: 'var(--color-blue)' }} />
+                      <div><strong>{noEndpoint.length} product{noEndpoint.length > 1 ? 's have' : ' has'} no demo endpoint set.</strong> <a onClick={() => go('environments')} style={{ display: 'block', marginTop: 2 }}>Open environments →</a></div>
                     </div>
                   )}
                 </>
@@ -113,6 +115,12 @@ export function Dashboard({ go }: { go: Go }) {
   );
 }
 
+/* Lifecycle status pill — maps the real products.status column (Draft → Processing → Ready → Failed → Archived). */
+const STATUS_KIND: Record<string, string> = { Ready: 'success', Processing: 'info', Draft: 'neutral', Failed: 'danger', Archived: 'steel', Training: 'warn' };
+function ProductStatusPill({ status }: { status: string }) {
+  return <Pill kind={STATUS_KIND[status] ?? 'neutral'} dot>{status}</Pill>;
+}
+
 function ProductCard({ p, onClick }: { p: any; onClick: () => void }) {
   return (
     <div className="card" style={{ cursor: 'pointer', transition: 'transform .3s var(--easing-out), box-shadow .3s' }} onClick={onClick}
@@ -124,11 +132,11 @@ function ProductCard({ p, onClick }: { p: any; onClick: () => void }) {
             <span style={{ width: 38, height: 38, borderRadius: 9, background: p.color, color: '#fff', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 15 }}>{p.mk}</span>
             <div><div style={{ fontWeight: 800, fontSize: 16, color: 'var(--color-navy)' }}>{p.name}</div><div className="muted" style={{ fontSize: 12 }}>v{p.version}</div></div>
           </div>
-          {p.status === 'Ready' ? <Pill kind="success" dot>Ready</Pill> : <Pill kind="warn" dot>Training</Pill>}
+          <ProductStatusPill status={p.status} />
         </div>
         <p className="muted" style={{ fontSize: 13, margin: 0, lineHeight: 1.5 }}>{p.tagline}</p>
         <div className="flex between" style={{ fontSize: 12 }}>
-          <span className="muted">Coverage</span><span style={{ fontWeight: 700, color: 'var(--color-navy)' }}>{p.coverage}%</span>
+          <span className="muted">Knowledge validated</span><span style={{ fontWeight: 700, color: 'var(--color-navy)' }}>{p.coverage}%</span>
         </div>
         <div style={{ height: 6, borderRadius: 99, background: 'var(--color-light-steel)', overflow: 'hidden' }}><i style={{ display: 'block', height: '100%', width: `${p.coverage}%`, background: p.coverage > 80 ? 'var(--color-green)' : p.coverage > 60 ? 'var(--color-amber)' : 'var(--color-red)' }} /></div>
         <div className="flex between" style={{ borderTop: '1px solid var(--border-subtle)', paddingTop: 12, fontSize: 12 }}>
@@ -143,28 +151,71 @@ function ProductCard({ p, onClick }: { p: any; onClick: () => void }) {
 export function Products({ go, selected }: { go: Go; selected?: string | null }) {
   const VD = useData();
   const [sel, setSel] = useState<string | null>(selected || null);
+  const [adding, setAdding] = useState(false);
   useEffect(() => { setSel(selected || null); }, [selected]);
   const { products } = VD;
   if (sel) { const p = products.find((x) => x.id === sel); if (p) return <ProductDetail p={p} go={go} back={() => setSel(null)} />; }
+  if (adding) return <div className="page scroll"><ProductForm product={null} onClose={() => setAdding(false)} /></div>;
   return (
     <div className="page scroll">
       <PageHead overline="Library" title="Products" desc="Each product VIN Demo can demonstrate carries its own version, knowledge base, demo graph, and demo environment. Build the relations now; lifecycle automation comes later."
-        actions={<button className="btn btn-primary"><Icon name="plus" size={14} /> Add product</button>} />
+        actions={<button className="btn btn-primary" onClick={() => setAdding(true)}><Icon name="plus" size={14} /> Add product</button>} />
       <div className="grid cols-3">{products.map((p) => <ProductCard key={p.id} p={p} onClick={() => setSel(p.id)} />)}</div>
       <div className="banner banner-info section-gap"><Icon name="info" size={18} style={{ color: 'var(--color-blue)' }} />
-        <div><strong>Onboarding is still manual.</strong> Self-service &quot;Add → Train → Demo&quot; unlocks once the adapter contract is stable across three hand-onboarded products (currently {products.length}).</div></div>
+        <div><strong>Add a product record here</strong> (name, status, presentation). Full self-service onboarding — knowledge base, versions, environment, and demo graph — is still done via the CLI / “Discover from knowledge” (currently {products.length} products).</div></div>
     </div>
+  );
+}
+
+const PROD_STATUSES = ['draft', 'processing', 'ready', 'failed', 'archived'];
+/* Basic create / edit of a product record (name, lifecycle status, presentation metadata). A thin slice of
+   self-service onboarding — KB/versions/environment/demo-graph are managed in their own tabs (CLI/Discover).
+   On edit, metadata is rewritten from the form; coverage falls back to the computed value (honest). */
+function ProductForm({ product, onClose }: { product: any | null; onClose: () => void }) {
+  const router = useRouter();
+  const [name, setName] = useState(product?.name ?? '');
+  const [tagline, setTagline] = useState(product?.tagline ?? '');
+  const [mk, setMk] = useState(product?.mk ?? '');
+  const [color, setColor] = useState(product?.color ?? '#2f3a4a');
+  const [status, setStatus] = useState(String(product?.status ?? 'draft').toLowerCase());
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const editing = !!product;
+
+  const save = async () => {
+    if (!name.trim()) { setErr('Name is required.'); return; }
+    setBusy(true); setErr('');
+    try {
+      const data = { name: name.trim(), status, metadata: { tagline: tagline || '', mk: mk || '', color } };
+      if (editing) await adminMutate('product', 'update', { id: product.id, data });
+      else await adminMutate('product', 'create', { data });
+      router.refresh(); onClose();
+    } catch (e: any) { setErr(e?.message || 'Save failed'); setBusy(false); }
+  };
+
+  return (
+    <FormShell title={editing ? `Edit ${product.name}` : 'New product'} subtitle={editing ? 'Updates the product record + presentation. KB/versions/environment/graph are managed in their own tabs.' : 'A basic product record. Knowledge, versions, environment, and demo graph are onboarded next (CLI / “Discover from knowledge”).'} onClose={onClose} grid
+      footer={<><button className="btn btn-secondary" onClick={onClose} disabled={busy}>Cancel</button><button className="btn btn-primary" onClick={save} disabled={busy}>{busy ? 'Saving…' : editing ? 'Save product' : 'Create product'}</button></>}>
+      <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. invoice.vin" /></Field>
+      <Field label="Lifecycle status"><select value={status} onChange={(e) => setStatus(e.target.value)}>{PROD_STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></Field>
+      <Field label="Tagline" full><input value={tagline} onChange={(e) => setTagline(e.target.value)} placeholder="Short positioning line shown in the console" /></Field>
+      <Field label="Monogram (1–2 letters)"><input value={mk} onChange={(e) => setMk(e.target.value)} placeholder="e.g. IV" maxLength={2} /></Field>
+      <Field label="Brand colour"><input type="color" value={color} onChange={(e) => setColor(e.target.value)} style={{ height: 38, padding: 2 }} /></Field>
+      {err && <div className="fld--full" style={{ color: 'var(--color-red)', fontSize: 12 }}>{err}</div>}
+    </FormShell>
   );
 }
 
 const PROD_TABS = ['Overview', 'Versions', 'Knowledge base', 'Demo graph', 'Environment'];
 function ProductDetail({ p, go, back }: { p: any; go: Go; back: () => void }) {
   const [tab, setTab] = useState('Overview');
+  const [editing, setEditing] = useState(false);
+  if (editing) return <div className="page scroll"><ProductForm product={p} onClose={() => setEditing(false)} /></div>;
   return (
     <div className="page scroll">
       <PageHead crumbs={[{ label: 'Products', to: 'products' }, { label: p.name }]} go={(r) => { if (r === 'products') back(); else go(r); }}
         overline={`v${p.version} · ${p.tagline}`} title={<span className="flex items-center gap-3"><span style={{ width: 34, height: 34, borderRadius: 8, background: p.color, color: '#fff', display: 'inline-grid', placeItems: 'center', fontWeight: 800, fontSize: 14 }}>{p.mk}</span>{p.name}</span>}
-        actions={<><button className="btn btn-secondary"><Icon name="edit" size={13} /> Edit</button><a className="btn btn-primary" href="#"><Icon name="play" size={13} /> Launch demo</a></>} />
+        actions={<><button className="btn btn-secondary" onClick={() => setEditing(true)}><Icon name="edit" size={14} /> Edit</button><Unavailable label="Launch demo" icon="play" primary why="Demos are launched and driven from the VIN Desktop Control Room app, not the web console." /></>} />
       <div className="tabs">{PROD_TABS.map((t) => <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{t}</button>)}</div>
       {tab === 'Overview' && <ProductOverview p={p} setTab={setTab} />}
       {tab === 'Versions' && <ProductVersions p={p} />}
@@ -179,10 +230,10 @@ function ProductOverview({ p, setTab }: { p: any; setTab: (t: string) => void })
   return (
     <>
       <div className="grid cols-4" style={{ marginBottom: 20 }}>
-        <Metric label="Demo coverage" value={`${p.coverage}%`} delta="of graph reachable" dir="flat" />
+        <Metric label="Demo readiness" value={`${p.readiness}%`} delta={p.coverageEval ? `coverage eval ${p.coverageEval.passed}/${p.coverageEval.total}` : 'coverage × validated × fresh'} dir={p.readiness > 80 ? 'up' : 'flat'} />
         <Metric label="Knowledge chunks" value={p.chunks.toLocaleString()} delta={`${p.kbValidated}% validated`} dir="up" />
         <Metric label="Demos run" value={p.demos} delta="all-time" dir="flat" />
-        <Metric label="Graph nodes" value={p.graphNodes} delta={`${p.graphFlows} flows`} dir="flat" />
+        <Metric label="Graph nodes" value={p.graphNodes} delta={`${p.graphFlows} flows${p.graphBroken ? ` · ${p.graphBroken} broken` : ''}`} dir="flat" />
       </div>
       <div className="grid cols-2">
         <div className="card">
@@ -220,20 +271,21 @@ function ProductVersions({ p }: { p: any }) {
     <div className="card">
       <div className="card-hd"><h3>Versions</h3><span className="tag">lifecycle engine deferred</span></div>
       <table className="tbl">
-        <thead><tr><th>Version</th><th>State</th><th>Knowledge synced</th><th>Demos</th><th></th></tr></thead>
+        <thead><tr><th>Version</th><th>State</th></tr></thead>
         <tbody>
-          {p.versions.map((v: string, i: number) => (
-            <tr key={v}>
-              <td className="cell-strong">{v.replace(' (current)', '')}</td>
-              <td>{i === 0 ? <Pill kind="success" dot>Current</Pill> : i === 1 ? <Pill kind="info">Supported</Pill> : <Pill kind="neutral">Archived</Pill>}</td>
-              <td>{i === 0 ? <Pill kind="success">In sync</Pill> : i < 2 ? <Pill kind="warn">Partial</Pill> : <Pill kind="danger">Out of date</Pill>}</td>
-              <td className="tnum muted">{i === 0 ? p.demos : Math.max(0, p.demos - i * 7)}</td>
-              <td style={{ textAlign: 'right' }}><button className="btn btn-ghost btn-sm"><Icon name="chevR" size={13} /></button></td>
-            </tr>
-          ))}
+          {(p.versions.length ? p.versions : [p.version]).map((v: string) => {
+            const label = v.replace(' (current)', '');
+            const current = label === (p.version || '').replace(' (current)', '');
+            return (
+              <tr key={v}>
+                <td className="cell-strong">{label}</td>
+                <td>{current ? <Pill kind="success" dot>Active</Pill> : <Pill kind="neutral">Tracked</Pill>}</td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
-      <div className="banner banner-info" style={{ margin: 16 }}><Icon name="info" size={18} style={{ color: 'var(--color-blue)' }} /><div>The version <strong>field</strong> exists on every knowledge chunk today (so answers can cite a version). The full <strong>lifecycle engine</strong> — release-sync, retirement, drift alerts — turns on at product #3 / the first version bump.</div></div>
+      <div className="banner banner-info" style={{ margin: 16 }}><Icon name="info" size={18} style={{ color: 'var(--color-blue)' }} /><div>The version <strong>field</strong> is real on every knowledge chunk (so answers cite a version), and the <strong>active</strong> version above is real. Per-version sync state, retirement, and drift alerts arrive with the <strong>lifecycle engine</strong> (deferred to product #3 / the first version bump) — not shown until they reflect real state.</div></div>
     </div>
   );
 }

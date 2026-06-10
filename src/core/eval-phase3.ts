@@ -20,8 +20,11 @@ const PRODUCTS = [
 
 const checks: { name: string; pass: boolean; detail: string }[] = [];
 
-const { rows: prods } = await db().query<{ n: string }>('SELECT count(*)::text n FROM products');
-checks.push({ name: 'contract spans ≥5 products', pass: Number(prods[0].n) >= 5, detail: `${prods[0].n} products` });
+// Fixtures from other evals (eval-phase4, lifecycle-demo) are NOT real onboarded products — exclude them
+// so the count reflects the real adapter coverage, not vacuous fixtures. (Mirrors console-data.ts.)
+const TEST_PRODUCTS = ['eval-phase4-product', 'lifecycle-demo'];
+const { rows: prods } = await db().query<{ n: string }>('SELECT count(*)::text n FROM products WHERE name <> ALL($1::text[])', [TEST_PRODUCTS]);
+checks.push({ name: 'contract spans ≥5 real products', pass: Number(prods[0].n) >= 5, detail: `${prods[0].n} real products (test fixtures excluded)` });
 
 for (const p of PRODUCTS) {
   const { rows } = await db().query<{ id: string }>('SELECT id FROM products WHERE name = $1', [p.name]);

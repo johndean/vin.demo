@@ -1,0 +1,579 @@
+{
+  "product": "rounds.vin",
+  "outcomes": [
+    {
+      "title": "Reduce transcript turnaround time",
+      "description": "Shrink the wall-clock time from a recording upload to a finished, CMS-ready transcript by accelerating the AI pipeline and removing idle wait between SOP stages. Faster turnaround means more sessions can be published each week without adding headcount.",
+      "successIndicators": [
+        "Median hours from upload to 'Complete' stage drops measurably quarter over quarter",
+        "Average time a session sits idle between SOP stage transitions falls below the per-stage SLA window",
+        "Number of sessions reaching 'Complete' within a target number of business days increases",
+        "Backlog count of sessions older than the target turnaround shrinks each reporting period"
+      ]
+    },
+    {
+      "title": "Improve transcript accuracy",
+      "description": "Increase the fidelity of the AI-generated first-pass transcript so that copy editors spend less time on corrections and the final published text faithfully represents what was said. Fewer errors at the AI stage compound into fewer rework cycles across the 8-stage SOP.",
+      "successIndicators": [
+        "Average number of text edits per session in the correction ledger trends down over successive months",
+        "Discrepancy count flagged by the AI-vs-reference classifier at the start of review decreases per session",
+        "Sessions completing Copy Draft stage within SLA without re-opening for corrections increases as a share of the total",
+        "Proportion of segments receiving zero corrections before leaving the Editor rises",
+        "Editor time-in-session (measured by lock-hold duration) drops without a corresponding rise in downstream QA rejections"
+      ]
+    },
+    {
+      "title": "Reduce SOP stage bottlenecks",
+      "description": "Identify and eliminate the SOP stages where sessions pile up or exceed their SLA windows, so the transcript review pipeline moves steadily from Prep through to Complete without chronic overdue warnings. Sustained bottlenecks translate directly into late publishing and missed content deadlines.",
+      "successIndicators": [
+        "Number of sessions showing an OVERDUE badge on the dashboard SOP row falls week over week",
+        "Average dwell time per stage stays within the stage's configured SLA (Prep 8h, Copy Draft 24h, Medical 48h, etc.)",
+        "The stage with the highest backlog count on the dashboard SOP strip rotates rather than being the same stage every cycle",
+        "Percentage of sessions that complete each stage without accruing an overdue flag exceeds a defined target"
+      ]
+    },
+    {
+      "title": "Improve editor productivity",
+      "description": "Enable transcript editors to work through their correction queue faster by surfacing the right segments first and reducing the friction of each fix. Higher editor productivity means the same team can process more sessions without extending working hours.",
+      "successIndicators": [
+        "Average lock-hold time per session in the Editor decreases while correction completeness (no open discrepancies) stays high",
+        "Number of sessions moved from 'Editor' into Copy Draft SOP stage per editor per week increases",
+        "Proportion of sessions where an editor uses Find & Replace to handle systematic corrections rises, indicating fewer one-off fixes",
+        "Queue depth on each editor's My Queue page drops to a manageable number on a consistent basis"
+      ]
+    },
+    {
+      "title": "Improve speaker labeling accuracy",
+      "description": "Increase the proportion of transcript segments correctly attributed to the right speaker in the AI first pass, so that editors spend less time reassigning speakers during review. Accurate speaker labels in the AI output reduce a class of corrections that currently require listening back to the recording.",
+      "successIndicators": [
+        "Correction ledger shows declining speaker-reassignment events per session over time",
+        "Sessions arriving at the Copy Draft stage with zero speaker reassignments needed increases as a share of total",
+        "Average number of speaker-reassignment corrections per session across a rolling month trends downward",
+        "Discrepancy flags of type 'speaker' resolved as 'correct' (no change needed) in the Editor increases"
+      ]
+    },
+    {
+      "title": "Improve slide alignment accuracy",
+      "description": "Raise the percentage of transcript segments correctly matched to the slide being displayed at that moment, so that exports, captions, and the slide-by-slide viewer reflect the actual lecture flow without manual realignment work. Misaligned slides undermine the published product's usability.",
+      "successIndicators": [
+        "Slide-reassignment events in the correction ledger drop per session over successive processing periods",
+        "Sessions where Re-Align is triggered from the editor Admin tab (operator rescue) decline month over month",
+        "Average number of slide-reassignment corrections per session across a rolling cohort falls below a defined threshold",
+        "Sessions passing through the CMS stage without a slide-related correction being logged in the audit view increases"
+      ]
+    },
+    {
+      "title": "Reduce rework during review",
+      "description": "Cut the rate at which sessions are sent back or require out-of-stage corrections by improving first-pass quality and stage acceptance discipline. Rework that surfaces in Medical or Copy Final after Copy Draft has already closed costs disproportionately more time than catching it early.",
+      "successIndicators": [
+        "Number of text edits recorded in the correction ledger during or after the Medical stage (vs. during Copy Draft) falls",
+        "Proportion of sessions that accrue zero new corrections after leaving Copy Final stage increases",
+        "Instances of operator using editor Admin rescue actions (Re-Ingest, Re-Align) to fix quality issues that bypassed earlier stages decreases",
+        "QA stage rejection rate — sessions that require a correction note before the QA reviewer can advance — trends downward"
+      ]
+    },
+    {
+      "title": "Increase transcript throughput",
+      "description": "Grow the number of sessions the team can carry from upload to Complete in a given week or month without a proportional increase in staff or processing time. Higher throughput is the operational measure of whether the pipeline is scaling.",
+      "successIndicators": [
+        "Sessions reaching 'Complete' stage per calendar week increases quarter over quarter",
+        "CMS-published count on the dashboard KPI strip grows without a corresponding growth in sessions stuck in the pipeline",
+        "Average concurrent sessions in the SOP workflow can expand without triggering rate-limit errors or editor queue overloads",
+        "Total session backlog age (sum of days-in-pipeline across all open sessions) stays flat or declines even as volume grows"
+      ]
+    },
+    {
+      "title": "Improve per-stage SLA adherence",
+      "description": "Increase the percentage of SOP stage transitions that happen within the configured time window for each stage, turning SLA compliance from a reactive alarm into a steady operating standard. Strong SLA adherence gives publishing schedulers reliable lead-time commitments.",
+      "successIndicators": [
+        "Percentage of stage transitions completed before the stage SLA expires exceeds a defined target (e.g., 90% of transitions)",
+        "Count of OVERDUE badges visible on the dashboard SOP row at any given time stays below a defined ceiling",
+        "Average time-in-stage for the historically slowest stage (Medical, 48h SLA) stays within the window across a month",
+        "Overdue stage warnings logged in the system audit ledger decrease as a rate per session"
+      ]
+    },
+    {
+      "title": "Reduce unresolved discrepancies",
+      "description": "Lower the number of AI-vs-reference discrepancy flags that exit the Editor without a resolution — either a text correction or an explicit 'mark OK' — so that downstream reviewers encounter a clean transcript rather than an unacknowledged list of open questions.",
+      "successIndicators": [
+        "Sessions entering the Medical SOP stage with zero open discrepancy flags increases as a percentage of total",
+        "Discrepancy count shown in the Editor's Discrepancies tab at the time a session enters Copy Final drops to near zero",
+        "Average open-discrepancy count per session at QA stage falls below a defined threshold",
+        "Time from discrepancy first appearing in the Editor to resolution (text edit or mark-OK) decreases on average"
+      ]
+    },
+    {
+      "title": "Accelerate CMS publishing",
+      "description": "Shorten the time from a session reaching the CMS stage to the finished transcript being exported and live in the downstream content system, reducing the delay between editorial completion and audience availability.",
+      "successIndicators": [
+        "Average hours spent in the CMS SOP stage stays within the 12-hour SLA window consistently",
+        "Number of sessions with an OVERDUE badge specifically on the CMS stage falls to near zero",
+        "Exports downloaded from the Editor (Word / Captions / Plain Text) within the same business day the CMS stage opens increases",
+        "Total sessions with 'Published' status on the Sessions list KPI tiles grows at pace with new uploads"
+      ]
+    },
+    {
+      "title": "Standardize the SOP workflow",
+      "description": "Establish consistent stage-assignee matrices, stage sequences, and per-stage SLA windows across all session types so that every recording moves through the same predictable review path regardless of who uploaded it or which session type it is.",
+      "successIndicators": [
+        "Proportion of new sessions inheriting a fully populated 8-stage assignee matrix from their session Type (rather than being manually patched) increases",
+        "Deviation rate between planned stage-assignee matrix and the actual assignees at the time of each transition falls",
+        "Number of sessions where a stage owner is blank or unset when the stage becomes active drops to zero",
+        "Ad-hoc stage reassignments logged in the audit — those not matching the type default — decrease as a share of all assignments"
+      ]
+    },
+    {
+      "title": "Improve production visibility",
+      "description": "Give managers and operators a clear, current-state view of where every session sits in the pipeline, which stages are under pressure, and where work is accumulating, without needing to open individual session records.",
+      "successIndicators": [
+        "Dashboard SOP pipeline row accurately reflects current session counts per stage with no manual reconciliation required",
+        "Number of sessions 'found' to be stuck or overdue via direct manager inquiry (vs. spotted on the dashboard) approaches zero",
+        "My Queue page correctly shows each operator's active SOP assignments, so no follow-up messages are needed to find out who is holding a session",
+        "Manager can answer 'how many sessions are past their SLA right now?' from the dashboard in under 30 seconds"
+      ]
+    },
+    {
+      "title": "Reduce manual correction effort",
+      "description": "Decrease the total number of manual edits — text corrections, speaker reassignments, slide realignments — required to bring a session from AI first-pass to publication-ready, by improving upstream AI quality and discrepancy flagging.",
+      "successIndicators": [
+        "Total correction events in the audit ledger per session trends down over rolling quarterly cohorts",
+        "Share of sessions requiring fewer than a defined number of text edits before reaching Copy Final increases",
+        "Average Find & Replace operations per session (bulk corrections that mask many underlying errors) decreases as AI quality improves",
+        "Time editors spend holding the session lock per session falls without an increase in QA-stage rejections"
+      ]
+    },
+    {
+      "title": "Improve quality consistency",
+      "description": "Narrow the variance in transcript quality across sessions so that the published output meets the same editorial standard regardless of the presenter, recording quality, or which editor worked on it. Inconsistent quality erodes subscriber trust and increases CMS rework.",
+      "successIndicators": [
+        "Standard deviation of correction-event counts per session narrows across a monthly cohort",
+        "Proportion of sessions that pass QA stage on first attempt (no correction note added before advancement) stays above a defined floor",
+        "Sessions published with zero post-publication correction requests grows as a share of total published sessions",
+        "Per-editor correction rates converge rather than diverge, indicating the workflow — not individual skill — is the quality driver"
+      ]
+    },
+    {
+      "title": "Strengthen the edit audit trail",
+      "description": "Ensure every text edit, speaker reassignment, slide realignment, and stage advance is fully attributed and permanently recorded, so that any question about what changed, when, and by whom can be answered from the correction ledger or session audit view without escalating to an administrator.",
+      "successIndicators": [
+        "Zero instances of a correction appearing in the published transcript with no corresponding ledger entry",
+        "Any editor can reconstruct the full change history for a session from the Word Track Changes (session audit) view without assistance",
+        "JSONL exports from the audit view are used in at least one operational review per month, indicating the data is trusted and consulted",
+        "Time to answer 'who changed this segment and when?' from the session audit view averages under two minutes"
+      ]
+    },
+    {
+      "title": "Reduce failed or stuck sessions",
+      "description": "Lower the rate at which sessions enter a failed or permanently stalled state requiring operator intervention, so that pipeline capacity is not consumed by retries and recovery work instead of new transcripts.",
+      "successIndicators": [
+        "Count of sessions with 'Failed' status on the Sessions list falls as a percentage of all sessions processed per month",
+        "Number of times operators trigger Re-Ingest, Re-Align, or Abort from the editor Admin rescue panel decreases month over month",
+        "Sessions that retry after a failure and reach 'Ready' without a second failure grows as a share of all retried sessions",
+        "Rate-limit errors (429 from concurrent-session caps) logged in the system audit per week declines as operators learn session hygiene"
+      ]
+    },
+    {
+      "title": "Improve capacity planning",
+      "description": "Give operations management enough visibility into pipeline load, stage dwell times, and editor queue depth to make informed decisions about staffing, deadline commitments, and when to restrict new uploads.",
+      "successIndicators": [
+        "Manager can estimate 'time to clear current backlog' using session counts per SOP stage visible on the dashboard without a separate spreadsheet",
+        "Per-operator My Queue depth is reviewed in weekly team standups using the queue page directly, not a manually assembled list",
+        "Advance warning of SLA breaches — sessions approaching their stage deadline before they go OVERDUE — is part of a regular operational review",
+        "Upload rate (new sessions per week) is adjusted proactively based on dashboard pipeline depth, not reactively after a backlog crisis"
+      ]
+    },
+    {
+      "title": "Lower cost per transcript",
+      "description": "Reduce the combined AI processing, editor labor, and review overhead required to produce one published transcript, making the economics of the content pipeline sustainable as session volume grows.",
+      "successIndicators": [
+        "Average editor-hours per session (estimated from lock-hold time in the correction ledger) decreases over rolling quarters",
+        "AI processing retries per session decline, reducing redundant AI compute cost",
+        "Sessions completing all 8 SOP stages within the standard SLA windows (no overtime or expedited work) grow as a share of total",
+        "Number of sessions that require a second full Re-Ingest due to processing failure falls, eliminating duplicate AI spend"
+      ]
+    },
+    {
+      "title": "Improve handoffs between stages",
+      "description": "Make each SOP stage transition clean and unambiguous — the right person is assigned, they receive timely notice, and they have a complete transcript ready to work — so that sessions do not stall in the gap between stages.",
+      "successIndicators": [
+        "Time between a session advancing to a new SOP stage and the assignee opening it (first engagement) decreases on average",
+        "Sessions entering a new stage with a blank or default assignee that must be manually reassigned before work begins falls to near zero",
+        "Overdue warnings that fire specifically in the first few hours of a stage (indicating the handoff was not acknowledged) decrease",
+        "Annotation or note events logged at stage transitions increase, indicating incoming reviewers are oriented by their predecessor's context"
+      ]
+    }
+  ],
+  "committee": [
+    {
+      "name": "Owner / Managing Director",
+      "role": "Owner / Managing Director",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "decision_maker",
+      "sortOrder": 0,
+      "interests": [
+        "Whether rounds.vin can handle the current session volume without adding staff",
+        "The total cost of producing one finished transcript compared to the current process",
+        "Whether the AI pipeline produces results good enough to reduce editing time materially",
+        "How long it will take before the team is fully running on the new workflow",
+        "What happens to sessions already in progress if we switch over mid-cycle",
+        "Whether the SOP stages map to how we actually review transcripts today",
+        "How confident I can be in the published transcript quality once the team is trained",
+        "Whether the tool creates any new dependencies that could slow us down if they fail",
+        "What the contract commitment looks like and whether pricing scales with session volume",
+        "What real customers with similar operations have seen in turnaround time improvement",
+        "Whether this replaces tools we already pay for or sits on top of them"
+      ],
+      "decisionCriteria": [
+        "Measurable reduction in hours-per-transcript within the first 60 days of full use",
+        "The SOP workflow in rounds.vin covers all 8 stages we currently run without workarounds",
+        "Staff can be trained and operational within a timeline that does not delay current publishing commitments",
+        "Price per session (or per month at our volume) is lower than the current cost of manual coordination overhead",
+        "Sessions that fail the AI pipeline can be recovered without losing the uploaded file or starting over entirely",
+        "The correction ledger gives me proof that every change was made deliberately and can be traced back to a person",
+        "The CMS export format is compatible with our downstream publishing system without a custom integration",
+        "The tool does not introduce a single point of failure that would halt all transcript production if it goes down",
+        "A clear account contact exists for support issues — not just a help documentation portal",
+        "We can run a real pilot on 10–15 sessions before a long-term commitment",
+        "The per-stage SLA settings can be configured to match our actual turnaround promises to stakeholders"
+      ],
+      "goals": [
+        "Deliver more published transcripts per week with the current editorial team",
+        "Get out of the business of manually tracking which session is in which review stage via spreadsheet",
+        "Know at a glance every morning whether any session is overdue without asking anyone",
+        "Reduce the time the Medical review stage holds sessions, since it is our biggest deadline risk",
+        "Build a content pipeline that can absorb a 30% volume increase without a hiring decision",
+        "Have a defensible audit record if a speaker ever questions what was changed in their transcript",
+        "Standardize the workflow across all session types so new hires onboard to one process, not three",
+        "Lower the cost per transcript so the content operation can sustain itself at higher volume",
+        "Stop losing production time to sessions that get stuck or fail and require individual troubleshooting",
+        "Have a real answer when stakeholders ask 'when will this transcript be published?'"
+      ],
+      "objections": [
+        "Our editors have their own correction habits — I am worried they will resist a single-lock editing model",
+        "The AI will confidently mangle veterinary drug names and anatomical terms, and we will still have to catch every one",
+        "If the AI pipeline fails mid-week, we have zero fallback and miss our publishing schedule",
+        "We have been burned by SaaS tools that demo beautifully and then change their pricing once we are dependent",
+        "Our current turnaround SLA is a verbal agreement with presenters — I need to see how we communicate delays through this tool",
+        "The 8 fixed SOP stages may not match what we actually do for different session types",
+        "I am not ready to put three months of backlog sessions into a new system while also running production",
+        "My team is small — if adoption requires more than a couple of hours of training per person, it will not happen",
+        "The dashboard's trend charts are decorative — I need real historical data, not current-state snapshots",
+        "What does 'failed session' actually cost us — AI re-run charges plus editor time to restart?"
+      ],
+      "openQuestions": [
+        "Walk me through what happens from the moment I click Process to the moment a Word file is ready to hand off to CMS — every step.",
+        "If the AI pipeline fails overnight on three sessions, what does my team see the next morning and what do they do?",
+        "How do I see right now which sessions are overdue and who is responsible for each one?",
+        "Can the per-stage SLA windows be set differently for sessions involving a specialist reviewer versus a standard session?",
+        "What does the CMS export actually look like — is it a clean Word file or does it need cleanup before uploading?",
+        "If a presenter calls to say their name was consistently misspelled across a hundred segments, how long does a bulk fix take?",
+        "Can I limit who can advance a session past the Medical stage so that only a credentialed reviewer can do it?",
+        "What happens to a session that has been sitting in the SOP workflow for two weeks — can I force it to a later stage?",
+        "How much does the AI processing cost per session and how is that billed?",
+        "Is there a way to see total sessions published this month versus last month without exporting to a spreadsheet?",
+        "What is the realistic correction rate — how many text edits does the average 60-minute session require after the AI runs?",
+        "If one of my editors leaves, how do I reassign all their queued sessions at once?",
+        "Does the tool work for sessions recorded outside of Zoom — we have some ARAV and NAVAS format recordings?",
+        "Can we run two session types through the same pipeline simultaneously or is there a queue limit?",
+        "What does the first 30 days look like — who does what to get from zero sessions to full production?"
+      ]
+    },
+    {
+      "name": "Content Publishing Director",
+      "role": "Content Publishing Director",
+      "influence": "high",
+      "riskLevel": "medium",
+      "decisionAuthority": "approver",
+      "sortOrder": 1,
+      "interests": [
+        "Whether the CMS export format from rounds.vin lands in our publishing system without reformatting work",
+        "How slide-by-slide alignment in the Viewer affects the reading experience for subscribers",
+        "Whether the Captions stage in the SOP produces .srt files that stay synchronized after corrections",
+        "How many sessions can realistically move from Upload to CMS stage within a week at current team size",
+        "Whether published transcript quality is consistent enough that subscribers can rely on it",
+        "The hand-off between the CMS stage and our actual content management system — does someone manually copy-paste?",
+        "Whether the tool makes it easy to catch a speaker name misspelled consistently across an entire session before it goes live",
+        "How the Viewer's publishing checklist compares to our current pre-publish sign-off list",
+        "Whether the Word macro bundle simplifies how our CMS team handles the Word-to-web conversion",
+        "How session metadata (title, presenter, date) flows from rounds.vin into the CMS record",
+        "Whether a session can be recalled and corrected after it has reached the Complete stage"
+      ],
+      "decisionCriteria": [
+        "The Word .docx export from the Editor is clean enough to upload directly to our CMS without a reformatting step",
+        "Caption .srt files stay aligned to audio even after text corrections are made to the transcript",
+        "The Viewer's slide-by-slide preview matches what the CMS will actually display so we can catch layout errors pre-publish",
+        "Sessions move through the CMS SOP stage within the 12-hour SLA window consistently",
+        "Bulk find-and-replace in the Editor handles systematic errors (repeated name misspellings, drug name corrections) reliably before export",
+        "The publishing checklist in the Viewer covers the same destinations we currently check (VINcast, session page, etc.)",
+        "There is a clear handoff moment between rounds.vin and the CMS — not a vague 'it's done, someone go get it'",
+        "A correction made after a session reaches Complete can be isolated, re-exported, and republished without touching the entire session",
+        "The tool does not introduce a new step that adds publishing latency compared to our current process",
+        "Caption and transcript quality is high enough that our medical editor does not need to re-review after CMS export"
+      ],
+      "goals": [
+        "Publish transcripts within a defined SLA after a session recording is delivered, without chasing individual reviewers",
+        "Eliminate the manual reformatting step between the final Word transcript and what goes into our CMS",
+        "Know exactly which sessions are cleared for publishing and which are still in review without checking with the editorial team",
+        "Ensure that every published transcript has gone through the full 8-stage SOP without exception",
+        "Reduce the number of post-publication corrections triggered by errors that should have been caught in QA",
+        "Give subscribers a consistent transcript format across all session types regardless of presenter or recording quality",
+        "Have a clear record that the Captions stage was completed before a session was published",
+        "Be able to re-export a corrected transcript to the CMS without re-doing the entire review workflow",
+        "Reduce the back-and-forth between publishing and editorial when a transcript is 'almost ready but not quite'",
+        "Have a publishing dashboard that shows me today's ready-to-publish queue without a status email from the operations team"
+      ],
+      "objections": [
+        "Our CMS has a specific import format — if rounds.vin exports a generic Word file I will still need a manual conversion step",
+        "The Viewer's export buttons are labeled as not wired — that makes me nervous about relying on it for our pre-publish review",
+        "If a session sits in the Captions stage past its SLA, who owns the escalation — the publishing team or operations?",
+        "I have seen AI tools confidently produce speaker labels that are completely wrong for multi-speaker panels — has this been tested on our session types?",
+        "We use specific style conventions in our transcripts — how do I know those are applied consistently across editors?",
+        "Post-publication corrections to live transcripts are sensitive — what is the protocol for re-exporting and re-uploading to the CMS?",
+        "The slide alignment in the Viewer is the thing subscribers actually read — I need to see it working on a real ARAV or NAVAS recording, not a clean demo session",
+        "I am concerned the Medical stage's 48-hour SLA will regularly push us past our publishing promise to CE presenters",
+        "Does rounds.vin handle sessions where the presenter shared their screen rather than uploaded a slide deck separately?",
+        "Who signs off that a session is CMS-ready — the QA Lead, the editor, or is there a formal approval tied to stage advance?"
+      ],
+      "openQuestions": [
+        "Show me what the Word .docx export actually looks like when I open it — specifically the heading structure and speaker label formatting.",
+        "Can I see the Captions .srt file for a session that had corrections made after the first AI pass — are the timestamps still accurate?",
+        "What does the Viewer's slide-by-slide layout look like for a session where a slide was re-aligned mid-edit?",
+        "If a session is in the CMS stage and I find a medical term error, can I send it back to Copy Final or does the workflow only go forward?",
+        "How does bulk Find & Replace handle a name that appears in both the speaker label and the transcript body — does it catch both?",
+        "What is the practical difference between the Word export and the Word Macro bundle — when would I use each?",
+        "Can I filter the Sessions list to show only sessions currently at or past the CMS stage so I can manage the publishing queue?",
+        "How does sessions metadata — presenter name, session code, date — get into the Word export header?",
+        "If the CMS stage assignee is on vacation, what does the OVERDUE notification look like and who else sees it?",
+        "Is there a way to mark a session as 'hold — do not publish' from within rounds.vin without deleting it or completing the workflow?",
+        "Walk me through the publishing checklist in the Viewer — does checking those boxes do anything in the system or is it for reference only?",
+        "How long after a session reaches Complete can corrections still be made before it is effectively locked for CMS?",
+        "Can I download a batch of Word exports for a week's worth of completed sessions or only one at a time?",
+        "What happens to the .srt caption timestamps if the editor splits or merges segments late in the review process?",
+        "Can rounds.vin support a 'hold for presenter review' step between QA and Complete, or is the 8-stage sequence fixed?"
+      ]
+    },
+    {
+      "name": "Transcript Operations Manager",
+      "role": "Transcript Operations Manager",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "champion",
+      "sortOrder": 2,
+      "interests": [
+        "Whether the dashboard SOP pipeline strip gives me a real count of sessions per stage without needing to open each one",
+        "How My Queue works for each editor — do they only see sessions assigned to them at the current stage?",
+        "Whether the 8-stage SOP in rounds.vin (Prep, Copy Draft, Medical, Copy Final, CMS, Captions, QA, Complete) maps to the stages we actually run",
+        "How I reassign a session from one editor to another mid-stage without breaking the audit trail",
+        "Whether the OVERDUE badge fires early enough for me to intervene before a publishing deadline is missed",
+        "How many sessions can be in the pipeline at once before editors start hitting rate-limit errors on uploads",
+        "Whether the Processing page gives me enough detail to distinguish a slow pipeline from a genuinely failed one",
+        "How the session Type and its default stage-assignee matrix work when I need to onboard a new session type",
+        "Whether a stuck or failed session can be recovered without losing the uploaded media file",
+        "How I handle a Medical reviewer who is out — can I reassign their queue without them present?",
+        "How the per-stage dwell time data on the dashboard helps me spot which stage is chronically slow"
+      ],
+      "decisionCriteria": [
+        "My Queue accurately shows each editor only their own assigned sessions at the current stage, updated within 30 seconds",
+        "Reassigning a stage owner mid-session is audited — I can see who made the change and when in the session detail",
+        "The SOP advance button and its confirmation dialog are clear enough that editors won't accidentally skip a stage",
+        "Failed sessions show a plain-language reason (not a code or log dump) and a clear recovery path on the Processing page",
+        "The session Types system lets me define different default assignee matrices for ARAV vs. NAVAS vs. lecture session types",
+        "Stage SLA windows in the dashboard reflect our actual turnaround targets, not generic defaults",
+        "I can see at a glance how many sessions are currently in each SOP stage from the main dashboard without drilling in",
+        "The Ping owner button or an equivalent notification mechanism actually reaches the assignee when a stage goes overdue",
+        "Uploading a session with slides, chat, and manifest in a single upload works reliably without a file-type rejection",
+        "The 3-concurrent-session rate limit is visible and manageable before editors hit a 429 error during an upload",
+        "Re-Ingest from the editor Admin tab reliably recovers a failed session without creating a duplicate"
+      ],
+      "goals": [
+        "Run the morning production standup from the dashboard SOP strip without pulling a separate status report",
+        "Assign the right person to each SOP stage at session creation so sessions never sit waiting for an owner to be named",
+        "Get ahead of OVERDUE sessions before presenters or the publishing director notices the delay",
+        "Keep the pipeline moving during Medical review — the 48-hour SLA is the one we most often miss",
+        "Train new editors to the full upload-to-complete workflow in one session using the tool itself, not a separate manual",
+        "Eliminate the ad-hoc Slack messages asking 'is session X done yet?' by pointing everyone at My Queue",
+        "Know within a few minutes of a session failing what went wrong and whether a Retry will fix it",
+        "Build session Types for every format we process so any new session automatically gets the right SLA and assignee matrix",
+        "Reduce the number of sessions I have to touch personally because an assignee was blank or wrong",
+        "Have a clear record of every stage transition so that post-production questions about a transcript's history have a definitive answer"
+      ],
+      "objections": [
+        "The dashboard KPIs note they can undercount once we exceed 50 sessions — we are already over that on a busy week",
+        "The Ping owner feature shows a toast but sends nothing — we need a real notification path or editors will miss overdue alerts",
+        "The SOP Advance button is currently gated by acceptance checks that never flip to pass — that is a workflow blocker, not a minor bug",
+        "Stage-transition emails are off by default and require a configuration switch — who sets that and when?",
+        "If My Queue only shows sessions at the current stage and an editor is reassigned mid-stage, how quickly does their queue update?",
+        "The rate-limit cap of 3 concurrent sessions per user will hit us when we do bulk uploads after a conference",
+        "I cannot go backward in the SOP — if a Copy Final session needs to go back to Medical we have to annotate a workaround",
+        "The 'Your Queue' card on the dashboard shows the three most recent sessions globally, not the user's work — this will confuse new editors who expect it to be their personal queue",
+        "Setting up session Types and the 8-stage assignee matrix requires admin access — what if I need to make a change on a Sunday evening?",
+        "If we have a session where the presenter also did the Q&A moderation, will the speaker labeling treat them as one speaker or two?"
+      ],
+      "openQuestions": [
+        "Show me the dashboard SOP strip right now — can I click the Medical stage count and see exactly which sessions are sitting there?",
+        "If I reassign a session from one Copy Draft editor to another, what shows up in the session audit view — do I see both names?",
+        "Walk me through what an editor sees when they open My Queue — is it sorted by how long the session has been waiting?",
+        "When a session goes OVERDUE on the SOP strip, what is the sequence of events — does anyone get an email or does it just show an in-app badge?",
+        "Can I configure different SLA windows for a session marked as 'urgent' versus a standard session?",
+        "If a session fails during the AI pipeline overnight, will it show on the dashboard failed count before I arrive in the morning?",
+        "How do I set up a new session Type for a panel-format recording with three speakers — walk me through the Types settings screen?",
+        "If the Medical reviewer is out for a week, can I temporarily reassign all their queued sessions from a single view?",
+        "What is the maximum number of concurrent sessions the system can hold in the SOP pipeline before performance degrades?",
+        "Can I see the correction ledger for a session that was completed last month to answer a presenter question about what changed?",
+        "If an editor accidentally advances a session from Copy Draft to Medical before finishing their corrections, what is the recovery path?",
+        "Does the session Type's default assignee matrix apply automatically when I upload, or do I have to apply it manually after upload?",
+        "How do I tell from the Processing page whether the AI is working on a session versus genuinely stuck — is there a timeout indicator?",
+        "Can I run a report that shows me every session that exceeded its Medical stage SLA in the last 30 days?",
+        "If we upload a session with both a PPTX slide deck and a PDF version, which one does the alignment use?"
+      ]
+    },
+    {
+      "name": "Quality Assurance Lead",
+      "role": "Quality Assurance Lead",
+      "influence": "medium",
+      "riskLevel": "medium",
+      "decisionAuthority": "evaluator",
+      "sortOrder": 3,
+      "interests": [
+        "Whether the Discrepancies tab in the Editor shows AI-vs-reference diffs clearly enough to triage without opening each segment",
+        "How the QA SOP stage interacts with the correction ledger — can I see every change made before the session reached me?",
+        "Whether the flag filter chips (Medication / Name / Number / Filler / Punctuation / Drift) in the Editor surface the right categories for our QA criteria",
+        "How the append-only correction ledger prevents someone from quietly undoing a medical term correction after QA signs off",
+        "Whether the Editor's undo/redo model means a previous editor can reverse a correction I made",
+        "How I communicate a finding back to a prior stage owner — is there a notes field on the SOP page or do we go off-platform?",
+        "Whether the Word Track Changes audit view gives me enough detail to verify that a specific correction was applied",
+        "How the Editor handles segments where the AI produced a plausible but wrong drug dose — will the Medication flag catch that?",
+        "Whether the session lock system actually prevents two people from editing simultaneously and creating a conflict",
+        "How I escalate a session from QA back to Copy Final if I find a systematic error late in review"
+      ],
+      "decisionCriteria": [
+        "Every text edit, speaker reassignment, and slide realignment made before QA stage is visible in the correction ledger with editor attribution",
+        "The Discrepancies tab in the Editor presents AI-vs-reference diffs sorted by severity or type so I can triage the most critical ones first",
+        "A 90-second session lock means if I am mid-correction and the lock expires, I lose nothing and can re-acquire immediately",
+        "The flag filter for Medication type segments surfaces veterinary drug names flagged as likely errors, not just generic filler words",
+        "I can add a note on the SOP Workflow page when advancing from QA to Complete that is attributed to me and timestamped",
+        "The correction ledger is truly append-only — no one can alter or delete a row, and I can verify this by seeing the total event count stay stable",
+        "The JSONL export from the session audit view can be used to verify correction completeness in a review outside the tool",
+        "The SOP workflow forces a forward-only path so a session cannot go from QA back to an earlier stage without a visible note explaining why",
+        "Any segment I flag as 'needs correction' during QA can be linked to a specific discrepancy record so follow-up is traceable",
+        "The Editor shows me the STT Reference tab alongside the AI Transcript so I can compare original speech-to-text against the AI output"
+      ],
+      "goals": [
+        "Complete a QA pass on a session in under two hours for a standard 60-minute lecture",
+        "Have a reliable way to confirm that every medical term correction flagged in Copy Draft was actually applied before the session reached me",
+        "Catch systematic errors — a drug name misspelled the same way 40 times — before they reach the QA stage by setting up an upstream catch",
+        "Know that once I advance a session from QA to Complete, no earlier editor can quietly push through a conflicting change",
+        "Have a documented record that I personally reviewed and cleared the QA stage on every session, exportable for our internal quality reporting",
+        "Surface the highest-risk segments first — medication names, dosage numbers, procedural steps — without reading every line sequentially",
+        "Reduce the number of sessions I have to advance under a note-and-override because the acceptance checks are stuck in pending",
+        "Have a clear escalation path when I find an error that should have been caught in Medical, without having to manually rebuild the session history",
+        "Ensure the Captions stage runs after QA so caption files reflect my corrections and not an earlier draft",
+        "Track my own QA throughput — sessions reviewed per week — to make the case for staffing during high-volume periods"
+      ],
+      "objections": [
+        "The flag filter chips for Name, Number, and Date show zero because they have no data source — those are exactly the categories I rely on for medical accuracy review",
+        "The SOP acceptance checks stay 'pending' and never flip — that means advancing from QA requires an override every single time, and the audit trail will look like I bypassed checks rather than legitimately cleared them",
+        "Split and merge are off by default — there are sessions where a segment boundary is wrong in a medically significant way, and I cannot fix the structure",
+        "The Medication filter flag is listed in the spec but I need to see it in action on a real veterinary drug name before I trust it",
+        "If undo/redo in the Editor is session-wide, does that mean an editor in a different stage could theoretically undo one of my QA corrections if they get the lock?",
+        "The approvals card on the SOP page is 'derived synthetically' from stage index — that is not a real sign-off record, which matters if a presenter disputes a change",
+        "There is no backward movement in the SOP — if I find an error serious enough to need Medical re-review, I have to handle it with an annotation and a phone call rather than a formal stage return",
+        "The QA stage SLA is 8 hours — for a complex 90-minute session with hundreds of medical terms, that is not always achievable",
+        "I need more than a JSONL export to do quality reporting — what does the data look like and can it be imported into our current reporting tool?",
+        "What prevents an editor from marking a discrepancy as 'OK' when it is actually incorrect, just to clear the flag before the session hits QA?"
+      ],
+      "openQuestions": [
+        "Show me the Discrepancies tab for a real session — how many discrepancies are there, what types, and how are they sorted?",
+        "If I open the Editor for a session at QA stage, can I still make text corrections or am I in a read-only view?",
+        "Walk me through the Word Track Changes audit view for a session that has had 30 corrections — what does each row tell me about who changed what?",
+        "When I filter the Editor by the Medication flag, what exactly is the criteria that puts a segment in that filter?",
+        "If a previous editor used Find & Replace to fix a drug name across 50 segments, does the audit ledger show 50 rows or one bulk-edit row?",
+        "Can I export the full correction ledger as a JSONL file and does it contain the before and after text for each edit?",
+        "What happens to open discrepancy flags when a session reaches the QA stage — are they still listed even if the Copy Draft editor did not resolve them?",
+        "If I advance from QA to Complete and the session owner says a correction was lost, how long does it take to trace back which edit pointer is at fault?",
+        "Is there a way to add a structured QA checklist to the SOP page — or is annotation on the stage the only mechanism?",
+        "How does the Editor handle a segment where the AI confidently transcribed a veterinary drug name but it is the wrong one — does anything flag it as suspect?",
+        "Can I see how long the current session has been in the QA stage from the SOP Workflow page, so I know if I am at risk of hitting the 8-hour SLA?",
+        "If I find 10 errors in a session that should have been caught in Copy Draft, what is the right way to document that in rounds.vin so the operations manager can see the pattern?",
+        "Does the STT Reference tab show the raw speech-to-text output before AI normalization, so I can compare against the AI Transcript tab?",
+        "Can I filter the Sessions list to show only sessions currently assigned to me at any SOP stage, or is My Queue the only view for that?",
+        "What is the total number of distinct editors who touched a session shown somewhere in the session detail — or do I have to read the full audit ledger to count them?"
+      ]
+    },
+    {
+      "name": "SOP Workflow Manager",
+      "role": "SOP Workflow Manager",
+      "influence": "medium",
+      "riskLevel": "medium",
+      "decisionAuthority": "evaluator",
+      "sortOrder": 4,
+      "interests": [
+        "Whether the SOP stage configuration in rounds.vin can be mapped to our specific 8-stage review process without compromise",
+        "How the session Types system lets me define different default assignee matrices for different recording formats",
+        "Whether per-stage SLA windows can be customized without requiring developer access",
+        "How the OVERDUE badge and SOP pipeline strip on the dashboard help me identify which stage is backing up in real time",
+        "Whether annotating a stage transition creates a permanent record that the next owner can read before starting work",
+        "How the workflow handles a Medical reviewer who needs to make a note before they can clear a session — is there a formal acceptance check mechanism?",
+        "Whether the forward-only advancement rule creates problems when a session needs to go backward for a serious medical correction",
+        "How the workflow handles a panel session with multiple reviewers — can more than one person be the stage owner?",
+        "Whether the overdue notification path — currently just an in-app badge — is sufficient to reach remote reviewers",
+        "How I audit which sessions went through which SOP stages when someone asks for a compliance check after the fact",
+        "Whether the email template system for stage-transition notifications can be configured per session type"
+      ],
+      "decisionCriteria": [
+        "The 8 SOP stages in rounds.vin (Prep, Copy Draft, Medical, Copy Final, CMS, Captions, QA, Complete) match our workflow stages by name and sequence without needing workarounds",
+        "Stage-assignee matrices for session Types can be saved and applied to new sessions automatically so no session starts without an assigned owner chain",
+        "The SLA window per stage is configurable to reflect our actual turnaround commitments and not locked to the system defaults",
+        "Reassigning a stage owner mid-session is possible, audited, and does not reset the stage clock or break the workflow",
+        "A stage annotation (note/override) is visible to the next stage owner before they open the session for the first time",
+        "The Overdue badge fires based on a real elapsed-time calculation and is not subject to the same caching or static display issues as other dashboard cards",
+        "Every forward SOP advance is attributed to a specific user with a timestamp in the session audit view",
+        "Stage-transition email templates can be authored per session type per stage, not just a single global template",
+        "The workflow does not require admin access for day-to-day stage management — any signed-in user can advance, reassign, and annotate",
+        "Group assignees work correctly in the stage matrix so a stage can be owned by a named group rather than requiring an individual to be named in advance"
+      ],
+      "goals": [
+        "Eliminate the situation where a session sits in a stage for days because no one knows they are the owner",
+        "Have a self-documenting workflow — every handoff, reassignment, and advancement recorded automatically without relying on email threads",
+        "Build session Types that match each recording format we process so new sessions start with the right assignee chain out of the box",
+        "Give each SOP reviewer a clear queue view (My Queue) that shows their current responsibilities without a separate task list tool",
+        "Configure stage-specific SLA windows so we can set a longer window for Medical review without affecting the rest of the stages",
+        "Ensure the Medical stage has a formal note mechanism so the medical reviewer can communicate what they checked, not just advance and be done",
+        "Have a reliable way to see whether a session's SOP history is complete — all 8 stages transitioned through — before it goes to CMS",
+        "Reduce manual workflow coordination by routing overdue notifications to the right person automatically",
+        "Build a track record of on-time stage transitions that can be used in quarterly operations reviews",
+        "Have a single place to see all active sessions and their current stage that is current enough to run a team standup from"
+      ],
+      "objections": [
+        "Stage-transition emails require a configuration switch to be on — if that switch is off by default we are back to manual notification from day one",
+        "The Ping owner button on the SOP page sends no notification — it is not wired. That is the mechanism I would rely on for same-day overdue escalations",
+        "The approval card on the SOP stage is derived from the stage index, not a real sign-off — for our Medical stage that is not good enough for compliance purposes",
+        "There is no backward movement in the SOP — if a session is already in CMS and the Medical reviewer flags a late error, there is no formal re-review path",
+        "A session that sits in the SOP workflow for two weeks accumulates an OVERDUE badge, but there is no automated escalation path beyond the in-app badge",
+        "If a group is the stage assignee and the group has three members, how does My Queue work — do all three see it or none?",
+        "The stage assignee matrix is an admin-only operation — I cannot adjust it on short notice when an SME leaves without pulling in the admin",
+        "The 8-stage sequence is fixed and non-skippable — for a session that does not need Medical review, we cannot shortcut to Copy Final",
+        "I am worried the workflow won't differentiate between a 30-minute CE quiz recording and a 2-hour specialist conference session in terms of SLA or review depth",
+        "There is no dashboard view I can use to see how many sessions are currently on time versus behind across all 8 stages simultaneously"
+      ],
+      "openQuestions": [
+        "Show me the SOP Workflow page for a live session — can I see the stage name, the current owner, the time elapsed, and the OVERDUE badge on one screen?",
+        "If I assign 'group:Medical' as the owner of the Medical stage, what does each member of that group see in their My Queue?",
+        "Walk me through creating a new session Type with an 8-stage assignee matrix — what information do I enter for each stage?",
+        "Can I set a different SLA window for the Medical stage on one session Type and a shorter window on another?",
+        "If a session is in the Medical stage and I add a note saying 'hold — awaiting presenter clarification', can the next reviewer see that note before they open the session?",
+        "What is the actual trigger for the OVERDUE badge — is it calculated from when the stage was first entered, or from when an assignee was last set?",
+        "Can I see all sessions currently in the Medical stage with their elapsed time, sorted by longest wait, from a single view?",
+        "If a session reaches Complete and someone notices a QA error, what is the formal path in rounds.vin for initiating a correction and re-publishing?",
+        "When a session Type's default assignee matrix is updated, does that change apply to sessions already in the pipeline or only new ones?",
+        "How does the workflow handle a session where the Medical reviewer is the same person as the Copy Final reviewer — do they advance their own stage?",
+        "Is there a way to mark a stage as 'waived — not applicable' rather than advancing through it with a note, for session types that skip a specific review?",
+        "Can the stage-transition email template include the session title, the stage name, and the time-in-stage in the message body?",
+        "If two sessions are both overdue in the Medical stage simultaneously, is there any prioritization signal in My Queue for which to work first?",
+        "What does the system audit log show for a session that was advanced through three stages in a single afternoon — does it show each advance as a separate attributed event?",
+        "Can I filter the Sessions list to show only sessions that have been in the same SOP stage for more than 24 hours, across all sessions in the pipeline?"
+      ]
+    }
+  ]
+}

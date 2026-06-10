@@ -53,6 +53,7 @@ export const ICONS: Record<string, string> = {
   pin: 'M12 22s7-5.8 7-12a7 7 0 1 0-14 0c0 6.2 7 12 7 12zM12 11a2 2 0 1 0 0-4 2 2 0 0 0 0 4z',
   logout: 'M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9',
   chat: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z',
+  archive: 'M21 8v13H3V8M1 3h22v5H1zM10 12h4',
 };
 
 export function Icon({ name, size = 16, fill = false, style, cls }: { name: string; size?: number; fill?: boolean; style?: React.CSSProperties; cls?: string }) {
@@ -156,30 +157,24 @@ export function Topbar({ cost, workspace, operator, onAsk }: { cost: string; wor
         <img className="brand__logo" src="/assets/VIN-light.svg" alt="VIN" />
         <span className="brand__div" />
         <div>
-          <div className="brand__product">Demo</div>
-          <div className="brand__sub">Solution Consultant</div>
+          <div className="brand__product">AI Guided Product</div>
+          <div className="brand__sub">Experience Platform</div>
         </div>
       </div>
+      {/* Single-tenant workspace — a label, not a switcher (no other workspaces to pick). */}
       <div className="ws-switch">
         <span className="ws-switch__dot">{ws.name[0]?.toUpperCase() ?? 'V'}</span>
         <div>
           <div className="ws-switch__name">{ws.name}</div>
           <div className="ws-switch__role">{ws.sub}</div>
         </div>
-        <Icon name="chevD" size={11} />
       </div>
       <div className="topbar__spacer" />
-      <div className="topbar__search">
-        <Icon name="search" size={14} />
-        <input placeholder="Search products, knowledge, customers…" />
-        <kbd>⌘K</kbd>
-      </div>
-      <div className="cost-pill" title="Spend across active demos this month">
+      <div className="cost-pill" title="Cost of demos run month-to-date (cost_events this month)">
         <span className="cost-pill__label">MTD spend</span>
         <span className="cost-pill__val">${cost}</span>
       </div>
       <button onClick={onAsk} title="Ask VIN — live conversation" style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', borderRadius: 8, border: 'none', background: '#0861CE', color: '#fff', fontSize: 12.5, fontWeight: 700, cursor: 'pointer' }}><Icon name="chat" size={14} /> Ask VIN</button>
-      <button className="topbar__icon" title="Notifications"><Icon name="bell" size={16} /><span className="dot" /></button>
       <div className="avatar" title={operator ?? 'Operator'}>{opInitials}</div>
       <button className="topbar__icon" title="Log out" onClick={logout}><Icon name="logout" size={16} /></button>
     </header>
@@ -190,50 +185,69 @@ export function Topbar({ cost, workspace, operator, onAsk }: { cost: string; wor
 export const NAV = [
   { group: 'Workspace', items: [{ id: 'dashboard', label: 'Dashboard', icon: 'dashboard' }] },
   { group: 'Library', items: [
-    { id: 'products', label: 'Products', icon: 'product', count: 6 },
-    { id: 'knowledge', label: 'Knowledge', icon: 'knowledge', count: 8 },
+    { id: 'products', label: 'Products', icon: 'product', countable: true },
+    { id: 'knowledge', label: 'Knowledge', icon: 'knowledge', countable: true },
     { id: 'graphs', label: 'Demo Graphs', icon: 'graph' },
     { id: 'environments', label: 'Environments', icon: 'environment' },
-    { id: 'personas', label: 'Personas', icon: 'persona', count: 3 },
+    { id: 'personas', label: 'Personas', icon: 'persona', countable: true },
   ] },
   { group: 'Pipeline', items: [
-    { id: 'customers', label: 'Departments', icon: 'customers', count: 4 },
-    { id: 'sessions', label: 'Demo Sessions', icon: 'sessions', count: 5 },
+    { id: 'chain', label: 'Experience Map', icon: 'dashboard' },
+    { id: 'experience', label: 'Outcomes & Committee', icon: 'customers' },
+    { id: 'orgchart', label: 'Org Chart', icon: 'persona', countable: true },
+    { id: 'journeys', label: 'Journeys', icon: 'sessions' },
+    { id: 'customers', label: 'Departments', icon: 'customers', countable: true },
+    { id: 'sessions', label: 'Demo Sessions', icon: 'sessions', countable: true },
   ] },
   { group: 'Operations', items: [
     { id: 'safety', label: 'Safety & Modes', icon: 'safety' },
+    { id: 'governance', label: 'Governance', icon: 'lock' },
+    { id: 'aicontrol', label: 'AI Control', icon: 'settings' },
+    { id: 'aihistory', label: 'AI Conversation History', icon: 'sessions' },
     { id: 'evals', label: 'Eval Harness', icon: 'evals' },
     { id: 'costs', label: 'Cost & Economics', icon: 'costs' },
   ] },
-] as { group: string; items: { id: string; label: string; icon: string; count?: number }[] }[];
+] as { group: string; items: { id: string; label: string; icon: string; countable?: boolean }[] }[];
 
-export function Sidebar({ route, go }: { route: string; go: Go }) {
+export function Sidebar({ route, go, counts }: { route: string; go: Go; counts?: Record<string, number> }) {
   return (
     <nav className="sidebar scroll">
       {NAV.map((g) => (
         <div className="nav-group" key={g.group}>
           <div className="nav-group__title">{g.group}</div>
-          {g.items.map((it) => (
-            <button key={it.id} className={`nav-item ${route === it.id ? 'active' : ''}`} onClick={() => go(it.id)}>
-              <span className="ico"><Icon name={it.icon} size={17} /></span>
-              <span className="nav-label">{it.label}</span>
-              {it.count != null && <span className="nav-count">{it.count}</span>}
-            </button>
-          ))}
+          {g.items.map((it) => {
+            const n = it.countable ? counts?.[it.id] : undefined; // real, live collection size
+            return (
+              <button key={it.id} className={`nav-item ${route === it.id ? 'active' : ''}`} onClick={() => go(it.id)}>
+                <span className="ico"><Icon name={it.icon} size={17} /></span>
+                <span className="nav-label">{it.label}</span>
+                {n != null && <span className="nav-count">{n}</span>}
+              </button>
+            );
+          })}
         </div>
       ))}
       <div className="sidebar__foot">
-        <div className="mode-card">
-          <div className="mode-card__label">Default execution mode</div>
-          <div className="mode-card__row" style={{ marginTop: 6, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <ModeChip mode="read-only" />
-            <button className="btn btn-ghost btn-sm" onClick={() => go('safety')} style={{ padding: '2px 6px' }}><Icon name="settings" size={13} /></button>
-          </div>
-        </div>
-        <button className="nav-item" style={{ marginTop: 8 }} onClick={() => go('settings')}>
+        {/* Modes are per-site (set on each Environment) — link to Safety rather than imply one global default. */}
+        <button className="nav-item" onClick={() => go('safety')}>
+          <span className="ico"><Icon name="safety" size={17} /></span><span className="nav-label">Safety &amp; Modes</span>
+        </button>
+        <button className="nav-item" onClick={() => go('settings')}>
           <span className="ico"><Icon name="settings" size={17} /></span><span className="nav-label">Settings</span>
         </button>
       </div>
     </nav>
+  );
+}
+
+/* ---- Mark-unavailable affordance: a visible, clearly-disabled control with the reason/trigger.
+   Used wherever a workflow is deferred (not yet wired) so the UI never implies functionality that
+   doesn't exist — per the audit's "if you can see it, it must be real / unavailable / removed" rule. */
+export function Unavailable({ label, icon, why, primary, sm }: { label: string; icon?: string; why: string; primary?: boolean; sm?: boolean }) {
+  return (
+    <button className={`btn ${primary ? 'btn-primary' : 'btn-secondary'}${sm ? ' btn-sm' : ''}`} disabled title={why}
+      style={{ opacity: .55, cursor: 'not-allowed' }} aria-disabled>
+      {icon && <Icon name={icon} size={sm ? 12 : 13} />} {label} <span style={{ fontSize: 10, fontWeight: 800, letterSpacing: '.06em', opacity: .8, marginLeft: 4, textTransform: 'uppercase' }}>soon</span>
+    </button>
   );
 }

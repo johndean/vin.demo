@@ -21,6 +21,8 @@ import { updateSessionStatus } from './session.js';
 import { recordDiscovery } from './discovery.js';
 import { setActiveSpeaker, getActiveStakeholder, addOpenItem } from './stakeholders.js';
 import { retrieveAndGate } from './retrieval.js';
+import { selectNavigation, recordNavAttempt } from './graph-lifecycle.js';
+import { journeyWalkPlan } from './journeys.js';
 const EXPLAIN_TRACE_WINDOW = 16; // bound the cross-turn trace fed to explain (it grows unbounded)
 
 // ── whoSpeaks (multi-stakeholder, P2.3 / Gap F) — resolve the active speaker ───
@@ -63,31 +65,51 @@ async function interpret(state: DemoStateT): Promise<Partial<DemoStateT>> {
 // ── retrieve (confidence + validation + staleness + relevance gate) ───────────
 async function retrieve(state: DemoStateT): Promise<Partial<DemoStateT>> {
   const query = state.interpretation?.intent ?? state.utterance;
-  const r = await retrieveAndGate(query, state.productId);
+  // An active specialist persona can demand a stricter confidence bar + re-rank by its knowledge hierarchy.
+  const r = await retrieveAndGate(query, state.productId, state.minConfidence, state.knowledgePriority);
   return {
     retrieved: r.rows,
     gated: r.gated,
     navigable: r.navigable,
-    trace: [`retrieve: ${r.rows.length} chunks; top confidence=${r.top?.confidence ?? 'n/a'} status=${r.top?.validation_status ?? 'n/a'} age=${r.ageDays ?? 'n/a'}d distance=${r.top?.distance?.toFixed(3) ?? 'n/a'} → ${r.gated ? `GATED (${r.reason})${r.navigable ? ' but navigable — still showing the screen' : ''}` : 'answer'}`],
+    band: r.band,
+    // Provenance in the trace so explainWhy ("why did you show that?") can name the source + its owner/validator.
+    trace: [`retrieve: ${r.rows.length} chunks; top "${r.top?.source ?? 'n/a'}"${r.top?.source_owner ? ` (owned by ${r.top.source_owner}${r.top?.validated_by ? `, validated by ${r.top.validated_by}` : ''})` : ''} confidence=${r.top?.confidence ?? 'n/a'} status=${r.top?.validation_status ?? 'n/a'} age=${r.ageDays ?? 'n/a'}d distance=${r.top?.distance?.toFixed(3) ?? 'n/a'} band=${r.band} → ${r.gated ? `GATED (${r.reason})${r.navigable ? ' but navigable — still showing the screen' : ''}` : 'answer'}`],
   };
 }
 
 // ── shared UI-driving used by navigate + resume ──────────────────────────────
-interface DriveOutcome { navigation: { ok: boolean; healedVia: string | null; url: string }; blockedMutations: string[]; opened: boolean; label: string; traceLines: string[]; navAction?: { label?: string; selectors?: string[]; url?: string } }
+interface DriveOutcome { navigation: { ok: boolean; healedVia: string | null; url: string }; blockedMutations: string[]; opened: boolean; label: string; traceLines: string[]; navAction?: { label?: string; selectors?: string[]; url?: string }; noMatch?: boolean }
 
-async function driveTo(state: DemoStateT, intent: string): Promise<DriveOutcome> {
-  const { rows } = await db().query<DemoNode & { product_name: string }>(
-    `SELECT n.intent_label, n.screen_route, n.locator_strategies, n.persona_labels, p.name AS product_name
-       FROM demo_graph_nodes n
-       JOIN demo_graphs g ON g.id = n.demo_graph_id
-       JOIN products p ON p.id = g.product_id
-      WHERE g.product_id = $1`,
-    [state.productId],
-  );
-  if (!rows.length) return { navigation: { ok: false, healedVia: null, url: '' }, blockedMutations: [], opened: false, label: '', traceLines: ['drive: no DemoGraph nodes'] };
-  const labels = rows.map((r) => r.intent_label);
-  const chosen = (await getLlm().pickNode(intent, labels)) || labels[0];
-  const node = rows.find((r) => r.intent_label === chosen) ?? rows[0];
+async function driveTo(state: DemoStateT, intent: string, opts?: { targetLabel?: string | null }): Promise<DriveOutcome> {
+  // Navigation (de-gated this session): the ACTIVE graph's NAVIGABLE nodes (verified + pending + draft, broken
+  // excluded) are candidates, preferring verified + the approved WORKFLOW matching the active stakeholder/persona.
+  // The runtime gotoNode tests each locator on the REAL DOM and falls back to the route, else fails honestly —
+  // so the live DOM test is the truth gate; a confirmed-broken node is never driven and the loop degrades honestly.
+  // Journey walk: when a target node is named (opts.targetLabel), select over ALL navigable nodes (no
+  // stakeholder-role workflow constraint, which could exclude the journey's target) and force that node below.
+  const sel = await selectNavigation(state.productId, opts?.targetLabel ? null : (state.activeStakeholder?.role ?? null));
+  if (!sel.graph) return { navigation: { ok: false, healedVia: null, url: '' }, blockedMutations: [], opened: false, label: '', traceLines: ['drive: no active DemoGraph'] };
+  if (!sel.candidates.length) return { navigation: { ok: false, healedVia: null, url: '' }, blockedMutations: [], opened: false, label: '', traceLines: ['drive: active graph has no navigable nodes — not navigating (degrade: nothing to show for this request)'] };
+  const labels = sel.candidates.map((r) => r.intent_label);
+  // Navigation-truth line — fed to the trace so explainWhy can state which workflow / graph version /
+  // verified date / environment drove the navigation (the spec's "explain what was selected and why").
+  const truthLine = `drive: ${sel.workflow ? `workflow "${sel.workflow.name}"${sel.workflow.stakeholderType && sel.workflow.stakeholderType.toLowerCase() !== 'none' ? ` (for ${sel.workflow.stakeholderType})` : ''}` : 'no stakeholder-workflow match — choosing across all navigable screens'} · graph v${sel.graph.graphVersion}${sel.graph.verifiedAt ? ` · verified ${sel.graph.verifiedAt.slice(0, 10)}` : ''}${sel.graph.environment ? ` · env "${sel.graph.environment}"` : ''}`;
+  // Phase 4 REEL→node re-model + Journey walk: if a node is named (journey targetLabel, else the turn's
+  // navHint) and it's a navigable candidate, take it; otherwise pick intent-driven via pickNode.
+  const navHintLabel = opts?.targetLabel ?? state.navHint;
+  const hinted = navHintLabel ? labels.find((l) => l.toLowerCase() === String(navHintLabel).toLowerCase()) : undefined;
+  // pickNode returns '' when NO screen fits (off-domain / out of scope). HONOR that — do NOT force a
+  // first-label fallback. The old `|| labels[0]` / `?? candidates[0]` is exactly what mapped "capital of
+  // france" → a random screen AND recorded it as a confident intent→node row. A journey targetLabel / navHint
+  // always wins (the journey is on rails); free-roam respects "none fit".
+  const picked = hinted ?? (await getLlm().pickNode(intent, labels));
+  const node = picked ? sel.candidates.find((r) => r.intent_label === picked) : undefined;
+  if (!node) {
+    // No screen fits → don't navigate, and crucially DON'T recordNavAttempt (a no-match never enters the
+    // empirical intent registry — that's how the bogus mappings appeared). The turn degrades honestly; the
+    // confidence-gated answer speaks to scope. Returns BEFORE any recordNavAttempt below.
+    return { navigation: { ok: false, healedVia: null, url: '' }, blockedMutations: [], opened: false, label: '', traceLines: [truthLine, picked ? `drive: picked "${picked}" is not a navigable candidate — not navigating` : 'drive: no screen fits this request — out of scope; not navigating (honest degrade)'], noMatch: true };
+  }
 
   // Client-driven nav (desktop embedded browser): don't drive a server browser — resolve the node to
   // the role's on-screen label + any plain CSS selectors, and hand the click to the embedded pane.
@@ -97,19 +119,24 @@ async function driveTo(state: DemoStateT, intent: string): Promise<DriveOutcome>
     const selectors = (node.locator_strategies ?? [])
       .map((s) => String(s.value).replaceAll('{label}', label))
       .filter((v) => /^[#.]/.test(v)); // plain id/class only; the client matches the label text otherwise
+    // Phase 2 telemetry: record the node SELECTION (client-driven → ok=NULL, the DOM outcome isn't observed
+    // server-side, but the node + intent are real signal for the intent→node registry).
+    await recordNavAttempt({ source: 'path-a', productId: state.productId, sessionId: state.sessionId, graphId: sel.graph.graphId, nodeId: node.id, intent, url: node.screen_route || '', ok: null, healedVia: null, selectorUsed: selectors[0] ?? label });
     return {
       navigation: { ok: true, healedVia: null, url: '' },
       blockedMutations: [], opened: true, label,
-      traceLines: [`drive (client-nav): instruct embedded browser → "${label}" as ${state.role}`],
+      traceLines: [truthLine, `drive (client-nav): instruct embedded browser → "${label}" as ${state.role}`],
       navAction: { label, selectors, url: node.screen_route || undefined },
     };
   }
 
-  const driver = await getAdapter(rows[0].product_name, state.mode, state.baseUrl);
+  const driver = await getAdapter(sel.graph.productName, state.mode, state.baseUrl);
   try {
     await driver.open(state.role);
     const nav = await driver.gotoNode(node, state.role);
     await record('navigation', 'none', {}, { url: nav.url, node: node.intent_label });
+    // Phase 2 telemetry: server-side drive → a REAL ok/healed_via outcome recorded against the node.
+    await recordNavAttempt({ source: 'path-a', productId: state.productId, sessionId: state.sessionId, graphId: sel.graph.graphId, nodeId: node.id, intent, url: nav.url || node.screen_route || '', ok: nav.ok, healedVia: nav.healedVia, selectorUsed: null });
     const opened = nav.ok ? await driver.openRecord() : false;
     const scan = opened ? await driver.scanActions() : [];
     const confirmed = scan.filter((s) => s.cls === 'mutating' && s.confident && !s.permitted).map((s) => s.label);
@@ -135,22 +162,33 @@ async function driveTo(state: DemoStateT, intent: string): Promise<DriveOutcome>
       opened,
       label: node.intent_label,
       traceLines: [
+        truthLine,
         `drive: "${node.intent_label}" as ${state.role} → ${nav.ok ? nav.url : 'FAILED'}${nav.healedVia ? ` [self-heal via ${nav.healedVia}]` : ' [primary ok]'}`,
         `drive: mode=${state.mode}; PO ${opened ? 'opened' : 'not opened'}; ${scan.length === 0 ? 'no action panel' : `blocked ${confirmed.length} confirmed mutating${defensive ? ` (+${defensive} held)` : ''} of ${scan.length}`}`,
       ],
     };
   } catch (e: any) {
-    return { navigation: { ok: false, healedVia: null, url: '' }, blockedMutations: [], opened: false, label: node.intent_label, traceLines: [`drive: ERROR — ${e?.message ?? e}`] };
+    return { navigation: { ok: false, healedVia: null, url: '' }, blockedMutations: [], opened: false, label: node.intent_label, traceLines: [truthLine, `drive: ERROR — ${e?.message ?? e}`] };
   } finally {
     await driver.close();
   }
 }
 
-// ── navigate (with mid-flight pivot push) ────────────────────────────────────
-async function navigate(state: DemoStateT): Promise<Partial<DemoStateT>> {
-  if (!state.productId) return { trace: ['navigate: skipped (no productId)'] };
+// ── navigate: free-roam (intent-driven; no pinned journey) — with mid-flight pivot push ───────
+async function navigateFreeRoam(state: DemoStateT): Promise<Partial<DemoStateT>> {
   const intent = state.interpretation?.intent ?? state.utterance;
   const d = await driveTo(state, intent);
+  if (d.noMatch) {
+    // No product screen fits this request (off-domain / out of scope). Don't navigate, clear any pending nav
+    // action, leave the breadcrumb where it is; the confidence-gated answer responds honestly. No intent→node
+    // mapping was recorded, so the empirical registry never learns a bogus "X → random screen".
+    return {
+      navigation: d.navigation,
+      navAction: null,
+      blockedMutations: [],
+      trace: [...d.traceLines, `navigate: "${intent}" is outside this product's screens — answering honestly without navigating`],
+    };
+  }
   if (!d.navigation.ok) {
     // Recovery (P2.1): a step that didn't complete must NOT move the breadcrumb to a
     // place we never reached — stay anchored to the last good position so a later
@@ -175,6 +213,51 @@ async function navigate(state: DemoStateT): Promise<Partial<DemoStateT>> {
   };
 }
 
+// ── navigate: JOURNEY walk — the pinned journey drives WHERE we go, in order (V5; mig 0026) ───
+// When state.journeyId is set, ignore free-roam pickNode and walk the journey's ordered plan one entry per
+// turn: a 'node' entry drives the live product to that exact verified screen; a 'beat' is a narration moment
+// (the voice layer composes the words in P3). journeyStep advances + persists via the thread checkpointer.
+async function navigateJourneyStep(state: DemoStateT): Promise<Partial<DemoStateT>> {
+  const wp = state.journeyId ? await journeyWalkPlan(state.journeyId).catch(() => null) : null;
+  if (!wp || !wp.plan.length) return await navigateFreeRoam(state); // nothing to walk → honest free-roam fallback
+  const step = state.journeyStep ?? 0;
+  const total = wp.plan.length;
+  // Walk complete (the run lifecycle is owned by walkJourney in live-session.ts, not per-node).
+  if (step >= total) return { journeyStep: step, navigation: null, navAction: null, explanation: null, trace: [`journey: walk complete — "${wp.journey.name}" (${total} steps)`] };
+  const entry = wp.plan[step];
+  const advance = { journeyStep: step + 1 };
+  const audience = state.activeStakeholder?.role ?? null;
+  if (entry.kind === 'beat') {
+    // Narration beat (knowledge/note/tour) — no navigation; compose ONE warm spoken line (clean fallback).
+    const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: null, audience, outcome: wp.journey.businessGoal });
+    return { ...advance, navigation: null, navAction: null, blockedMutations: [], explanation: say, trace: [`journey: [${step + 1}/${total}] ${entry.stepKind} narration beat`] };
+  }
+  // 'node' — drive the live product to this exact screen, on the journey's rails (forced target label).
+  const d = await driveTo(state, entry.caption ?? entry.nodeLabel ?? 'demonstrate', { targetLabel: entry.nodeLabel ?? null });
+  const ok = d.navigation.ok || !!d.navAction;
+  const newPos: Position = { intent: entry.nodeLabel ?? 'journey step', url: d.navigation.url, answer: state.retrieved?.[0]?.content ?? null };
+  // Warm, conversational narration spoken while this screen is shown (runTurn emits `explanation` as the voice line).
+  const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: entry.nodeLabel ?? null, audience, outcome: wp.journey.businessGoal });
+  return {
+    ...advance,
+    navigation: d.navigation,
+    navAction: d.navAction ?? null,
+    blockedMutations: d.blockedMutations,
+    currentPosition: ok ? newPos : state.currentPosition,
+    explanation: say,
+    trace: [`journey: [${step + 1}/${total}] → "${entry.nodeLabel}"`, ...d.traceLines],
+  };
+}
+
+// ── navigate: dispatcher — walk the pinned journey, else free-roam (intent-driven default) ────
+async function navigate(state: DemoStateT): Promise<Partial<DemoStateT>> {
+  if (!state.productId) return { trace: ['navigate: skipped (no productId)'] };
+  // Walk a journey step ONLY on an explicit walk turn (journeyAdvance). An off-script question on a
+  // journey-pinned session is answered normally (free-roam) and does NOT consume a journey step.
+  if (state.journeyId && state.journeyAdvance) return await navigateJourneyStep(state);
+  return await navigateFreeRoam(state);
+}
+
 // ── discover (active discovery, P2.2 / Gap E) — capture signals + offer one Q ──
 async function discover(state: DemoStateT): Promise<Partial<DemoStateT>> {
   if (!state.sessionId || !state.interpretation) return {};
@@ -183,6 +266,7 @@ async function discover(state: DemoStateT): Promise<Partial<DemoStateT>> {
       utterance: state.utterance,
       kind: state.interpretation.kind,
       answer: state.retrieved[0]?.content ?? '',
+      personaPreamble: state.personaPreamble || undefined,
     });
     if (d.painPoints.length || d.buyingSignals.length || d.businessObjective) {
       await recordDiscovery(state.sessionId, { painPoints: d.painPoints, buyingSignals: d.buyingSignals, businessObjective: d.businessObjective });
@@ -207,6 +291,7 @@ async function explain(state: DemoStateT): Promise<Partial<DemoStateT>> {
     answer: pos.answer ?? '',
     navUrl: pos.url,
     trace: state.trace.slice(-EXPLAIN_TRACE_WINDOW),
+    personaPreamble: state.personaPreamble || undefined,
   });
   return { explanation: why, trace: ['explain: justified the last action from the decision trace'] };
 }
@@ -217,6 +302,17 @@ async function resume(state: DemoStateT): Promise<Partial<DemoStateT>> {
   if (!stack.length) return { explanation: 'There’s nothing to return to — we’re at the start of the demo.', trace: ['resume: empty stack'] };
   const target = stack[stack.length - 1];
   const d = await driveTo(state, target.intent);
+  // If we couldn't actually get back (no-match on re-score, or a failed drive — e.g. the pushed node was
+  // archived between turns), DON'T overwrite the breadcrumb with an empty url and DON'T pop the stack — leave
+  // both intact so a later "take me back" still returns somewhere real (mirrors navigateFreeRoam's guard).
+  if (d.noMatch || !d.navigation.ok) {
+    return {
+      navigation: d.navigation,
+      navAction: d.navAction ?? null,
+      blockedMutations: d.blockedMutations,
+      trace: [...d.traceLines, `resume: could not return to "${target.intent}" — staying put; stack left intact`],
+    };
+  }
   return {
     navigation: d.navigation,
     navAction: d.navAction ?? null,
@@ -286,7 +382,10 @@ export function buildGraph() {
     .addConditionalEdges('interpret', routeFromInterpret, { govern: 'govern', explain: 'explain', resume: 'resume', retrieve: 'retrieve' })
     // Gate the ANSWER, not the SCREEN: a gated-but-navigable query still navigates (showing the live
     // product isn't inventing). Only a truly off-topic query (gated AND not navigable) ends here.
-    .addConditionalEdges('retrieve', (s: DemoStateT) => (s.gated && !s.navigable ? END : 'navigate'), { navigate: 'navigate', [END]: END })
+    // A journey WALK turn always proceeds to navigate (the journey decides the screen, not retrieval
+    // relevance, so a beat/screen is never skipped because the synthetic step query "gated"). An off-script
+    // question on a journey-pinned session (journeyAdvance=false) gates normally.
+    .addConditionalEdges('retrieve', (s: DemoStateT) => (!(s.journeyId && s.journeyAdvance) && s.gated && !s.navigable ? END : 'navigate'), { navigate: 'navigate', [END]: END })
     .addEdge('navigate', 'discover')
     .addEdge('discover', END)
     .addEdge('explain', END)

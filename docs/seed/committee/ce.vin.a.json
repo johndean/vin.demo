@@ -1,0 +1,634 @@
+{
+  "product": "ce.vin",
+  "outcomes": [
+    {
+      "title": "Reduce course production time",
+      "description": "Shorten the end-to-end cycle from session upload to a course that is ready for the review gate, giving program staff more capacity to process incoming sessions without adding headcount. Faster production directly expands how many sessions the organization can turn into accredited courses per quarter.",
+      "successIndicators": [
+        "Average days from session upload to 'Awaiting review' status drops measurably quarter over quarter",
+        "Stage 0 processing backlog (sessions uploaded but not yet flagged for review) stays below a defined threshold",
+        "Percentage of sessions reaching the review gate within the target SLA window increases",
+        "Staff hours spent per course on pre-review preparation decreases",
+        "Number of sessions in production simultaneously without queue congestion increases"
+      ]
+    },
+    {
+      "title": "Increase course publishing throughput",
+      "description": "Grow the number of finished, accredited courses published to members per month or quarter without proportionally increasing review staff or production hours. Higher throughput means the CE library expands faster, increasing member value and reducing the backlog of recorded sessions awaiting publication.",
+      "successIndicators": [
+        "Published courses per month trends upward without proportional headcount growth",
+        "Sessions backlog (uploaded but not yet published) shrinks or stays flat as upload volume grows",
+        "Ratio of sessions uploaded to sessions published within 30 days improves",
+        "Average queue depth in the Needs-review screen at any given time decreases",
+        "Proportion of sessions completing the full upload-to-publish cycle in under a target number of days increases"
+      ]
+    },
+    {
+      "title": "Improve course content accuracy",
+      "description": "Ensure that the AI-generated transcripts, learning objectives, quiz questions, and handout content faithfully reflect what was said and shown in the uploaded session, reducing the corrections reviewers must make before a course can pass its review gate. Accurate content protects the organization's clinical credibility and reduces re-review cycles.",
+      "successIndicators": [
+        "Average number of content corrections made per course during review gate decreases",
+        "Rate of courses passing the review gate on the first attempt without corrections increases",
+        "Proportion of low-confidence items flagged in the Needs-review queue that reviewers overturn (false positives) decreases",
+        "Reviewer-reported content accuracy rating per course improves over successive cohorts",
+        "Incidence of post-publication errata notices or member-reported errors drops"
+      ]
+    },
+    {
+      "title": "Reduce review bottlenecks",
+      "description": "Prevent the Needs-review queue from becoming a choke point that stalls courses from reaching members, by ensuring that the items surfaced for review are actionable, well-scoped, and resolved quickly. Fewer bottlenecks mean reviewer time is not wasted on ambiguous or redundant flags, and courses move through the gate without waiting.",
+      "successIndicators": [
+        "Average age of items sitting open in the Needs-review queue decreases",
+        "Number of courses stalled at the review gate for more than a defined period shrinks",
+        "Proportion of Needs-review items resolved in a single review session (without re-flagging) increases",
+        "Reviewer queue length per person stays within a manageable ceiling during peak upload periods",
+        "Time between a course entering 'Awaiting review' and clearing all review gate items decreases"
+      ]
+    },
+    {
+      "title": "Improve reviewer productivity",
+      "description": "Enable clinical reviewers to clear more courses per week without increasing error rates, by surfacing only meaningful flags in the Needs-review queue and giving reviewers the context they need to act quickly. Higher reviewer productivity unlocks throughput without hiring additional clinical staff.",
+      "successIndicators": [
+        "Courses reviewed and approved per reviewer per week trends upward",
+        "Average time a reviewer spends per course in the Needs-review queue decreases",
+        "Proportion of Needs-review flags that reviewers mark as 'accepted as-is' without editing increases (signal quality)",
+        "Reviewer re-open rate (courses returned to the queue after initial approval) decreases",
+        "Reviewer satisfaction with queue clarity and actionability improves on periodic check-ins"
+      ]
+    },
+    {
+      "title": "Ensure CE accreditation compliance",
+      "description": "Guarantee that every published course meets the accreditation body's requirements — including RACE standards for learning objectives, credit hours, and required topic coverage — before it reaches members, so the organization's CE provider status is never at risk. Compliance must be systematic and auditable, not dependent on individual reviewer memory.",
+      "successIndicators": [
+        "Zero accreditation violations found in courses published after full review gate passage",
+        "Proportion of courses flagged for accreditation-related issues (e.g., missing learning objectives, incorrect credit hours) caught at the review gate rather than post-publication",
+        "Time to prepare a course file for RACE or accreditation-body audit decreases",
+        "Accreditation renewal applications completed without material corrections from the accrediting body",
+        "Percentage of published courses with all required accreditation metadata fields populated correctly reaches and holds at 100%"
+      ]
+    },
+    {
+      "title": "Improve coverage of required topics",
+      "description": "Detect coverage gaps in a session's content before the course is published, so reviewers can request supplemental material or add editorial notes rather than discovering that a required topic is missing only after members have accessed the course. Consistent topic coverage strengthens the CE program's clinical value and accreditation standing.",
+      "successIndicators": [
+        "Proportion of courses with coverage gaps identified and resolved at the review gate — before publication — increases",
+        "Number of post-publication complaints or member questions citing missing topic coverage decreases",
+        "Rate at which the Needs-review queue surfaces coverage gaps (rather than reviewers discovering them manually) increases",
+        "Average number of coverage-gap flags per course that require editorial intervention decreases as session quality improves over time",
+        "All required-topic checklists in Settings are fully mapped and applied to every new session at Stage 0"
+      ]
+    },
+    {
+      "title": "Reduce gate violations before publishing",
+      "description": "Drive down the number of courses that reach the review gate still carrying unresolved gate violations — such as missing objectives, unanswered low-confidence flags, or failed topic checks — so that reviewers spend their time on substantive editorial decisions rather than correcting structural defects. Fewer violations entering the gate means faster, cleaner approval cycles.",
+      "successIndicators": [
+        "Average number of gate violations per course at the time it enters 'Awaiting review' decreases quarter over quarter",
+        "Proportion of courses entering the review gate with zero structural violations increases",
+        "Re-flag rate (courses that pass review but are returned due to a missed violation) trends toward zero",
+        "Time spent by reviewers on structural/checklist corrections versus substantive content review improves in favor of substantive review",
+        "Gate violation categories tracked in Settings show declining incidence for the most common violation types"
+      ]
+    },
+    {
+      "title": "Improve member access to new courses",
+      "description": "Ensure that finished courses appear in the member-facing catalog promptly after the review gate clears, so members can access timely, relevant CE content without unnecessary delays between production completion and availability. Faster access improves member satisfaction and the perceived value of the CE program.",
+      "successIndicators": [
+        "Days between a course clearing the review gate and becoming visible to members decreases",
+        "Proportion of courses published to members within 48 hours of review gate approval increases",
+        "Member-reported instances of expecting a course to be available but finding it still in production decrease",
+        "Number of sessions per quarter that complete the full pipeline and reach members on or ahead of a program calendar target increases",
+        "Published course count visible to members grows in step with session upload volume"
+      ]
+    },
+    {
+      "title": "Increase published course volume",
+      "description": "Grow the total catalog of accredited, member-accessible courses over time, giving the CE program more clinical depth, supporting a wider range of specialties, and strengthening member retention. Volume growth must come from a scalable production process, not from relaxing review standards.",
+      "successIndicators": [
+        "Total published course count grows quarter over quarter at or above the program's catalog growth target",
+        "New courses added per quarter increases without a corresponding increase in staff or review cycle time",
+        "Proportion of uploaded sessions that ultimately reach publication (rather than being abandoned or deferred) improves",
+        "CE catalog breadth across clinical topics and specialties expands as measured by topic taxonomy coverage",
+        "Ratio of published courses to sessions uploaded in the same period trends upward"
+      ]
+    },
+    {
+      "title": "Improve transcript and slide alignment quality",
+      "description": "Ensure that the AI-generated transcript and the corresponding slide content are accurately synchronized in each course, so that learning objectives, quiz questions, and handouts correctly reference what was shown on screen at the relevant moment. Poor alignment forces reviewers to manually re-match content, adding hours per course.",
+      "successIndicators": [
+        "Proportion of courses where reviewers flag transcript-to-slide mismatches in the Needs-review queue decreases",
+        "Average number of alignment corrections made per course during review decreases",
+        "Rate of quiz questions that reviewers flag as referencing the wrong slide or timestamp decreases",
+        "Reviewer time attributed to alignment corrections (versus content-quality corrections) decreases as a share of total review time",
+        "Stage 0 alignment confidence scores improve on average across a rolling cohort of sessions"
+      ]
+    },
+    {
+      "title": "Reduce manual content editing effort",
+      "description": "Minimize the amount of manual text editing — correcting transcripts, rewriting quiz questions, adjusting learning objectives — that reviewers and production staff must do before a course can pass the review gate. Less manual editing per course frees reviewer capacity and shortens the production cycle.",
+      "successIndicators": [
+        "Average editing time per course in the review gate decreases",
+        "Number of manually edited fields per course before gate approval decreases",
+        "Proportion of AI-generated learning objectives and quiz questions accepted without edits increases",
+        "Total staff hours per month attributed to manual content correction decreases",
+        "Courses cleared through the review gate without any manual transcript edits increases as a percentage of total"
+      ]
+    },
+    {
+      "title": "Improve consistency across courses",
+      "description": "Ensure that courses produced across different sessions, speakers, and production runs follow the same structure, terminology, learning-objective format, and quality standards, so members have a predictable learning experience and accreditation reviewers see a uniform course portfolio. Inconsistency today is a reviewer burden and an accreditation risk tomorrow.",
+      "successIndicators": [
+        "Variance in course structure scores (learning objectives format, quiz question count, handout completeness) across published courses narrows",
+        "Proportion of courses requiring structural reformatting by reviewers to match program standards decreases",
+        "Reviewer-flagged consistency issues in the Needs-review queue decrease quarter over quarter",
+        "Prompt template and profile settings in Settings are applied uniformly across all sessions (zero ad-hoc overrides)",
+        "Member feedback citing inconsistency in course format or depth decreases"
+      ]
+    },
+    {
+      "title": "Improve accreditation audit readiness",
+      "description": "Maintain a complete, accurate, and quickly retrievable record of each course's review history, gate decisions, and compliance metadata, so the organization can respond to an accreditation body audit without scrambling to reconstruct documentation. Audit readiness is a continuous state, not a pre-audit sprint.",
+      "successIndicators": [
+        "Time to compile a complete course audit package (gate history, reviewer decisions, accreditation metadata) decreases to under a defined target",
+        "Proportion of published courses with fully complete review gate records (no missing decisions or timestamps) reaches 100%",
+        "Accreditation-body requests for supplemental documentation during audits decrease",
+        "Number of courses that require retroactive documentation corrections when preparing for audit trends to zero",
+        "Audit preparation staff-hours per renewal cycle decreases"
+      ]
+    },
+    {
+      "title": "Reduce time-to-publish",
+      "description": "Compress the total elapsed time from the moment a session is uploaded to the moment the finished course is live for members, capturing the full pipeline: Stage 0 processing, Needs-review queue resolution, review gate passage, and final publication. Shorter time-to-publish means the CE library reflects recent clinical content faster.",
+      "successIndicators": [
+        "Median time-to-publish across all sessions decreases quarter over quarter",
+        "90th-percentile time-to-publish (the slowest 10% of courses) decreases, eliminating chronic outliers",
+        "Proportion of sessions hitting a target time-to-publish SLA (e.g., published within 14 days of upload) increases",
+        "Time-to-publish variance across sessions narrows, making production planning more predictable",
+        "Stages contributing the most delay (Stage 0 processing time vs. time in Needs-review vs. time awaiting final publication) are identified and trending down individually"
+      ]
+    },
+    {
+      "title": "Strengthen content governance",
+      "description": "Establish and enforce clear rules for what must be reviewed, who can approve, and what constitutes a gate-cleared course, so that no course reaches members without passing the required checks and the organization can demonstrate systematic oversight to accreditation bodies, member organizations, and clinical leadership.",
+      "successIndicators": [
+        "Zero courses published without a complete, recorded review gate passage",
+        "All active prompt templates and AI model settings in Settings are version-controlled and change-logged",
+        "Reviewer role assignments and approval authority are defined and consistently applied across all sessions",
+        "Proportion of Needs-review queue items resolved by the designated reviewer (not bypassed) reaches 100%",
+        "Policy exceptions (manual overrides, skipped checks) are logged and reviewed at a defined cadence"
+      ]
+    },
+    {
+      "title": "Increase member engagement with CE content",
+      "description": "Grow the rate at which members actively access, complete, and return for new courses, reflecting that the content is timely, clinically relevant, and well-structured. Higher engagement validates the CE program's value to members and supports membership renewal and association growth.",
+      "successIndicators": [
+        "Course completion rate (members who start and finish a course) increases",
+        "Average number of courses accessed per active member per quarter increases",
+        "Member return rate (accessing a second or subsequent course after the first) improves",
+        "Time between a new course becoming available and first member access decreases",
+        "Member-reported satisfaction with course quality and clinical relevance improves on post-course surveys"
+      ]
+    },
+    {
+      "title": "Prevent low-confidence content from reaching members",
+      "description": "Ensure that AI-generated content flagged as low-confidence in the Needs-review queue is always resolved — either corrected or confirmed — before the course is published, so members never receive clinically inaccurate or uncertain information presented as authoritative CE content.",
+      "successIndicators": [
+        "Zero published courses with unresolved low-confidence flags from the Needs-review queue",
+        "Proportion of low-confidence flags resolved through reviewer correction (versus simple acceptance) trends toward a quality-appropriate baseline",
+        "Post-publication member-reported errors that can be traced to a low-confidence item missed in review trends to zero",
+        "Average confidence score of AI-generated content items that pass through the review gate without correction improves",
+        "Stage 0 low-confidence flag rate per course decreases as prompt templates and AI model settings in Settings are refined"
+      ]
+    },
+    {
+      "title": "Improve course production visibility",
+      "description": "Give program leadership a clear, current picture of where every session stands in the production pipeline — from upload through Stage 0, the Needs-review queue, the review gate, and publication — so they can identify bottlenecks, manage reviewer workloads, and forecast when upcoming courses will be available to members.",
+      "successIndicators": [
+        "Program managers can identify, at any moment, every session stuck in a given stage without running manual inquiries",
+        "Time for leadership to produce a production-status report decreases to near zero (available on demand from the Sessions screen)",
+        "Reviewer workload imbalances (one reviewer holding a disproportionate share of the Needs-review queue) are visible and corrected proactively",
+        "Forecast accuracy for course publication dates improves as pipeline stage durations become measurable and consistent",
+        "Number of sessions that 'disappear' into the pipeline with no visible status updates decreases to zero"
+      ]
+    },
+    {
+      "title": "Lower cost per published course",
+      "description": "Reduce the total staff time, AI processing, and review resources consumed per course that reaches members, making the CE program more cost-efficient as volume grows. Lower unit cost enables the organization to expand the catalog without a proportional budget increase.",
+      "successIndicators": [
+        "Staff hours per published course (production + review combined) decreases year over year",
+        "AI processing and re-processing costs per session decrease as prompt templates in Settings are optimized",
+        "Cost per published course calculated against total program operating expense trends downward as throughput increases",
+        "Proportion of sessions requiring costly manual intervention (full transcript rework, complete quiz regeneration) decreases",
+        "Budget required to reach a given published-course volume target decreases as the platform matures"
+      ]
+    }
+  ],
+  "committee": [
+    {
+      "name": "Owner / Managing Director",
+      "role": "Owner / Managing Director",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "decision_maker",
+      "sortOrder": 0,
+      "interests": [
+        "Whether ce.vin will let the organization publish more accredited courses without hiring additional review staff",
+        "The reputational and accreditation risk of a low-confidence or inaccurate course reaching members",
+        "How quickly the CE catalog can grow to strengthen member retention and recruitment",
+        "Total cost of running the CE program per published course compared to the current manual process",
+        "Whether the platform gives her clear visibility into production status without requiring daily check-ins with staff",
+        "How the platform handles the review gate — whether it enforces standards or can be bypassed",
+        "The organization's ability to respond to an accreditation audit without a scramble",
+        "Whether switching to ce.vin creates a painful transition that disrupts the current publishing schedule",
+        "Long-term vendor stability — is this a platform the organization can rely on for years",
+        "How member satisfaction with course quality trends after the platform is adopted",
+        "Whether the platform can handle growth in session upload volume without degrading review quality",
+        "The ROI story she can present to the board or association leadership to justify the investment"
+      ],
+      "decisionCriteria": [
+        "The platform demonstrably reduces time-to-publish without lowering the quality bar at the review gate",
+        "No course can be published without passing the full review gate — the system enforces this, not just policy",
+        "The cost per published course is lower than the current all-in staff cost for the same output",
+        "Accreditation compliance (RACE and similar) is systematically enforced, not dependent on reviewer memory",
+        "The Needs-review queue surfaces actionable items — reviewers are not wasting time on noise",
+        "She can see the production pipeline status at a glance from the Sessions screen without asking staff",
+        "The platform's Stage 0 AI accuracy is good enough that manual editing effort is materially reduced",
+        "Implementation does not require a long dark period where the current publishing schedule is disrupted",
+        "The vendor has a credible support and update track record for a clinical-content platform",
+        "Pricing scales reasonably with session volume — she is not penalized for growing the program",
+        "The platform reduces, not increases, the organization's accreditation audit preparation burden",
+        "References or evidence from comparable CE programs or veterinary associations can be checked"
+      ],
+      "goals": [
+        "Grow the published CE catalog materially within the first year without adding reviewer headcount",
+        "Eliminate the risk of an inaccurate or non-compliant course reaching members and damaging clinical credibility",
+        "Reduce the time she personally spends resolving production bottleneck escalations from program staff",
+        "Strengthen the organization's RACE accreditation standing through systematic, auditable review processes",
+        "Make the CE program a competitive differentiator for member recruitment relative to peer associations",
+        "Achieve a cost per published course that makes catalog growth financially sustainable",
+        "Give reviewers enough capacity relief that the organization can accept more sessions per quarter",
+        "Establish a production process that is resilient to staff turnover — not locked in individual reviewer knowledge",
+        "Ensure that members can access new courses quickly after sessions are recorded, not weeks later",
+        "Build the confidence to commit to a CE calendar that depends on predictable production throughput",
+        "Position the organization to handle a significant increase in session submissions without a quality regression",
+        "Free the Director of CE to focus on program strategy rather than production logistics"
+      ],
+      "objections": [
+        "The AI-generated content will need heavy editing anyway, so we are really just paying for a fancier transcript tool",
+        "Our reviewers already have a process — training them on a new platform and changing their workflow is a real cost",
+        "If the review gate can be configured in Settings, someone will misconfigure it and a bad course will get published",
+        "We are a small operation — the implementation overhead for a new platform could easily exceed the benefit in year one",
+        "What happens to our accreditation standing if Stage 0 produces something wrong and we do not catch it in review",
+        "I am worried that the Needs-review queue will generate so many flags that reviewers spend more time in the queue than they save",
+        "We have years of previously published courses — how does ce.vin help with those, or is it only useful for new sessions",
+        "The contract terms and pricing need to be simple — we cannot manage a per-seat or per-minute model that is hard to forecast",
+        "If the vendor changes the AI models in Settings without notice, our review gate calibration could drift",
+        "Our clinical reviewers are veterinarians with limited patience for clunky software — if it is hard to use they will revert to email",
+        "We need to see evidence that the platform has handled veterinary CE content — not just generic continuing education",
+        "I want to know what our exit path looks like if we need to move off the platform in two years"
+      ],
+      "openQuestions": [
+        "Show me exactly what a reviewer sees in the Needs-review queue when Stage 0 flags a coverage gap — how specific is the flag",
+        "Can the review gate be configured so that certain violation types are hard stops versus advisory warnings",
+        "What does the Sessions screen show me right now as the owner — can I see all sessions across all reviewers in one view",
+        "If a reviewer clears a gate violation that they should not have, is there an audit trail I can inspect later",
+        "How does the platform handle accreditation metadata — where do RACE credit hours and learning objectives live, and who can edit them",
+        "What is the realistic Stage 0 processing time for a one-hour session with 40 slides",
+        "If I want to add a new required-topic check to all future sessions, how do I do that in Settings and does it affect sessions already in the queue",
+        "Can I pull a report showing every course published in the last quarter, who reviewed it, and when each gate item was resolved",
+        "What happens to the Needs-review queue if the lead reviewer is out for a week — can I reassign items",
+        "How does ce.vin handle sessions with poor audio quality — does Stage 0 flag it, or does the transcript just come back wrong",
+        "Are there any AI model or prompt template changes I cannot make without vendor involvement",
+        "What does onboarding actually look like — how many weeks before we are publishing real courses through the platform",
+        "If we upload a session and decide not to publish it, is there a cost or a limit on how many sessions we can abandon",
+        "Has the platform been through an accreditation body review or used by a RACE-approved CE provider",
+        "What is the contractual commitment around uptime and data retention for our published course records"
+      ]
+    },
+    {
+      "name": "Director of Continuing Education",
+      "role": "Director of Continuing Education",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "approver",
+      "sortOrder": 1,
+      "interests": [
+        "Whether the platform can handle the full production workflow without requiring Marcus to manage exceptions manually",
+        "The quality and clinical accuracy of AI-generated course content coming out of Stage 0",
+        "How the Needs-review queue prioritizes and categorizes flags so reviewers can triage efficiently",
+        "Whether accreditation requirements (RACE learning objective format, credit hour documentation) are enforced at the review gate",
+        "How prompt templates and AI profiles in Settings can be tailored to veterinary CE content standards",
+        "The platform's ability to detect and surface coverage gaps before a course reaches members",
+        "Whether the Sessions screen gives Marcus a real-time view of the full production pipeline",
+        "How the platform handles multiple concurrent reviewers without creating conflicting edits or missed flags",
+        "The reliability and predictability of Stage 0 processing time across different session types",
+        "Whether the platform reduces the time Marcus spends on reviewer coordination and escalation",
+        "How changes to Settings (models, templates, profiles) are tracked and attributed",
+        "The long-term roadmap for AI model quality improvements and how they affect the review gate calibration"
+      ],
+      "decisionCriteria": [
+        "Stage 0 output quality is high enough that reviewers spend time on editorial decisions, not basic corrections",
+        "The Needs-review queue surfaces flags that are specific, actionable, and clinically relevant — not generic warnings",
+        "Accreditation metadata (learning objectives, credit hours, topic coverage) is generated, stored, and auditable per course",
+        "Settings allows Marcus to define and enforce program-specific review standards without vendor involvement",
+        "The review gate cannot be bypassed — publication requires documented gate passage",
+        "Marcus can see the status of every session in the pipeline from the Sessions screen without running reports",
+        "The platform reduces reviewer re-work cycles, not just initial production time",
+        "Onboarding does not require a multi-month disruption to the existing publishing schedule",
+        "The vendor can demonstrate Stage 0 accuracy on veterinary CE content specifically",
+        "Reviewer workload is visible and manageable — queue depth per reviewer is transparent",
+        "The platform's AI model and template settings can be updated without re-processing all existing sessions",
+        "Pricing is predictable and does not create perverse incentives to limit session uploads"
+      ],
+      "goals": [
+        "Establish a production pipeline that can scale to a materially higher session volume without reviewer burnout",
+        "Achieve consistent course quality across all sessions regardless of speaker or recording conditions",
+        "Eliminate post-publication corrections by catching every content issue at the review gate",
+        "Reduce Marcus's personal involvement in day-to-day production troubleshooting",
+        "Build an accreditation audit package that can be assembled in hours, not days",
+        "Give reviewers a queue that is focused and manageable — not an overwhelming list of marginal flags",
+        "Ensure that required topics are covered in every course before publication without relying on reviewer memory",
+        "Create a feedback loop from review gate decisions back into Settings to improve Stage 0 output over time",
+        "Reduce the gap between session recording and course availability to members",
+        "Make reviewer onboarding faster by having the platform guide new reviewers through the gate process",
+        "Demonstrate to accreditation bodies that the CE program has a systematic, documented review process",
+        "Free the CE Program Manager to focus on member-facing improvements rather than production firefighting"
+      ],
+      "objections": [
+        "If Stage 0 flags too many low-confidence items, reviewers will start treating all flags as noise and stop engaging with them",
+        "The prompt templates and AI model settings in Settings look powerful, but misconfiguration could silently degrade output quality",
+        "We have very specific RACE formatting requirements for learning objectives — can Stage 0 actually produce these, or will we always reformat them",
+        "Our reviewers are veterinarians, not tech users — if the Needs-review queue is confusing they will route around it",
+        "I need to know that changes to Settings by one administrator do not affect sessions already in the review queue",
+        "If the vendor updates the underlying AI model, our Stage 0 output could shift and we would not know until reviewers start flagging more issues",
+        "We currently have a backlog of unpublished sessions — I need to know if ce.vin can process those or only works for new uploads",
+        "The review gate must be configurable by us, not locked to whatever the vendor decides is a violation",
+        "I am concerned that sessions with poor audio will generate transcripts that look plausible but contain errors the reviewer will not catch",
+        "We need a documented chain of custody for every course — reviewer name, timestamp, decision — for accreditation purposes",
+        "What is the process if a course passes the review gate and is published, but we later discover a clinical error",
+        "Training our current reviewers on a new system mid-cycle is a real disruption — what does that actually look like"
+      ],
+      "openQuestions": [
+        "Walk me through exactly what happens between session upload and the course appearing in the Needs-review queue",
+        "Can I see a live example of a coverage gap flag in the Needs-review queue — what information does the reviewer see and what actions can they take",
+        "How are RACE-required learning objective formats encoded in the prompt templates in Settings",
+        "What does the Needs-review queue look like when a session has 15 flags across different categories — how does a reviewer triage that",
+        "If a reviewer resolves a gate violation incorrectly, can I see that in the audit log and reverse it",
+        "Can I configure different review gate rules for different course types or CE credit categories",
+        "How does the platform handle a session where the slide audio and the slide content are inconsistent — does Stage 0 flag the mismatch",
+        "What is the realistic accuracy of Stage 0 transcript generation for a fast-talking veterinary specialist with discipline-specific terminology",
+        "Can I set a minimum confidence threshold in Settings below which Stage 0 items are automatically held for review rather than passed through",
+        "How do I add a new required-topic check to the review gate without affecting sessions already in 'Awaiting review'",
+        "Does the Sessions screen show me elapsed time in each stage so I can see where sessions are getting stuck",
+        "If two reviewers are working the Needs-review queue at the same time, how does the platform prevent them from both editing the same item",
+        "What analytics or reporting does the platform give me on reviewer throughput and queue resolution time",
+        "Is there a way to see which AI model and prompt template version was used for a specific course's Stage 0 run",
+        "How does the platform handle CE credit hour calculation — is that a Settings field, is it automated, or does it require manual entry per session"
+      ]
+    },
+    {
+      "name": "CE Program Manager",
+      "role": "CE Program Manager",
+      "influence": "high",
+      "riskLevel": "medium",
+      "decisionAuthority": "champion",
+      "sortOrder": 2,
+      "interests": [
+        "Whether the Needs-review queue gives reviewers clear, specific flags rather than vague quality warnings",
+        "How quickly Stage 0 processes an uploaded session so Renata knows when to expect it to enter the review queue",
+        "Whether the Sessions screen lets Renata track every session's status without sending emails to reviewers",
+        "How the platform handles the handoff from Stage 0 completion to the review gate opening",
+        "Whether Settings lets Renata update prompt templates and profiles without filing a support ticket",
+        "How the review gate is structured — what categories of violations it checks and whether Renata can adjust those",
+        "Whether the platform gives Renata visibility into reviewer workload so she can redistribute when one reviewer is overloaded",
+        "How coverage gaps are detected and surfaced — whether the platform tells the reviewer exactly what topic is missing",
+        "Whether the platform supports batch uploads or only one session at a time",
+        "How ce.vin handles sessions that fail Stage 0 and need to be re-uploaded or reprocessed",
+        "Whether she can run a report on time-to-publish per course to show management where the pipeline is slow",
+        "How member access is managed after publication — can Renata see which members have accessed which courses"
+      ],
+      "decisionCriteria": [
+        "The Sessions screen gives Renata a clear, real-time view of every session from upload to publication without manual tracking in a spreadsheet",
+        "The Needs-review queue is specific enough that reviewers can act on flags without emailing Renata for clarification",
+        "Stage 0 processing is fast and reliable — she can plan reviewer schedules around a predictable turnaround",
+        "The review gate prevents publication until all required items are resolved — Renata does not have to police this manually",
+        "Settings allows Renata to adjust prompt templates and review gate parameters without developer involvement",
+        "The platform surfaces reviewer bottlenecks visibly so Renata can intervene before a session misses a publication deadline",
+        "Coverage gap detection is specific to required topics, not generic — flags name the missing content, not just 'gap detected'",
+        "The platform handles re-processing gracefully — a session that Stage 0 gets wrong does not require starting over from scratch",
+        "Reporting on production metrics (time-to-publish, gate violations, reviewer throughput) is available without custom exports",
+        "Renata can onboard a new reviewer and have them productive in the Needs-review queue within a day",
+        "The platform keeps a clear log of which reviewer resolved which flag, so Renata can follow up on decisions",
+        "Pricing or seat limits do not create friction when Renata adds a temporary reviewer during a high-volume period"
+      ],
+      "goals": [
+        "Eliminate the personal email and Slack thread she currently uses to track which sessions are stuck and why",
+        "Get every uploaded session to 'Awaiting review' in a predictable, consistent timeframe she can communicate to reviewers",
+        "Reduce the number of courses that sit in the Needs-review queue for more than a week without progress",
+        "Give reviewers a queue that is scoped to genuinely actionable items so they do not feel overwhelmed and disengage",
+        "Publish more courses per quarter without increasing her own coordination workload",
+        "Build a production calendar that is reliable enough to commit to members in advance",
+        "Reduce re-work cycles where a course passes review but comes back because something was missed",
+        "Keep the review gate configuration current as RACE and other accreditation requirements evolve",
+        "Demonstrate to leadership that production throughput has measurably improved after adopting the platform",
+        "Make the process resilient to reviewer absences — Renata should not be the single point of failure",
+        "Capture production metrics she can use in program reports to the Director and Owner",
+        "Get low-confidence content consistently resolved before publication rather than catching it in member feedback"
+      ],
+      "objections": [
+        "If the Needs-review queue generates too many flags per session, reviewers will burn out and we will end up with the same bottleneck in a different place",
+        "I need to be able to adjust review gate settings when accreditation requirements change — if that requires a support request every time it will not work",
+        "The Sessions screen needs to be fast to load and easy to filter — if it is slow or clunky I will keep using the spreadsheet",
+        "How do I handle a session that gets stuck in Stage 0 processing — is there a timeout, an error state, someone to call",
+        "Our reviewers are part-time veterinarians — they are not going to learn a complex system; it needs to be simple enough to use in 30 minutes a week",
+        "If I cannot export the production data to share with leadership in a familiar format, I will still be building manual reports",
+        "I am concerned that coverage gap detection depends on how well the required-topic lists are maintained in Settings — who is responsible for keeping those current",
+        "What happens when a reviewer marks a low-confidence flag as accepted and it turns out to be wrong — is there a way to catch that before publishing",
+        "If the AI model in Settings is updated and Stage 0 behavior changes, will I know in advance or will it just affect the next batch of sessions silently",
+        "The onboarding timeline matters — if it takes three months to go live, we will have missed a full quarter of publishing",
+        "I need the platform to handle the session file formats we actually use — not force us to re-encode everything before uploading",
+        "What is the process when a published course needs to be corrected — can I take it down and republish without going through the full pipeline again"
+      ],
+      "openQuestions": [
+        "Show me the Sessions screen right now — what columns are visible by default and what filters can I apply",
+        "When Stage 0 finishes processing, what exactly triggers the session to appear in the Needs-review queue",
+        "If a session has been in 'Awaiting review' for five days with no activity, how does the platform surface that to me",
+        "Can I see in the Needs-review queue which items have been sitting unresolved the longest, sorted by age",
+        "How does the platform communicate a coverage gap flag to the reviewer — does it name the missing topic, show the relevant section, or just flag the course",
+        "Walk me through adding a new required-topic rule in Settings — how long does it take and what happens to sessions currently in Stage 0",
+        "Can I assign specific sessions or queue items to a specific reviewer, or is the queue shared and self-directed",
+        "What does the reviewer see when they open a low-confidence item in the Needs-review queue — do they see the original transcript, the slide, a confidence score",
+        "How do I know when Stage 0 processing has failed versus when it is just slow",
+        "Can I generate a report showing all sessions uploaded in the last 30 days, their current stage, and time in each stage",
+        "What file formats does ce.vin accept for session upload — audio formats, slide formats",
+        "If a reviewer clears a gate item and I think they should not have, can I reopen it",
+        "Is there a way to set a target publication date for a session and have the platform flag if it is at risk",
+        "How many sessions can be in Stage 0 processing simultaneously — is there a queue limit",
+        "What does the Settings diagnostics section show me — can I use it to debug why Stage 0 flagged something unexpectedly",
+        "Can members self-enroll in courses or does publication require a manual enrollment step"
+      ]
+    },
+    {
+      "name": "Content Production Manager",
+      "role": "Content Production Manager",
+      "influence": "medium",
+      "riskLevel": "medium",
+      "decisionAuthority": "influencer",
+      "sortOrder": 3,
+      "interests": [
+        "Whether Stage 0 produces usable first-draft content that reduces Dominic's manual editing work per session",
+        "How the platform handles sessions with inconsistent audio quality, background noise, or dense clinical terminology",
+        "Whether the transcript-to-slide alignment coming out of Stage 0 is reliable enough to build quiz questions from",
+        "How editing and corrections are made in the Needs-review queue — is it an in-place editor or a download-edit-reupload process",
+        "How the Settings prompt templates affect the style and structure of generated quiz questions and handouts",
+        "Whether the platform tracks which edits were made by production staff versus which were AI-generated originals",
+        "How many sessions Dominic can actively have in production at the same time without the platform slowing down",
+        "Whether Settings gives Dominic control over how speaker names, abbreviations, and clinical terms are handled in transcripts",
+        "How the platform deals with multi-speaker sessions where two presenters alternate throughout the recording",
+        "Whether the Stage 0 output format for learning objectives is consistent enough to apply accreditation formatting without rewriting",
+        "How easily production templates can be updated when the CE program changes its handout or quiz structure standards",
+        "Whether the platform preserves the original uploaded session files and all intermediate Stage 0 outputs for reference"
+      ],
+      "decisionCriteria": [
+        "Stage 0 transcript accuracy on veterinary clinical content is high enough that Dominic corrects individual terms, not entire paragraphs",
+        "The editing interface in the Needs-review queue is fast and in-place — not a download-edit-reupload cycle",
+        "Slide alignment is accurate enough that quiz questions reference the correct content without manual realignment",
+        "Learning objectives generated by Stage 0 follow a structure that requires formatting adjustments, not full rewrites",
+        "The platform handles multi-speaker sessions without confusing attribution or losing transcript continuity",
+        "Settings allows Dominic to maintain a custom glossary or term-correction list for recurring clinical vocabulary",
+        "Production stage processing time is predictable so Dominic can plan workloads without sessions going missing for hours",
+        "The platform tracks edit history so Dominic can see what Stage 0 originally produced versus what was changed in review",
+        "The Needs-review queue makes it clear which flags require production edits versus which require clinical judgment from a reviewer",
+        "Batch processing or simultaneous session production is supported without throughput degradation",
+        "Platform reliability is high — a session upload must not require Dominic to check back hourly to see if Stage 0 finished",
+        "Settings changes that affect output (model swaps, template edits) are version-logged so Dominic can correlate output changes to configuration changes"
+      ],
+      "goals": [
+        "Cut the average hours Dominic spends editing each course before it enters the review gate",
+        "Reduce the number of courses that come back from the review gate with production-layer corrections (not clinical corrections)",
+        "Establish a reliable process for sessions with poor audio so they do not silently produce bad transcripts",
+        "Get transcript-to-slide alignment accurate enough that handouts and quizzes can be built from Stage 0 output with minimal adjustment",
+        "Maintain a custom clinical vocabulary in Settings that prevents recurring terminology errors from showing up in every session",
+        "Build a production workflow that is reproducible by any staff member, not dependent on Dominic's personal process knowledge",
+        "Reduce the time Dominic spends on format-only corrections (spacing, heading levels, learning objective syntax) by having the platform enforce templates",
+        "Keep every session's production history auditable — original upload, Stage 0 output, edits, gate decisions",
+        "Increase the number of sessions Dominic can move through production simultaneously without losing track of any",
+        "Make handoff from production to the review queue clean — a session enters the Needs-review queue ready for clinical review, not structural cleanup",
+        "Identify and flag multi-speaker attribution errors at Stage 0 rather than discovering them during review",
+        "Reduce the frequency of Stage 0 re-runs, which create duplicate content versions and confusion in the Needs-review queue"
+      ],
+      "objections": [
+        "If the transcript editor in the Needs-review queue is limited, I will end up doing all corrections in an external document and pasting back, which is slower than our current process",
+        "Clinical veterinary terminology is very specific — if Stage 0 does not handle species-specific drug names, anatomical terms, and abbreviations well, every transcript will need heavy editing",
+        "I need to understand what happens if I update a prompt template in Settings mid-cycle — will sessions already in Stage 0 use the old or new template",
+        "If the platform cannot handle multi-speaker sessions cleanly, a significant portion of our content is effectively excluded",
+        "I have no visibility into how Stage 0 decides what to flag as low-confidence — if the threshold is arbitrary, I cannot calibrate my editing process around it",
+        "Version control on prompt templates and model settings needs to be robust — right now it sounds like Settings is a live config, not a versioned one",
+        "If Stage 0 produces a plausible-sounding but clinically incorrect transcript, the reviewer might not catch it — I need the confidence flags to surface those cases, not hide them",
+        "The platform needs to handle a variety of session lengths — we have 20-minute short sessions and 3-hour symposia — without treating them the same way",
+        "I worry that the Needs-review queue conflates production-layer issues (formatting, alignment) with clinical-review issues, making it unclear who should act on what",
+        "If Stage 0 processing fails silently and Dominic does not notice, a session could sit unprocessed for days without anyone knowing",
+        "The custom glossary or term-correction feature in Settings, if it exists, needs to be maintainable by production staff, not locked to an admin role",
+        "We need the platform to preserve the original uploaded audio and slides indefinitely — we cannot have them expire after processing"
+      ],
+      "openQuestions": [
+        "Show me what Stage 0 output looks like for a 45-minute single-speaker session — what does the transcript, the learning objectives, and the quiz question draft actually look like",
+        "How does the Needs-review queue distinguish between a production-layer flag (formatting, alignment) and a clinical-review flag — can I filter the queue by flag type",
+        "If Stage 0 produces an incorrect term throughout a 60-minute transcript, can I fix it globally in the editor, or do I have to correct each instance manually",
+        "How does the platform handle a session where the speaker goes off-slide for 15 minutes — does Stage 0 still attempt to align that section",
+        "Can I add a custom term-correction or pronunciation mapping in Settings so that 'Metacam' is never transcribed as 'metal cam'",
+        "What happens if Stage 0 fails partway through a session — does it save partial output, retry automatically, or require a manual re-upload",
+        "How is the quiz question generation structured — does Stage 0 generate distractors, or only the correct answer plus a stem",
+        "Can I see the confidence score for each individual item Stage 0 generated, not just the items that were flagged for review",
+        "If a session has 12 low-confidence items, are they all presented in the Needs-review queue at once, or prioritized in some order",
+        "How does the platform handle slides that are image-only with no text — does Stage 0 skip them, flag them, or attempt to describe them",
+        "Can production staff access the Settings prompt templates directly, or is that restricted to an admin role",
+        "What does an in-place edit look like in the Needs-review queue — if I correct a transcript line, does the change propagate to the quiz question that referenced that line",
+        "Is there a way to see, for a completed course, which content was Stage 0-generated versus what was manually edited",
+        "How does the platform handle sessions where the speaker reads a slide verbatim — does Stage 0 deduplicate that or include both the transcript and the slide text as separate items",
+        "What is the current limit on session file size and duration — do we need to split long symposia before uploading"
+      ]
+    },
+    {
+      "name": "Clinical Review Lead",
+      "role": "Clinical Review Lead",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "evaluator",
+      "sortOrder": 4,
+      "interests": [
+        "Whether the Needs-review queue surfaces clinically meaningful flags — not formatting issues or obvious errors that production should have caught",
+        "How confident Yolanda can be that a low-confidence flag is genuinely clinically uncertain versus a Stage 0 transcription artifact",
+        "Whether the review gate enforces clinical accuracy standards independently of what the AI generated",
+        "How the platform handles clinical terminology specific to veterinary disciplines — pharmacology, anatomy, species-specific dosing",
+        "Whether Yolanda can add clinical judgment annotations to a review decision so there is a record of why she accepted or rejected a flagged item",
+        "How the Needs-review queue handles conflicts between transcript content and what is shown on the corresponding slide",
+        "Whether the platform gives Yolanda enough context per flag to make a decision without switching to the original session recording",
+        "How coverage gap detection is calibrated for veterinary CE — whether it reflects current clinical standards or generic educational requirements",
+        "Whether the review gate has a hard stop for accreditation-critical violations or only advisory warnings",
+        "How the platform handles a course where Yolanda's review reveals a systematic clinical error across multiple items — can she reject the course back to production",
+        "Whether Yolanda's review decisions are tracked in a way that can be referenced in an accreditation audit",
+        "How Stage 0's confidence model is trained or tuned — whether it has any veterinary-domain awareness or is general-purpose"
+      ],
+      "decisionCriteria": [
+        "The Needs-review queue items presented to Yolanda are clinically significant — not noise that wastes her limited review time",
+        "Low-confidence flags include enough original context (transcript excerpt, slide, timestamp) to make a clinical judgment without leaving the queue",
+        "The review gate has hard stops for accreditation-critical items that cannot be bypassed — Yolanda does not have to police this manually",
+        "Coverage gap detection identifies specific clinical topics missing from a session, not generic 'content gap detected' warnings",
+        "Yolanda can annotate her review decisions with clinical rationale that is stored alongside the course record",
+        "When Yolanda rejects a gate item, it is clear what the course needs to correct and the session cannot publish until that item is resolved",
+        "The platform tracks Yolanda's review decisions with timestamps and allows her to reference past decisions when similar flags recur",
+        "Slide-transcript alignment is good enough that Yolanda is not discovering mismatches the platform should have caught at Stage 0",
+        "Yolanda can configure the clinical review gate rules within her authority without needing Settings admin access for every change",
+        "The platform provides a clear chain of review custody — who reviewed what, when, and what decision was made",
+        "Re-processing a session (after corrections) does not wipe Yolanda's prior review notes and decisions",
+        "The platform's behavior on a clinical violation is predictable and consistent — Yolanda should not see a violation treated differently on two similar courses"
+      ],
+      "goals": [
+        "Clear the Needs-review queue for an average course in under 45 minutes, reserving her clinical attention for genuine ambiguities",
+        "Never have a course reach members with an unresolved clinical accuracy issue that passed through the review gate",
+        "Build a documented review record for every published course that satisfies RACE audit requirements without separate note-keeping",
+        "Eliminate the experience of opening a gate flag and not having enough context to make a decision — every flag should be self-contained",
+        "Establish a review process that is resilient to her absence — a covering reviewer can use the queue without needing Yolanda's institutional knowledge",
+        "Prevent coverage gaps from reaching publication by having the platform catch them at Stage 0, not during her review",
+        "Maintain the clinical credibility of the CE program with members — one inaccurate published course damages trust significantly",
+        "Reduce the number of courses that require a second review cycle because something was missed in the first pass",
+        "Build a body of review decisions in the platform that can inform future Stage 0 confidence calibration",
+        "Have a clear escalation path for courses where clinical content is contested or outside her specialty area",
+        "Ensure that clinical corrections made in the Needs-review queue are reflected in all downstream content — quiz questions, handouts — not just the transcript",
+        "Keep the review gate configuration aligned with current RACE standards without having to lobby for Settings changes every accreditation cycle"
+      ],
+      "objections": [
+        "If Stage 0 flags too many items as low-confidence, I will start skimming flags instead of reviewing them carefully, and a real clinical error will slip through",
+        "The platform needs to show me the original transcript excerpt and the corresponding slide together when presenting a flag — if I have to navigate to find context, I will not use the queue",
+        "Coverage gap detection is only useful if the required-topic lists in Settings reflect current veterinary clinical standards — who is maintaining those, and how often",
+        "I am worried that if a low-confidence item is a transcription artifact (the AI heard the wrong word), I will accept it and a clinically wrong statement will remain in the course",
+        "The review gate rules need to be under my authority to adjust for clinical standards changes, not locked to an admin Settings role I do not have",
+        "If the platform re-runs Stage 0 after corrections, I need my original review notes preserved — starting the review from scratch on a corrected course is not acceptable",
+        "I do not trust a generic confidence model to identify clinically significant uncertainty in veterinary CE content — species-specific dosing errors might look high-confidence to the model",
+        "If the Needs-review queue mixes my clinical review items with production-layer items (formatting, alignment), I will spend time on things that are not my job",
+        "A course that has 20 flags is not more suspicious than one with 5 flags — I need the queue to surface the most clinically significant items first, not the most numerous",
+        "I need to be able to send a course back to production with specific instructions when I find a systematic error — not just close individual flags and hope production notices",
+        "The audit trail for my review decisions needs to be something I can present to an accreditation body — not just internal platform logs I cannot export",
+        "If a published course is later found to have a clinical error, I need to understand exactly what the platform showed me and what I approved — a clear review record protects me professionally"
+      ],
+      "openQuestions": [
+        "Show me exactly what a clinical review flag looks like in the Needs-review queue — what information is presented and what actions can I take",
+        "When the platform flags a low-confidence item, does it show me the original transcript text, the corresponding slide, and the confidence score together on one screen",
+        "Can I filter the Needs-review queue to show only items the platform has classified as clinically significant versus structural or formatting issues",
+        "How does the platform distinguish between a confidence flag that should require my clinical judgment and one that is just a transcription noise artifact",
+        "If I reject a gate item and send the course back to production, what happens in the system — does the session revert to a previous state, and does my rejection note travel with it",
+        "Can I add a clinical annotation to an accepted flag — for example, to note that I verified dosing against a specific reference — and does that annotation persist in the course record",
+        "How does coverage gap detection work — does it compare the transcript to a required-topic checklist, and where is that checklist maintained in Settings",
+        "What is the process if I believe Stage 0 has a systematic problem with a specific type of veterinary terminology — can I report it, and will it affect future sessions",
+        "If a course has a gate violation that is a hard stop for RACE compliance, can the program manager or production manager override it without my sign-off",
+        "Can I see the complete review history for a published course — every flag, every decision, every reviewer, in chronological order",
+        "If two reviewers disagree on whether to accept or reject a gate item, how does the platform handle that",
+        "What does the platform show me for a coverage gap — does it name the specific topic that is missing, or just indicate that the coverage check failed",
+        "Can I configure an automatic hold on courses where Stage 0 confidence on clinical content items falls below a threshold I set, so they never reach the queue without being triaged first",
+        "How does the platform handle a multi-session course — if I reviewed session one and a different reviewer handled session two, does the gate track both review records separately",
+        "If the underlying AI model is updated in Settings and it changes how low-confidence flags are generated, will I be notified before sessions I am currently reviewing are affected",
+        "What happens to my review queue items if I am out for two weeks — can the program manager see which courses are stalled waiting for my review and reassign them"
+      ]
+    }
+  ]
+}

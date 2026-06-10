@@ -21,8 +21,9 @@ class VoyageProvider implements EmbeddingProvider {
   readonly dim = 1024; // voyage-3
   private client = new VoyageAIClient({ apiKey: process.env.VOYAGE_API_KEY ?? '' });
   async embed(texts: string[]): Promise<number[][]> {
-    // Free tier is 3 RPM without a payment method — retry 429s with backoff.
-    const delays = [21_000, 42_000];
+    // Paid tier (account has billing) lifts the free 3 RPM cap — transient 429s under burst clear fast,
+    // so retry with SHORT backoff (was 21s/42s, tuned for the free tier's per-minute window).
+    const delays = [1_500, 4_000, 8_000];
     for (let attempt = 0; ; attempt++) {
       try {
         const res = await this.client.embed({ input: texts, model: 'voyage-3' });
@@ -37,7 +38,7 @@ class VoyageProvider implements EmbeddingProvider {
         return vecs;
       } catch (e: any) {
         if (e?.statusCode === 429 && attempt < delays.length) {
-          console.error(`  (Voyage rate-limited; retrying in ${delays[attempt] / 1000}s — add a payment method to lift the 3 RPM free limit)`);
+          console.error(`  (transient Voyage rate-limit; retrying in ${delays[attempt] / 1000}s)`);
           await new Promise((r) => setTimeout(r, delays[attempt]));
           continue;
         }

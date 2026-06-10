@@ -5,14 +5,13 @@ import { useState, useEffect, useRef, createElement } from 'react';
 import { Icon, MODE_META, VALIDATION } from './shell';
 import { VD } from './data';
 import { LOOP, PLAN, QUOTES, SEED, BEATS, type Beat, type Msg } from './beats';
-import { DemoApp } from './demo-app';
-import { useReal, useDemoProduct, type RealProduct, type RealPersona } from './real-data';
+import { useReal, useDemoProduct, type RealProduct, type RealPersona, type RealWorkflow, type RealTour, type RealJourney } from './real-data';
 import { VoiceClient } from './voice-client';
 
 /** What the operator can define per session, sent to the engine as query params. */
-type TargetParams = { productId?: string; role?: string; mode?: string; url?: string; scenario?: string; clientNav?: string };
+type TargetParams = { productId?: string; role?: string; mode?: string; url?: string; scenario?: string; clientNav?: string; journeyId?: string };
 /** The committed demo target (selection + config) the control room drives against. */
-interface DemoTarget { productId: string; host: string; mk: string; color: string; role: string; mode: string; url: string; scenario: string }
+interface DemoTarget { productId: string; host: string; mk: string; color: string; role: string; mode: string; url: string; scenario: string; journeyId?: string }
 const TARGET_ROLES = ['admin', 'manager', 'owner', 'accounting', 'employee'];
 const TARGET_MODES: { id: string; label: string }[] = [
   { id: 'read-only', label: 'Read-only' }, { id: 'safe', label: 'Safe' }, { id: 'approval', label: 'Approval' }, { id: 'execution', label: 'Execution · live writes' },
@@ -40,7 +39,7 @@ function ConfGauge({ conf }: { conf: number }) {
   );
 }
 
-function CostMeter({ cost, live }: { cost: number; live?: { total: number; byType: { type: string; usd: number }[] } }) {
+function CostMeter({ cost, live, engine }: { cost: number; live?: { total: number; byType: { type: string; usd: number }[] }; engine?: boolean }) {
   const real = useReal();
   let rows: { k: string; v: number; color: string; pct: number }[];
   let total: number;
@@ -51,6 +50,9 @@ function CostMeter({ cost, live }: { cost: number; live?: { total: number; byTyp
     total = live.total; label = 'this live demo · tagged to session';
   } else if (real?.costBreakdown?.length) {
     rows = real.costBreakdown; total = real.costBreakdown.reduce((a, c) => a + c.v, 0); label = 'all demos · tagged to sessions';
+  } else if (engine) {
+    // Live session, no cost yet — show an honest zero, NEVER the scripted breakdown.
+    rows = []; total = 0; label = 'this live demo · tagged to session';
   } else {
     rows = VD.costBreakdown.map((r) => ({ ...r, v: cost * r.pct / 100 })); total = cost; label = 'this demo · tagged to session';
   }
@@ -70,11 +72,17 @@ function CostMeter({ cost, live }: { cost: number; live?: { total: number; byTyp
   );
 }
 
-function Citation({ id, chunk }: { id: string | null; chunk?: any }) {
+function Citation({ id, chunk, engine }: { id: string | null; chunk?: any; engine?: boolean }) {
   const real = useReal();
-  if (!id && !chunk) return <div className="brain-now" style={{ color: 'var(--cr-fg3)', fontSize: 12 }}>No knowledge retrieved yet for the current step.</div>;
-  // Live cite (real streamed chunk) wins; else a REAL chunk from the SSOT; else scripted.
-  const realChunk = chunk ?? real?.knowledge?.find((x) => /delegat|approval/i.test(`${x.title} ${x.content} ${x.source}`)) ?? real?.knowledge?.[0];
+  // In a live session the ONLY legitimate citation is the streamed chunk — never a scripted/regex-guessed
+  // one. Before the first cite arrives, show the honest empty state.
+  if (engine) {
+    if (!chunk) return <div className="brain-now" style={{ color: 'var(--cr-fg3)', fontSize: 12 }}>No knowledge retrieved yet for the current step.</div>;
+  } else if (!id && !chunk) {
+    return <div className="brain-now" style={{ color: 'var(--cr-fg3)', fontSize: 12 }}>No knowledge retrieved yet for the current step.</div>;
+  }
+  // Live cite (real streamed chunk) wins; in scripted mode only, fall back to a real SSOT chunk then scripted.
+  const realChunk = chunk ?? (engine ? null : real?.knowledge?.find((x) => /delegat|approval/i.test(`${x.title} ${x.content} ${x.source}`)) ?? real?.knowledge?.[0]);
   if (realChunk) {
     const t = real?.kbTypes?.[realChunk.type] ?? { label: realChunk.type, cls: 'pill-info' };
     const cls = realChunk.conf >= 0.85 ? 'conf-hi' : realChunk.conf >= 0.7 ? 'conf-mid' : 'conf-lo';
@@ -121,23 +129,26 @@ function Citation({ id, chunk }: { id: string | null; chunk?: any }) {
   );
 }
 
-function LeftRail({ beat }: { beat: Beat }) {
+function LeftRail({ beat, target, activePersona }: { beat: Beat; target?: DemoTarget | null; activePersona?: RealPersona | null }) {
   const po = useDemoProduct();
+  // Real session facts from the operator's chosen target + the targeted product (no hardcoded dept/objective).
   return (
     <div className="cr-col cr-left">
       <div className="cr-sec">
         <div className="cr-sec__title">Session</div>
         <dl className="cr-kv">
-          <dt>Department</dt><dd>Procurement</dd>
-          <dt>Product</dt><dd>{po ? `${po.name} · ${po.version}` : 'po.vin'}</dd>
-          <dt>Scenario</dt><dd>Approval delegation</dd>
-          <dt>Environment</dt><dd>{po?.env || 'demo env'}</dd>
-          <dt>Knowledge</dt><dd>{po ? `${po.chunks} chunks · ${po.coverage}% coverage` : '—'}</dd>
-          <dt>Objective</dt><dd style={{ fontWeight: 500, color: 'var(--cr-fg2)' }}>Audit-clean coverage when approvers are out</dd>
+          <dt>Product</dt><dd>{po ? `${po.name}${po.version && po.version !== '—' ? ` · ${po.version}` : ''}` : (target?.host ?? '—')}</dd>
+          <dt>Target</dt><dd>{target ? (target.url?.trim() || target.host) : '—'}</dd>
+          <dt>Drive as</dt><dd>{target?.role ?? '—'}</dd>
+          <dt>Mode</dt><dd>{target?.mode ?? '—'}</dd>
+          <dt>Scenario</dt><dd>{target?.scenario?.trim() || 'Interactive (operator-led)'}</dd>
+          <dt>Environment</dt><dd>{po?.env || '—'}</dd>
+          <dt>Knowledge</dt><dd>{po ? `${po.chunks} chunks · ${po.coverage}% validated` : '—'}</dd>
         </dl>
       </div>
       <div className="cr-sec">
-        <div className="cr-sec__title">Demo plan <span className="badge">{Math.max(0, beat.planIdx + (beat.loopDone ? 1 : 0))}/{PLAN.length}</span></div>
+        <div className="cr-sec__title">Demo plan <span className="badge">the consultant&apos;s loop</span></div>
+        {/* Descriptive loop stages; the active stage tracks the real engine loop index when live. */}
         <ul className="plan">
           {PLAN.map((p, i) => {
             const done = beat.loopDone || i < beat.planIdx;
@@ -152,33 +163,31 @@ function LeftRail({ beat }: { beat: Beat }) {
         </ul>
       </div>
       <div className="cr-sec" style={{ borderBottom: 'none', flex: 1 }}>
-        <div className="cr-sec__title">Stakeholders <span className="badge">collection · {VD.stakeholders.length}</span></div>
+        <div className="cr-sec__title">Active specialist</div>
+        {/* Real hand-off state — who the consultant is currently speaking as (null = the lead consultant). */}
         <div className="stk">
-          {VD.stakeholders.map((s) => (
-            <div key={s.id} className={`stk__card ${beat.activeStk === s.id ? 'active' : ''}`}>
-              <div className="stk__top">
-                <span className="stk__av" style={{ background: s.color }}>{s.initials}</span>
-                <div><div className="stk__name">{s.name}</div><div className="stk__role">{s.role}</div></div>
-                {beat.activeStk === s.id && <span className="stk__active-tag">Active</span>}
-              </div>
-              <div className="stk__interest">{s.interest}</div>
-              <div className="stk__open"><Icon name="dot" size={10} className="solid" style={{ width: 9, height: 9 }} /> {s.asked} raised · <span className="n">{s.open}</span> open</div>
+          <div className="stk__card active">
+            <div className="stk__top">
+              <span className="stk__av" style={{ background: activePersona?.color ?? '#002855' }}>{(activePersona?.name ?? 'Lead Consultant').split(' ').map((w) => w[0]).join('').slice(0, 2)}</span>
+              <div><div className="stk__name">{activePersona?.name ?? 'Lead Consultant'}</div><div className="stk__role">{activePersona ? (activePersona.role || 'Specialist') : 'Always-on default'}</div></div>
+              <span className="stk__active-tag">Active</span>
             </div>
-          ))}
+            <div className="stk__interest">{activePersona ? 'Handed off — answers, gate, and voice now reflect this specialist.' : 'Hand off to a specialist from the live browser footer for deep questions.'}</div>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function RightRail({ beat, mode, liveCite, liveCost }: { beat: Beat; mode: string; liveCite?: any; liveCost?: { total: number; byType: { type: string; usd: number }[] } }) {
+function RightRail({ beat, mode, liveCite, liveCost, onKill, engine }: { beat: Beat; mode: string; liveCite?: any; liveCost?: { total: number; byType: { type: string; usd: number }[] }; onKill?: () => void; engine?: boolean }) {
   return (
     <div className="cr-col cr-right">
       <div className="cr-sec">
         <div className="cr-sec__title">Execution mode</div>
         <div className="flex between items-center" style={{ gap: 10 }}>
           <span className={`cr-mode ${MODE_META[mode].cls}`} title="Read-only is the AI agent's limit — it never fires a mutating action. You're logged in yourself and have full control of your live session; take over and click anything, anytime."><Icon name={MODE_META[mode].icon} size={12} /> {MODE_META[mode].label}</span>
-          <button className="kill"><Icon name="stop" size={12} className="solid" /> Kill</button>
+          <button className="kill" onClick={onKill} title="Hard kill — stop the agent immediately"><Icon name="stop" size={12} className="solid" /> Kill</button>
         </div>
         <div style={{ fontSize: 11, color: 'var(--cr-fg3)', marginTop: 9, lineHeight: 1.45 }}>Default-deny. Mutating actions require an explicit mode + action grant. Hard kill is always available.</div>
       </div>
@@ -196,17 +205,17 @@ function RightRail({ beat, mode, liveCite, liveCost }: { beat: Beat; mode: strin
       </div>
       <div className="cr-sec">
         <div className="cr-sec__title">Knowledge cited</div>
-        <Citation id={beat.cite} chunk={liveCite} />
+        <Citation id={beat.cite} chunk={liveCite} engine={engine} />
       </div>
       <div className="cr-sec" style={{ borderBottom: 'none' }}>
         <div className="cr-sec__title">Cost · live</div>
-        <CostMeter cost={beat.cost} live={liveCost} />
+        <CostMeter cost={beat.cost} live={liveCost} engine={engine} />
       </div>
     </div>
   );
 }
 
-function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, onAsk, canAsk, onMic, micActive, liveCite, liveCost }: { beat: Beat; mode: string; open: boolean; setOpen: (b: boolean) => void; tab: string; setTab: (t: string) => void; messages: Msg[]; typing: boolean; onAsk?: (text: string) => void; canAsk?: boolean; onMic?: () => void; micActive?: boolean; liveCite?: any; liveCost?: { total: number; byType: { type: string; usd: number }[] } }) {
+function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, onAsk, canAsk, onMic, micActive, liveCite, liveCost, onKill, target, activePersona, handoffSuggestion, onHandoff, engine }: { beat: Beat; mode: string; open: boolean; setOpen: (b: boolean) => void; tab: string; setTab: (t: string) => void; messages: Msg[]; typing: boolean; onAsk?: (text: string) => void; canAsk?: boolean; onMic?: () => void; micActive?: boolean; liveCite?: any; liveCost?: { total: number; byType: { type: string; usd: number }[] }; onKill?: () => void; target?: DemoTarget | null; activePersona?: RealPersona | null; handoffSuggestion?: { topic: string; toPersona: string } | null; onHandoff?: (toPersona: string) => void; engine?: boolean }) {
   const TABS = [
     { id: 'convo', label: 'Conversation', icon: 'sessions' },
     { id: 'brief', label: 'Brief', icon: 'customers' },
@@ -229,9 +238,9 @@ function RightPanel({ beat, mode, open, setOpen, tab, setTab, messages, typing, 
         <button className="cr-panel__collapse" onClick={() => setOpen(false)} title="Collapse panel"><Icon name="chevR" size={15} /></button>
       </div>
       <div className="cr-panel__body">
-        {tab === 'convo' && <Convo messages={messages} typing={typing} onAsk={onAsk} canAsk={canAsk} onMic={onMic} micActive={micActive} />}
-        {tab === 'brief' && <LeftRail beat={beat} />}
-        {tab === 'reasoning' && <RightRail beat={beat} mode={mode} liveCite={liveCite} liveCost={liveCost} />}
+        {tab === 'convo' && <Convo messages={messages} typing={typing} onAsk={onAsk} canAsk={canAsk} onMic={onMic} micActive={micActive} handoffSuggestion={handoffSuggestion} onHandoff={onHandoff} />}
+        {tab === 'brief' && <LeftRail beat={beat} target={target} activePersona={activePersona} />}
+        {tab === 'reasoning' && <RightRail beat={beat} mode={mode} liveCite={liveCite} liveCost={liveCost} onKill={onKill} engine={engine} />}
       </div>
     </div>
   );
@@ -257,28 +266,158 @@ const PAGE_SNAPSHOT_JS = `(function(){
     } else if(tag==='input'){
       var t=(el.getAttribute('type')||'text').toLowerCase();
       item.filled = (t==='checkbox'||t==='radio') ? !!el.checked : !!el.value;
+      if(!item.filled && t!=='checkbox' && t!=='radio'){ // custom combobox: the chosen value often renders in a sibling node while the input itself stays empty
+        try{ var cb=el.closest('[role="combobox"]')||el.closest('[class*="select"],[class*="Select"],[class*="combobox"],[class*="Combobox"],[class*="autocomplete"],[class*="Autocomplete"]');
+          if(cb){ var sv=cb.querySelector('[class*="singleValue"],[class*="single-value"],[class*="multiValue"],[class*="multi-value"],[aria-selected="true"]');
+            if(sv && (sv.textContent||'').trim()) item.filled=true; } }catch(e){}
+      }
     } else if(tag==='textarea'){ item.filled = !!el.value; }
     out.push(item); ref++; }
   var heads=[].slice.call(document.querySelectorAll('h1,h2,h3')).filter(vis).map(function(h){return (h.innerText||'').trim().replace(/\\s+/g,' ').slice(0,100);}).filter(Boolean).slice(0,12);
   return { url: location.href, title: document.title, headings: heads, elements: out };
 })()`;
-const clickRefJs = (ref: number) => `(function(){ var el=document.querySelector('[data-vin-ref="'+${ref}+'"]'); if(!el) return false;
-  el.scrollIntoView({behavior:'smooth',block:'center'}); var o=el.style.outline, off=el.style.outlineOffset; el.style.outline='3px solid #0861CE'; el.style.outlineOffset='2px';
-  setTimeout(function(){ try{ el.click(); }catch(e){} }, 400); setTimeout(function(){ el.style.outline=o; el.style.outlineOffset=off; }, 2400); return true; })()`;
-const selectRefJs = (ref: number, val: string) => `(function(){ var el=document.querySelector('[data-vin-ref="'+${ref}+'"]'); if(!el) return false;
-  el.scrollIntoView({behavior:'smooth',block:'center'}); var want=${JSON.stringify(val)}.toString().toLowerCase().trim();
-  if(el.tagName==='SELECT'){ var opts=[].slice.call(el.options), pick=-1;
-    for(var i=0;i<opts.length;i++){ var t=(opts[i].text||'').toLowerCase().trim(), v=(opts[i].value||'').toLowerCase().trim(); if(t===want||v===want){ pick=i; break; } }
-    if(pick<0) for(var j=0;j<opts.length;j++){ if((opts[j].text||'').toLowerCase().indexOf(want)>=0 && want){ pick=j; break; } }
-    if(pick<0) for(var k=1;k<opts.length;k++){ if(opts[k].value && !opts[k].disabled){ pick=k; break; } } // fallback: first real option
-    if(pick<0) return false;
-    el.selectedIndex=pick; el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
-    var o=el.style.outline; el.style.outline='3px solid #0861CE'; setTimeout(function(){el.style.outline=o;},2400); return true; }
-  try{ el.click(); }catch(e){} return true; })()`; // custom dropdown trigger → open it; the option is clicked next step
-const typeRefJs = (ref: number, val: string) => `(function(){ var el=document.querySelector('[data-vin-ref="'+${ref}+'"]'); if(!el) return false;
-  el.scrollIntoView({behavior:'smooth',block:'center'}); try{ el.focus(); var proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype; var s=Object.getOwnPropertyDescriptor(proto,'value').set; s.call(el, ${JSON.stringify(val)}); }catch(e){ try{ el.value=${JSON.stringify(val)}; }catch(x){} }
-  el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
-  var o=el.style.outline; el.style.outline='3px solid #0861CE'; setTimeout(function(){ el.style.outline=o; }, 2400); return true; })()`;
+// Robustly set a native temporal input (<input type=date|datetime-local|month|week|time>) to a FUTURE
+// value, coercing whatever the agent typed (ISO, dd/mm/yyyy, "June 16", "next week", "ASAP", or NOTHING)
+// into the exact ISO string that input type requires, clamped to [min,max] and NEVER in the past — then
+// firing input/change via the native value setter so React/controlled forms register it. This is why a
+// date field now "just fills" with zero gaps instead of stranding the drive loop on an unclickable native
+// calendar popup (the #1 demo blocker). Injected as a function decl so click/type/replay can all reuse it.
+const TEMPORAL_FN = `
+  function __vinTType(el){ try{ return (el.getAttribute('type')||el.type||'').toLowerCase(); }catch(e){ return ''; } }
+  function __vinIsTemporal(el){ return !!el && el.tagName==='INPUT' && ['date','datetime-local','month','week','time'].indexOf(__vinTType(el))>=0; }
+  function __vinSetTemporal(el, raw){
+    var TYPE=__vinTType(el);
+    function pad(n){ n=Math.floor(n); return (n<10?'0':'')+n; }
+    function mid(d){ var x=new Date(d.getTime()); x.setHours(0,0,0,0); return x; }
+    var today=mid(new Date());
+    var MON={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+    function parseLoose(s){
+      if(s==null) return null; s=(''+s).trim().toLowerCase();
+      if(!s || s==='dd/mm/yyyy' || s==='mm/dd/yyyy' || s==='yyyy-mm-dd' || s==='hh:mm') return null; // placeholder echoes → treat as empty
+      if(s==='today') return new Date(today);
+      if(s==='tomorrow'){ var t=new Date(today); t.setDate(t.getDate()+1); return t; }
+      if(/asap|urgent|immediat|rush|right away|soon/.test(s)){ var a=new Date(today); a.setDate(a.getDate()+3); return a; }
+      var rel=s.match(/in\\s+(\\d+)\\s*(day|week|month|year)/);
+      if(rel){ var n=+rel[1], u=rel[2], r=new Date(today); if(u==='day')r.setDate(r.getDate()+n); else if(u==='week')r.setDate(r.getDate()+7*n); else if(u==='month')r.setMonth(r.getMonth()+n); else r.setFullYear(r.getFullYear()+n); return r; }
+      if(/next\\s+week/.test(s)){ var w=new Date(today); w.setDate(w.getDate()+7); return w; }
+      if(/next\\s+month|end of (the )?month|month end/.test(s)){ var m=new Date(today); m.setMonth(m.getMonth()+1); return m; }
+      if(/next\\s+quarter/.test(s)){ var q=new Date(today); q.setMonth(q.getMonth()+3); return q; }
+      var iso=s.match(/^(\\d{4})-(\\d{1,2})(?:-(\\d{1,2}))?/);                       // ISO yyyy-mm[-dd] (also month/week-min)
+      if(iso){ return mid(new Date(+iso[1], (+iso[2])-1, iso[3]?+iso[3]:1)); }
+      var nm=s.match(/([a-z]{3,9})/);                                                // "june 16, 2026" / "16 jun" / "jun 2026"
+      if(nm && MON[nm[1].slice(0,3)]!==undefined){
+        var mo=MON[nm[1].slice(0,3)], dm=s.match(/(\\d{1,2})(?!\\d|:)/), ym=s.match(/(\\d{4})/);
+        var yr=ym?+ym[1]:today.getFullYear(), dy=dm?+dm[1]:1, dd=mid(new Date(yr, mo, dy));
+        if(!ym && dd<today) dd.setFullYear(dd.getFullYear()+1);                      // bare "june 16" already passed → next year
+        return isNaN(dd.getTime())?null:dd;
+      }
+      var p=s.split(/[\\/.\\-\\s]+/).filter(Boolean).map(Number);                    // d/m/y or m/d/y (also . - )
+      if(p.length>=3 && p.every(function(x){return !isNaN(x);})){
+        var yi,mi,di;
+        if(p[0]>=1000){ yi=p[0]; mi=p[1]-1; di=p[2]; }                               // y/m/d
+        else { yi=p[2]<100?2000+p[2]:p[2]; if(p[0]>12){ di=p[0]; mi=p[1]-1; } else { mi=p[0]-1; di=p[1]; } } // >12 ⇒ day, else mm/dd
+        var nd=mid(new Date(yi, mi, di)); return isNaN(nd.getTime())?null:nd;
+      }
+      var dn=new Date(s); return isNaN(dn.getTime())?null:mid(dn);                   // last resort
+    }
+    var minD=parseLoose(el.getAttribute('min')), maxD=parseLoose(el.getAttribute('max'));
+    var floor=new Date(today); floor.setDate(floor.getDate()+1);                     // future = at least tomorrow
+    if(minD && minD>floor) floor=minD;                                              // respect the form's own min
+    var d=parseLoose(raw);
+    if(!d || isNaN(d.getTime())){ d=new Date(today); d.setDate(d.getDate()+7); if(minD && d<minD) d=new Date(minD); } // unset/garbage → a week out
+    if(d<floor) d=new Date(floor);                                                  // FUTURE guarantee — never the past
+    if(maxD && d>maxD) d=new Date(maxD);
+    function isoDate(x){ return x.getFullYear()+'-'+pad(x.getMonth()+1)+'-'+pad(x.getDate()); }
+    function isoWeek(x){ var u=new Date(Date.UTC(x.getFullYear(),x.getMonth(),x.getDate())), day=u.getUTCDay()||7; u.setUTCDate(u.getUTCDate()+4-day); var ys=new Date(Date.UTC(u.getUTCFullYear(),0,1)), wk=Math.ceil((((u-ys)/86400000)+1)/7); return u.getUTCFullYear()+'-W'+pad(wk); }
+    var val;
+    if(TYPE==='datetime-local') val=isoDate(d)+'T09:00';
+    else if(TYPE==='month') val=d.getFullYear()+'-'+pad(d.getMonth()+1);
+    else if(TYPE==='week') val=isoWeek(d);
+    else if(TYPE==='time'){ var tm=(''+raw).match(/(\\d{1,2}):(\\d{2})/); val=tm?pad(+tm[1])+':'+tm[2]:'09:00'; }
+    else val=isoDate(d);
+    try{ var st=Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set; st.call(el, val); }catch(e){ try{ el.value=val; }catch(x){} }
+    el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
+    try{ el.blur&&el.blur(); }catch(e){}
+    return val;
+  }`;
+// Robustly resolve ANY dropdown to a chosen option — the other #1 demo blocker. Handles three shapes with one
+// async path: (a) a native <select>; (b) an ARIA combobox/menu button; (c) a SEARCHABLE typeahead (a "Search …"
+// field backed by a long list, e.g. GL Account · 302 accounts) that shows NOTHING until you type to filter.
+// It opens the control, types the wanted value to filter, WAITS (polls) for options to render in the page OR a
+// portal, and clicks the best match — falling back to clearing the query / ArrowDown / Enter so it always lands
+// on a real option. This is why a custom search-dropdown now "just selects" instead of stranding the drive loop.
+const COMBO_FN = `
+  function __vinVis(el){ try{ var r=el.getBoundingClientRect(); return el.offsetParent!==null && r.width>1 && r.height>1; }catch(e){ return false; } }
+  function __vinSleep(ms){ return new Promise(function(r){ setTimeout(r, ms); }); }
+  function __vinFire(el,type){ try{ var ev; if(type.indexOf('key')===0) ev=new KeyboardEvent(type,{bubbles:true,cancelable:true}); else if(/^(mouse|click|pointer|dbl)/.test(type)) ev=new MouseEvent(type,{bubbles:true,cancelable:true,view:window}); else ev=new Event(type,{bubbles:true}); el.dispatchEvent(ev); }catch(e){} }
+  function __vinKey(el,key){ var kc=key==='Enter'?13:(key==='ArrowDown'?40:0); ['keydown','keypress','keyup'].forEach(function(t){ try{ el.dispatchEvent(new KeyboardEvent(t,{bubbles:true,cancelable:true,key:key,code:key,keyCode:kc,which:kc})); }catch(e){} }); }
+  function __vinSetVal(el,v){ try{ var p=el.tagName==='TEXTAREA'?window.HTMLTextAreaElement.prototype:window.HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(p,'value').set.call(el,v); }catch(e){ try{ el.value=v; }catch(x){} } }
+  function __vinHilite(el){ try{ var o=el.style.outline; el.style.outline='3px solid #0861CE'; setTimeout(function(){ el.style.outline=o; },2200); }catch(e){} }
+  function __vinIsCombo(el){ if(!el) return false; if(el.tagName==='SELECT') return true;
+    try{ var role=(el.getAttribute('role')||'').toLowerCase(); if(role==='combobox'||role==='listbox') return true;
+      var hp=(el.getAttribute('aria-haspopup')||'').toLowerCase(); if(['listbox','menu','tree','grid','dialog','true'].indexOf(hp)>=0) return true;
+      if(el.getAttribute('aria-autocomplete')||el.getAttribute('aria-expanded')!==null) return true;
+      if(el.closest && el.closest('[role="combobox"],[role="listbox"]')) return true; }catch(e){}
+    return false; }
+  function __vinCollect(input){
+    var tiers=['[role="option"]','[role="listbox"] li','[role="menu"] [role="menuitem"]','[role="menuitem"]','[aria-selected]'];
+    var found=[]; for(var i=0;i<tiers.length && !found.length;i++){ try{ found=[].slice.call(document.querySelectorAll(tiers[i])).filter(__vinVis); }catch(e){} }
+    if(!found.length){ try{ found=[].slice.call(document.querySelectorAll('[class*="option"],[class*="-option"],[id*="-option-"],[class*="menu-item"],[class*="MenuItem"],[data-option-index],[class*="autocomplete"] li,[class*="Autocomplete"] li')).filter(__vinVis); }catch(e){} }
+    return found.filter(function(o){ var t=(o.textContent||'').trim(); return o!==input && t && t.length<160 && !/^(no .*(result|match|option|account|item)|type to search|start typing|loading|searching)/i.test(t) && (!o.getAttribute||o.getAttribute('aria-disabled')!=='true'); }).slice(0,80);
+  }
+  async function __vinWaitOpts(input,tries){ var o=[]; for(var i=0;i<(tries||16);i++){ o=__vinCollect(input); if(o.length) return o; await __vinSleep(90); } return o; }
+  function __vinChoose(opts,want){ if(!opts.length) return null; var w=(want||'').toLowerCase().trim();
+    if(w){ for(var i=0;i<opts.length;i++){ if((opts[i].textContent||'').toLowerCase().trim()===w) return opts[i]; }
+      for(var j=0;j<opts.length;j++){ if((opts[j].textContent||'').toLowerCase().indexOf(w)>=0) return opts[j]; } }
+    return opts[0]; }
+  function __vinNative(el,want){ var opts=[].slice.call(el.options), pick=-1, w=(want||'').toLowerCase().trim();
+    for(var i=0;i<opts.length;i++){ var t=(opts[i].text||'').toLowerCase().trim(), v=(opts[i].value||'').toLowerCase().trim(); if(w&&(t===w||v===w)){pick=i;break;} }
+    if(pick<0&&w) for(var j=0;j<opts.length;j++){ if((opts[j].text||'').toLowerCase().indexOf(w)>=0){pick=j;break;} }
+    if(pick<0) for(var k=0;k<opts.length;k++){ if(opts[k].value && !opts[k].disabled){pick=k;break;} }
+    if(pick<0) return {ok:false}; el.selectedIndex=pick; __vinFire(el,'input'); __vinFire(el,'change'); return {ok:true,picked:(opts[pick].text||'').trim().slice(0,60)}; }
+  async function __vinClickOpt(pick){ try{ pick.scrollIntoView({block:'nearest'}); }catch(e){} __vinFire(pick,'mousedown'); __vinFire(pick,'mouseup'); try{ pick.click(); }catch(e){} __vinFire(pick,'click'); await __vinSleep(140); }
+  async function __vinCombo(el,want){
+    want=(want==null?'':(''+want)).trim(); __vinHilite(el);
+    try{ el.scrollIntoView({behavior:'smooth',block:'center'}); }catch(e){}
+    if(el.tagName==='SELECT') return __vinNative(el,want);
+    var input = el.tagName==='INPUT' ? el : (el.querySelector('input:not([type=hidden]),textarea')||el);
+    try{ input.focus(); }catch(e){}
+    __vinFire(input,'mousedown'); __vinFire(input,'mouseup'); try{ input.click(); }catch(e){} __vinFire(el,'click');
+    await __vinSleep(150);
+    var isText = input.tagName==='INPUT' && /^(text|search|email|tel|url|)$/.test((input.getAttribute('type')||'').toLowerCase());
+    if(isText && want){ __vinSetVal(input,want); __vinFire(input,'input'); __vinFire(input,'keyup'); }   // type to filter the list
+    var opts = await __vinWaitOpts(input,16);
+    if(!opts.length && isText && input.value){ __vinSetVal(input,''); __vinFire(input,'input'); opts = await __vinWaitOpts(input,12); } // query matched nothing → clear, take any option
+    if(!opts.length){ __vinKey(input,'ArrowDown'); opts = await __vinWaitOpts(input,12); }                                              // some lists only open on ArrowDown
+    if(!opts.length){ __vinKey(input,'Enter'); await __vinSleep(120); return { ok: !!input.value, picked: input.value||'', reason: 'no-options' }; }
+    var pick = __vinChoose(opts,want); if(!pick) return { ok:false, reason:'no-match' };
+    var ptext=(pick.textContent||'').trim().slice(0,60);
+    await __vinClickOpt(pick);
+    if(input.value==='' && isText && ptext){ __vinKey(input,'Enter'); }   // keyboard fallback for libs that commit on Enter
+    return { ok:true, picked: ptext };
+  }`;
+// Everything injected ahead of an executor: the date filler + the dropdown resolver (both reused by click/type/select).
+const INJECT = TEMPORAL_FN + COMBO_FN;
+// Highlight an element briefly (shared by the click/type executors so the operator sees what the AI touched).
+const HILITE = `var o=el.style.outline, off=el.style.outlineOffset; el.style.outline='3px solid #0861CE'; el.style.outlineOffset='2px'; setTimeout(function(){ el.style.outline=o; el.style.outlineOffset=off; }, 2400);`;
+const clickRefJs = (ref: number) => `(async function(){ ${INJECT}
+  var el=document.querySelector('[data-vin-ref="'+${ref}+'"]'); if(!el) return false;
+  el.scrollIntoView({behavior:'smooth',block:'center'}); ${HILITE}
+  if(__vinIsTemporal(el)){ __vinSetTemporal(el, ''); return true; } // a click on a date field opens an unclickable native calendar → fill a future date instead
+  if(__vinIsCombo(el)){ return await __vinCombo(el, ''); }          // a click on a dropdown → open + select the first real option (no dead-end)
+  setTimeout(function(){ try{ el.click(); }catch(e){} }, 400); return true; })()`;
+// Resolve a dropdown (native <select>, ARIA combobox, or searchable typeahead) to the wanted option in ONE call.
+const comboPickJs = (ref: number, val: string) => `(async function(){ ${INJECT}
+  var el=document.querySelector('[data-vin-ref="'+${ref}+'"]'); if(!el) return {ok:false};
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+  return await __vinCombo(el, ${JSON.stringify(val)}); })()`;
+const typeRefJs = (ref: number, val: string) => `(async function(){ ${INJECT}
+  var el=document.querySelector('[data-vin-ref="'+${ref}+'"]'); if(!el) return false;
+  el.scrollIntoView({behavior:'smooth',block:'center'}); ${HILITE}
+  if(__vinIsTemporal(el)){ __vinSetTemporal(el, ${JSON.stringify(val)}); return true; } // date/time field → coerce to a valid future ISO value
+  if(__vinIsCombo(el)){ return await __vinCombo(el, ${JSON.stringify(val)}); }            // typing into a dropdown → filter + pick the option, don't just type text
+  try{ el.focus(); var proto=el.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype; var s=Object.getOwnPropertyDescriptor(proto,'value').set; s.call(el, ${JSON.stringify(val)}); }catch(e){ try{ el.value=${JSON.stringify(val)}; }catch(x){} }
+  el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true})); return true; })()`;
 
 /* SpecialistSelect — hand the demo off to a specialist persona (the AI adopts its prompt + guardrails)
    or back to the Lead Consultant. Always shows the ACTIVE specialist; lives in the live bar. */
@@ -351,7 +490,8 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, speci
       snapshot: () => ref.current?.executeJavaScript(PAGE_SNAPSHOT_JS, true),
       clickRef: (r: number) => ref.current?.executeJavaScript(clickRefJs(r), true),
       typeInto: (r: number, v: string) => ref.current?.executeJavaScript(typeRefJs(r, v), true),
-      selectOption: (r: number, v: string) => ref.current?.executeJavaScript(selectRefJs(r, v), true),
+      selectOption: (r: number, v: string) => ref.current?.executeJavaScript(comboPickJs(r, v), true),
+      comboPick: (r: number, v: string) => ref.current?.executeJavaScript(comboPickJs(r, v), true),
     };
     return () => { if (controlsRef) controlsRef.current = null; };
   }, [controlsRef]);
@@ -487,7 +627,7 @@ function Stage({ beat, onResolve, screenshot, blocked, url, picker, browser }: {
         {browser /* the real embedded browser replaces the screenshot/mock on the desktop */ ?? <>
         {live
           ? <img src={screenshot!} alt="Live product (driven by the AI consultant, read-only)" style={{ width: '100%', height: '100%', objectFit: 'cover', objectPosition: 'top', display: 'block' }} />
-          : <DemoApp screen={beat.screen} />}
+          : <div style={{ width: '100%', height: '100%', display: 'grid', placeItems: 'center', color: '#76859a', fontSize: 13, background: '#f4f6f9' }}>Connecting to the live product…</div>}
         {!live && beat.hl && <div className="ai-highlight" style={{ left: `${beat.hl.x}%`, top: `${beat.hl.y}%`, width: `${beat.hl.w}%`, height: `${beat.hl.h}%` }} />}
         {!live && beat.cursor && <div className="ai-cursor" style={{ left: `${beat.cursor.x}%`, top: `${beat.cursor.y}%` }}>{CURSOR}</div>}
         {!live && beat.callout && (
@@ -526,7 +666,7 @@ function Stage({ beat, onResolve, screenshot, blocked, url, picker, browser }: {
 
 const ASK_CHIPS = ['How does delegation get audited?', 'What about SSO?', 'Show me out-of-office routing', 'Can you submit a real PO?'];
 
-function Convo({ messages, typing, onAsk, canAsk, onMic, micActive }: { messages: Msg[]; typing: boolean; onAsk?: (text: string) => void; canAsk?: boolean; onMic?: () => void; micActive?: boolean }) {
+function Convo({ messages, typing, onAsk, canAsk, onMic, micActive, handoffSuggestion, onHandoff }: { messages: Msg[]; typing: boolean; onAsk?: (text: string) => void; canAsk?: boolean; onMic?: () => void; micActive?: boolean; handoffSuggestion?: { topic: string; toPersona: string } | null; onHandoff?: (toPersona: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [text, setText] = useState('');
   useEffect(() => { if (ref.current) ref.current.scrollTop = ref.current.scrollHeight; }, [messages.length, typing]);
@@ -550,6 +690,12 @@ function Convo({ messages, typing, onAsk, canAsk, onMic, micActive }: { messages
         {typing && <div className="msg ai"><span className="msg__av" style={{ background: '#002855' }}>AI</span><div className="msg__bubble" style={{ padding: 0 }}><div className="typing"><i /><i /><i /></div></div></div>}
       </div>
       <div className="convo__input">
+        {handoffSuggestion?.toPersona && onHandoff && (
+          <button className="ask-chip" style={{ borderColor: '#0861CE', color: '#0861CE', fontWeight: 700 }}
+            onClick={() => onHandoff(handoffSuggestion.toPersona)} title={`This question is better for the ${handoffSuggestion.toPersona}`}>
+            ↪ Bring in {handoffSuggestion.toPersona}
+          </button>
+        )}
         {ASK_CHIPS.map((c) => <button key={c} className="ask-chip" onClick={() => send(c)} disabled={!canAsk}>{c}</button>)}
         <div className="field">
           {onMic && (
@@ -617,15 +763,19 @@ interface LiveState {
   messages: Msg[]; cite: any | null; cost: number; byType: { type: string; usd: number }[];
   screenshot: string | null; url: string; blocked: string[]; error: string | null;
   navAction: { label?: string; selectors?: string[]; url?: string; seq: number } | null; // client-driven nav instruction for the embedded browser
+  sessionId: string | null; // real demo_sessions id from the engine `start` event (used for hand-off records)
+  handoffSuggestion: { topic: string; toPersona: string } | null; // active specialist suggested bringing in another
+  journeyName: string | null; journeyStep: number; journeyTotal: number; journeyDone: boolean; turnSeq: number; // V5 voice-walk progress + per-turn completion counter (auto-advance signal)
 }
-const LIVE_INIT: LiveState = { running: false, done: false, ready: false, loopIdx: -1, phase: 'Ready', brain: 'Live engine ready — press Run agent to drive po.vin read-only.', sub: 'awaiting start', conf: 0.9, messages: [], cite: null, cost: 0, byType: [], screenshot: null, url: '', blocked: [], error: null, navAction: null };
+const LIVE_INIT: LiveState = { running: false, done: false, ready: false, loopIdx: -1, phase: 'Ready', brain: 'Live engine ready — press Run agent to drive po.vin read-only.', sub: 'awaiting start', conf: 0.9, messages: [], cite: null, cost: 0, byType: [], screenshot: null, url: '', blocked: [], error: null, navAction: null, sessionId: null, handoffSuggestion: null, journeyName: null, journeyStep: 0, journeyTotal: 0, journeyDone: false, turnSeq: 0 };
 
 function reduceLive(p: LiveState, ev: any): LiveState {
   switch (ev.type) {
-    case 'start': return { ...LIVE_INIT, running: !ev.interactive, url: ev.product ? `https://${ev.product}` : '' };
+    case 'start': return { ...LIVE_INIT, running: !ev.interactive, url: ev.product ? `https://${ev.product}` : '', sessionId: typeof ev.sessionId === 'string' ? ev.sessionId : null };
     case 'ready': return { ...p, ready: true, running: false, phase: 'Ready', brain: 'Ask me anything about the product — I’ll answer live and show the screen.', sub: 'interactive' };
-    case 'turn_done': return { ...p, running: false };
-    case 'message': return { ...p, messages: [...p.messages, { side: ev.side, who: ev.who, role: ev.role, av: ev.side === 'ai' ? 'AI' : String(ev.who ?? '?')[0].toUpperCase(), color: ev.side === 'ai' ? '#002855' : '#4D6995', text: ev.text, tag: ev.tag, uncertain: ev.uncertain }] };
+    case 'turn_done': return { ...p, running: false, turnSeq: p.turnSeq + 1 };
+    case 'message': return { ...p, messages: [...p.messages, { side: ev.side, who: ev.who, role: ev.role, av: ev.side === 'ai' ? 'AI' : String(ev.who ?? '?')[0].toUpperCase(), color: ev.side === 'ai' ? '#002855' : '#4D6995', text: ev.text, tag: ev.tag, uncertain: ev.uncertain }], handoffSuggestion: ev.side === 'them' ? null : p.handoffSuggestion };
+    case 'handoff_suggestion': return { ...p, handoffSuggestion: { topic: String(ev.topic ?? ''), toPersona: String(ev.toPersona ?? '') } };
     case 'beat': return { ...p, loopIdx: ev.loopIdx ?? p.loopIdx, phase: ev.phase ?? p.phase, brain: ev.brain ?? p.brain, sub: ev.sub ?? p.sub, conf: ev.conf ?? p.conf };
     case 'cite': return { ...p, cite: ev.k };
     case 'nav': return {
@@ -637,6 +787,11 @@ function reduceLive(p: LiveState, ev: any): LiveState {
     };
     case 'blocked': return { ...p, blocked: ev.actions ?? [] };
     case 'cost': return { ...p, cost: ev.total ?? p.cost, byType: ev.byType ?? p.byType };
+    // V5 journey voice-walk progress (from the engine voice session).
+    case 'journey_start': return { ...p, journeyName: String(ev.journey ?? 'Journey'), journeyTotal: Number(ev.steps ?? 0), journeyStep: 0, journeyDone: false };
+    case 'journey_step': return { ...p, journeyStep: Number(ev.index ?? p.journeyStep) };
+    case 'journey_complete': return { ...p, journeyDone: true, journeyStep: Number(ev.steps ?? p.journeyTotal) };
+    case 'journey_unwalkable': return { ...p, error: String(ev.message ?? 'This journey has no walkable steps yet.') };
     case 'done': return { ...p, running: false, done: true, loopIdx: 6 };
     case 'error': return { ...p, running: false, error: ev.message ?? 'engine error' };
     case 'closed': return { ...p, running: false };
@@ -666,30 +821,464 @@ const COST_COLOR: Record<string, string> = { llm: '#002855', navigation: '#0097A
 const SEG_BTN: React.CSSProperties = { border: 'none', background: 'transparent', color: 'var(--color-steel-hover)', fontSize: 10.5, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', padding: '4px 9px', borderRadius: 6, cursor: 'pointer' };
 const SEG_ON: React.CSSProperties = { background: '#fff', color: 'var(--color-navy)' };
 
+/* ── Guided demo TOURS (record-and-replay) ── The SCRIPTED tab. The operator drives the REAL product in the
+   embedded browser and CAPTURES steps (a page to show · a click to perform · a talking-point note + a
+   caption); replay re-performs them on the live product with Prev/Next. Everything is CLIENT-SIDE in the
+   webview (no server browser, no LLM) — deterministic + reliable. Tours persist via the web admin endpoint. */
+function primaryCtl(d: boolean): React.CSSProperties { return { background: '#0861CE', border: 'none', color: '#fff', borderRadius: 8, padding: '8px 16px', cursor: d ? 'default' : 'pointer', opacity: d ? .7 : 1, display: 'flex', alignItems: 'center', gap: 5, fontWeight: 700, fontSize: 13 }; }
+const smBtn: React.CSSProperties = { fontSize: 12, padding: '6px 10px', border: '1px solid #d4dbe5', borderRadius: 7, background: '#fff', color: '#283e5b', cursor: 'pointer', fontWeight: 600 };
+const tinyBtn: React.CSSProperties = { fontSize: 11, padding: '2px 6px', border: '1px solid #e3e8ef', borderRadius: 5, background: '#fff', color: '#5a6b80', cursor: 'pointer' };
+function ctlBtnLight(d: boolean): React.CSSProperties { return { fontSize: 13, padding: '8px 14px', border: '1px solid #d4dbe5', borderRadius: 8, background: '#fff', color: '#283e5b', cursor: d ? 'default' : 'pointer', fontWeight: 600 }; }
+const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+// A recorded step. kind: navigate | click | input | select | check | note. `value` carries the typed text /
+// chosen option / checkbox state for input/select/check steps (this is what makes a real form-fill replayable).
+type TStep = { kind: string; url?: string; selector?: string; label?: string; value?: string; caption: string };
+interface TourCtl {
+  url(): string; navigate(u: string): void;
+  click(label: string, sels: string[]): Promise<any>;
+  setField(sels: string[], label: string, value: string, kind: string): Promise<any>; // replay a typed/selected/checked field
+  recOn(): void; recDrain(): Promise<any[]>; recOff(): Promise<any[]>;                  // auto-record: clicks + field changes
+}
+
+// Click an element by plain selector (id) first, then by VISIBLE TEXT label — same matcher the AI co-drive
+// uses. Highlights, then clicks (so the real product reacts/navigates).
+function clickJs(label: string, sels: string[]): string {
+  return `(function(){ ${TEMPORAL_FN}
+    var label=${JSON.stringify(label || '')}, sels=${JSON.stringify(sels || [])};
+    function act(el){ if(!el) return false; el.scrollIntoView({behavior:'smooth',block:'center'});
+      var o=el.style.outline; el.style.outline='3px solid #0861CE'; el.style.outlineOffset='2px';
+      setTimeout(function(){ el.style.outline=o; }, 2200);
+      if(__vinIsTemporal(el)){ __vinSetTemporal(el, ''); return true; } // recorded click on a date field → fill a valid future date on replay
+      setTimeout(function(){ try{ el.click(); }catch(e){} }, 360); return true; }
+    for(var i=0;i<sels.length;i++){ if(!sels[i]) continue; try{ var e=document.querySelector(sels[i]); if(e&&e.offsetParent!==null) return act(e); }catch(x){} }
+    if(label){ var lc=label.toLowerCase(),
+      els=[].slice.call(document.querySelectorAll('a,button,[role=\\"button\\"],[role=\\"menuitem\\"],nav a,aside a,li a,li,td,th')), best=null;
+      for(var j=0;j<els.length;j++){ var el=els[j], t=(el.textContent||'').trim(); if(t&&t.toLowerCase().indexOf(lc)>=0&&el.offsetParent!==null){ if(!best||t.length<(best.textContent||'').trim().length) best=el; } }
+      if(best) return act(best.closest('a,button,[role=\\"button\\"],[role=\\"menuitem\\"]')||best); }
+    return false; })();`;
+}
+// AUTO-RECORD: while on, capture-phase listeners log every meaningful interaction into window.__vinRec —
+// not just clicks but FIELD CHANGES (text/number/textarea → input, native <select> → select, checkbox/radio
+// → check) and custom-combobox selections (read off the dropdown's displayed value on focus-out). Listeners
+// do NOT preventDefault, so the operator keeps driving the real product normally. The host drains the buffer
+// on a timer so steps accrue live. This is what lets a full purchase-order submit (mostly typing + selects)
+// be recorded, where the old one-click capture could only record navigation.
+const REC_ON_JS = `(function(){
+  if(window.__vinRecOn) return 'on'; window.__vinRecOn=true; if(!window.__vinRec) window.__vinRec=[];
+  function esc(s){ return (window.CSS&&CSS.escape)?CSS.escape(s):s; }
+  function sel(el){ if(!el||!el.getAttribute) return ''; if(el.id) return '#'+esc(el.id); var nm=el.getAttribute('name'); if(nm) return el.tagName.toLowerCase()+'[name="'+nm+'"]'; return ''; }
+  function labelOf(el){ try{
+    var al=el.getAttribute&&el.getAttribute('aria-label'); if(al) return al.trim().slice(0,60);
+    if(el.id){ var lab=document.querySelector('label[for="'+esc(el.id)+'"]'); if(lab&&lab.textContent) return lab.textContent.trim().replace(/\\s+/g,' ').slice(0,60); }
+    var p=el.closest&&el.closest('label'); if(p&&p.textContent) return p.textContent.trim().replace(/\\s+/g,' ').slice(0,60);
+    var ph=el.getAttribute&&el.getAttribute('placeholder'); if(ph) return ph.trim().slice(0,60);
+    return ''; }catch(e){ return ''; } }
+  function comboOf(el){ try{ return el.closest&&el.closest('[role="combobox"],[aria-haspopup="listbox"],[class*="select"],[class*="Select"],[class*="combobox"],[class*="Combobox"],[class*="autocomplete"],[class*="Autocomplete"]'); }catch(e){ return null; } }
+  function push(s){ s.url=location.href; window.__vinRec.push(s); }
+  function onClick(e){
+    var t=e.target; if(!t||!t.closest) return;
+    if(t.closest('input,select,textarea')) return;        // a focus click on a field — the change/focus-out handler captures it
+    if(comboOf(t)) return;                                 // a click inside a custom dropdown — focus-out captures the chosen value
+    var act=t.closest('a,button,[role="button"],[role="menuitem"],[role="tab"],summary,tr,td,th,li');
+    if(!act) return;
+    var label=((act.textContent||'').trim().replace(/\\s+/g,' ')).slice(0,60);
+    if(!label && !sel(act)) return;
+    push({ kind:'click', selector: sel(act), label: label, value:'' });
+  }
+  function onChange(e){
+    var el=e.target; if(!el||!el.tagName) return; var tag=el.tagName.toLowerCase();
+    if(tag!=='input'&&tag!=='select'&&tag!=='textarea') return;
+    if(tag!=='select' && comboOf(el)) return;             // custom combobox input — focus-out handles its value
+    var type=(el.getAttribute('type')||'text').toLowerCase();
+    if(type==='checkbox'||type==='radio'){ push({ kind:'check', selector:sel(el), label:labelOf(el), value: el.checked?'1':'0' }); return; }
+    var val = tag==='select' ? (((el.options[el.selectedIndex]||{}).text)||el.value||'') : (el.value||'');
+    if(!String(val).trim()) return;
+    push({ kind: tag==='select'?'select':'input', selector: sel(el), label: labelOf(el), value: String(val).slice(0,200) });
+  }
+  function onFocusOut(e){
+    var el=e.target; if(!el||el.tagName!=='INPUT') return; var cb=comboOf(el); if(!cb) return;
+    var sv=cb.querySelector('[class*="singleValue"],[class*="single-value"],[class*="multiValue"],[class*="multi-value"],[aria-selected="true"]');
+    var v=((sv&&sv.textContent)?sv.textContent.trim():'')||el.value||''; if(!v) return; v=v.slice(0,120);
+    var s2=sel(el)||sel(cb), last=window.__vinRec[window.__vinRec.length-1];
+    if(last&&last.kind==='select'&&last.selector===s2&&last.value===v) return; // dedupe repeated focus-out
+    push({ kind:'select', selector: s2, label: labelOf(el), value: v });
+  }
+  window.__vinOnClick=onClick; window.__vinOnChange=onChange; window.__vinOnFocusOut=onFocusOut;
+  document.addEventListener('click', onClick, true);
+  document.addEventListener('change', onChange, true);
+  document.addEventListener('focusout', onFocusOut, true);
+  return 'on';
+})();`;
+const REC_DRAIN_JS = `(function(){ var r=window.__vinRec||[]; window.__vinRec=[]; return r; })();`;
+const REC_OFF_JS = `(function(){ window.__vinRecOn=false;
+  try{ document.removeEventListener('click', window.__vinOnClick, true); }catch(e){}
+  try{ document.removeEventListener('change', window.__vinOnChange, true); }catch(e){}
+  try{ document.removeEventListener('focusout', window.__vinOnFocusOut, true); }catch(e){}
+  var r=window.__vinRec||[]; window.__vinRec=[]; return r; })();`;
+// REPLAY a recorded field: locate it (by id/name selector, else by its <label>/placeholder text), then set the
+// value the right way for its type — checkbox/radio toggle, date via the future-safe filler, dropdown via the
+// combobox resolver, plain text via the native value setter — firing input/change so the real form registers it.
+const setFieldJs = (sels: string[], label: string, val: string, kind: string) => `(async function(){ ${INJECT}
+  var sels=${JSON.stringify(sels || [])}, label=${JSON.stringify(label || '')}, val=${JSON.stringify(val ?? '')}, kind=${JSON.stringify(kind || 'input')};
+  var el=null;
+  for(var i=0;i<sels.length;i++){ if(!sels[i]) continue; try{ var e=document.querySelector(sels[i]); if(e){ el=e; break; } }catch(x){} }
+  if(!el && label){ var lc=label.toLowerCase();
+    try{ var labs=[].slice.call(document.querySelectorAll('label'));
+      for(var j=0;j<labs.length;j++){ if((labs[j].textContent||'').trim().toLowerCase().indexOf(lc)>=0){ var f=labs[j].getAttribute('for'); var t=f?document.getElementById(f):labs[j].querySelector('input,select,textarea'); if(t){ el=t; break; } } } }catch(x){}
+    if(!el){ try{ var cands=[].slice.call(document.querySelectorAll('input,select,textarea')).filter(function(n){ return ((n.getAttribute('placeholder')||n.getAttribute('aria-label')||'').toLowerCase().indexOf(lc)>=0); }); if(cands.length) el=cands[0]; }catch(x){} }
+  }
+  if(!el) return {ok:false, reason:'not-found'};
+  el.scrollIntoView({behavior:'smooth',block:'center'});
+  var o=el.style.outline; el.style.outline='3px solid #0861CE'; setTimeout(function(){ el.style.outline=o; }, 2000);
+  if(kind==='check'){ try{ var want=(val==='1'||val==='true'); if(!!el.checked!==want){ el.click(); } }catch(e){} return {ok:true}; }
+  if(__vinIsTemporal(el)){ return {ok:true, picked: __vinSetTemporal(el, val)}; }
+  if(kind==='select' || __vinIsCombo(el)){ return await __vinCombo(el, val); }
+  try{ el.focus(); var p=el.tagName==='TEXTAREA'?window.HTMLTextAreaElement.prototype:window.HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(p,'value').set.call(el, val); }catch(e){ try{ el.value=val; }catch(x){} }
+  el.dispatchEvent(new Event('input',{bubbles:true})); el.dispatchEvent(new Event('change',{bubbles:true}));
+  try{ el.blur&&el.blur(); }catch(e){}
+  return {ok:true}; })()`;
+
+/* The embedded REAL browser (Electron <webview>) the operator logs into + drives — SAME rendering as
+   Ask/Reel: the live-browser shell + the product DROPDOWN (TargetPicker) in the bar. Exposes a control
+   handle for the recorder/player: navigate (loadURL), click, setField (replay a value), rec* (auto-record).
+   When `recording`, the capture listeners are re-injected on every page load so they survive navigation. */
+function TourBrowser({ initialUrl, ctlRef, products, target, onApply, recording }: { initialUrl: string; ctlRef: React.MutableRefObject<TourCtl | null>; products: RealProduct[]; target: DemoTarget | null; onApply: (t: DemoTarget) => void; recording?: boolean }) {
+  const ref = useRef<any>(null);
+  const [bar, setBar] = useState(initialUrl);
+  const firstUrl = useRef(initialUrl);
+  const lastBase = useRef(initialUrl);
+  const rec = useRef(false); rec.current = !!recording;
+  useEffect(() => {
+    const wv = ref.current; if (!wv) return;
+    const upd = () => { try { setBar(wv.getURL()); } catch { /* */ } };
+    // Re-arm the recorder after a (re)load so capture survives full navigations, not just SPA route changes.
+    const rearm = () => { upd(); if (rec.current) { try { wv.executeJavaScript(REC_ON_JS, true); } catch { /* */ } } };
+    for (const e of ['did-navigate', 'did-navigate-in-page', 'did-stop-loading']) wv.addEventListener(e, upd);
+    wv.addEventListener('dom-ready', rearm);
+    return () => { for (const e of ['did-navigate', 'did-navigate-in-page', 'did-stop-loading']) wv.removeEventListener(e, upd); wv.removeEventListener('dom-ready', rearm); };
+  }, []);
+  // Operator switched product in the dropdown → load the new site (its own persisted login).
+  useEffect(() => { const wv = ref.current; if (wv && initialUrl && initialUrl !== lastBase.current) { lastBase.current = initialUrl; try { wv.loadURL(initialUrl); } catch { /* */ } } }, [initialUrl]);
+  useEffect(() => {
+    const exec = (code: string) => { try { return ref.current?.executeJavaScript(code, true) ?? Promise.resolve(null); } catch { return Promise.resolve(null); } };
+    ctlRef.current = {
+      url: () => { try { return ref.current?.getURL() ?? ''; } catch { return ''; } },
+      navigate: (u: string) => { try { ref.current?.loadURL(u); } catch { /* */ } },
+      click: (label: string, sels: string[]) => exec(clickJs(label, sels)),
+      setField: (sels: string[], label: string, value: string, kind: string) => exec(setFieldJs(sels, label, value, kind)),
+      recOn: () => { void exec(REC_ON_JS); },
+      recDrain: () => exec(REC_DRAIN_JS).then((r: any) => (Array.isArray(r) ? r : [])),
+      recOff: () => exec(REC_OFF_JS).then((r: any) => (Array.isArray(r) ? r : [])),
+    };
+    return () => { ctlRef.current = null; };
+  }, [ctlRef]);
+  return (
+    <div className="live-browser">
+      <div className="live-bar"><TargetPicker products={products} target={target} liveUrl={bar} onApply={onApply} /></div>
+      {createElement('webview', { ref, src: firstUrl.current, partition: 'persist:vinlive', allowpopups: 'true', className: 'live-webview' })}
+    </div>
+  );
+}
+
+function TourRunner({ products, target, onApplyTarget }: { products: RealProduct[]; target: DemoTarget | null; onApplyTarget: (t: DemoTarget) => void }) {
+  const real = useReal();
+  const product = products.find((p) => p.id === target?.productId) ?? null;
+  const browserUrl = product ? `https://${product.domain}` : '';
+  // Merge server tours with any saved THIS session, so a just-saved tour shows before the next data refresh.
+  const [localTours, setLocalTours] = useState<RealTour[]>([]);
+  const serverTours = (real?.tours ?? []).filter((t) => t.productId === product?.id);
+  const tours = [...localTours.filter((l) => l.productId === product?.id), ...serverTours.filter((s) => !localTours.some((l) => l.id === s.id))];
+  const [mode, setMode] = useState<'list' | 'record' | 'play'>('list');
+  const [active, setActive] = useState<RealTour | null>(null);
+  const onSaved = (t: RealTour) => { setLocalTours((prev) => [t, ...prev.filter((p) => p.id !== t.id)]); setMode('list'); };
+
+  if (!product) return <div style={{ flex: 1, display: 'grid', placeItems: 'center', color: '#76859a', fontSize: 14 }}>No product selected — pick one in the Ask/Reel target picker.</div>;
+  if (mode === 'record') return <TourRecord product={product} browserUrl={browserUrl} tour={active} products={products} target={target} onApply={onApplyTarget} onClose={() => setMode('list')} onSaved={onSaved} />;
+  if (mode === 'play' && active) return <TourPlay tour={active} browserUrl={browserUrl} products={products} target={target} onApply={onApplyTarget} onExit={() => setMode('list')} />;
+
+  return (
+    <div style={{ flex: 1, overflow: 'auto', padding: 28, background: '#f4f6f9' }}>
+      <div style={{ maxWidth: 820, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontWeight: 800, fontSize: 18, color: '#002855' }}>Guided demos — {product.name}</div>
+            <div style={{ color: '#5a6b80', fontSize: 13, marginTop: 4 }}>Record a click-through demo on the real product, then replay it on cue. All pages and roles are available — you drive the actual product. (Switch product in the Ask/Reel target picker.)</div>
+          </div>
+          <button onClick={() => { setActive(null); setMode('record'); }} style={primaryCtl(false)}><Icon name="play" size={13} /> New demo (record)</button>
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 18 }}>
+          {!tours.length && <div style={{ padding: 20, background: '#fff', border: '1px solid #e3e8ef', borderRadius: 10, color: '#76859a', fontSize: 13 }}>No demos yet. Click <strong>New demo (record)</strong> — drive {product.name} on the left and capture each step (a page to show, a click to perform, a talking point).</div>}
+          {tours.map((t) => (
+            <div key={t.id} style={{ background: '#fff', border: '1px solid #e3e8ef', borderRadius: 10, padding: 16, display: 'flex', alignItems: 'center', gap: 12 }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 700, color: '#002855' }}>{t.name}</div>
+                <div style={{ color: '#76859a', fontSize: 12, marginTop: 4 }}>{t.steps.length} step{t.steps.length === 1 ? '' : 's'}{t.description ? ` · ${t.description}` : ''}</div>
+              </div>
+              <button onClick={() => { setActive(t); setMode('play'); }} style={primaryCtl(false)}><Icon name="play" size={13} /> Present</button>
+              <button onClick={() => { setActive(t); setMode('record'); }} style={ctlBtnLight(false)}>Edit</button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* RECORD: drive the real product (left) + capture steps (right). Press ● Record, then just USE the product —
+   every click, typed value, dropdown choice, date, and checkbox is captured automatically (so a full purchase-
+   order submit can be recorded, not just navigation). + This page / + Note add explicit steps; caption + reorder. */
+function TourRecord({ product, browserUrl, tour, products, target, onApply, onClose, onSaved }: { product: RealProduct; browserUrl: string; tour: RealTour | null; products: RealProduct[]; target: DemoTarget | null; onApply: (t: DemoTarget) => void; onClose: () => void; onSaved: (t: RealTour) => void }) {
+  const ctlRef = useRef<TourCtl | null>(null);
+  const [name, setName] = useState(tour?.name ?? '');
+  const [steps, setSteps] = useState<TStep[]>(tour ? tour.steps.map((s) => ({ kind: s.kind, url: s.url, selector: s.selector, label: s.label, value: s.value, caption: s.caption })) : []);
+  const [recording, setRecording] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState('');
+  const pollRef = useRef<any>(null);
+
+  const append = (got: any[]) => { if (got && got.length) setSteps((s) => [...s, ...got.map((c: any) => ({ kind: String(c.kind || 'click'), url: c.url || '', selector: c.selector || '', label: c.label || '', value: c.value || '', caption: '' }))]); };
+  const startRec = () => { if (recording) return; setErr(''); ctlRef.current?.recOn(); setRecording(true); if (pollRef.current) clearInterval(pollRef.current); pollRef.current = setInterval(() => { void ctlRef.current?.recDrain().then(append).catch(() => {}); }, 700); };
+  const stopRec = async () => { if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; } setRecording(false); try { append(await (ctlRef.current?.recOff() ?? Promise.resolve([]))); } catch { /* */ } };
+  const toggleRec = () => { if (recording) void stopRec(); else startRec(); };
+  useEffect(() => () => { if (pollRef.current) clearInterval(pollRef.current); try { void ctlRef.current?.recOff(); } catch { /* */ } }, []);
+
+  const capturePage = () => { const u = ctlRef.current?.url() ?? ''; setSteps((s) => [...s, { kind: 'navigate', url: u, caption: '' }]); };
+  const addNote = () => setSteps((s) => [...s, { kind: 'note', caption: '' }]);
+  const setCap = (i: number, v: string) => setSteps((s) => s.map((st, j) => (j === i ? { ...st, caption: v } : st)));
+  const removeAt = (i: number) => setSteps((s) => s.filter((_, j) => j !== i));
+  const move = (i: number, d: number) => setSteps((s) => { const j = i + d; if (j < 0 || j >= s.length) return s; const c = [...s]; [c[i], c[j]] = [c[j], c[i]]; return c; });
+  const trim = (v?: string) => { const t = (v || '').trim(); return t.length > 30 ? `${t.slice(0, 30)}…` : t; };
+  const stepLabel = (s: TStep) => {
+    switch (s.kind) {
+      case 'navigate': return `Go to ${s.url ? s.url.replace(/^https?:\/\//, '') : 'page'}`;
+      case 'click': return `Click “${s.label || s.selector || 'element'}”`;
+      case 'input': return `Type “${trim(s.value)}”${s.label ? ` in ${s.label}` : ''}`;
+      case 'select': return `Choose “${trim(s.value)}”${s.label ? ` in ${s.label}` : ''}`;
+      case 'check': return `${s.value === '1' ? 'Check' : 'Uncheck'} ${s.label || s.selector || 'box'}`;
+      default: return 'Talking point';
+    }
+  };
+
+  const save = async () => {
+    if (recording) await stopRec();
+    if (!name.trim()) { setErr('Give the demo a name.'); return; }
+    if (!steps.length) { setErr('Capture at least one step — press ● Record and drive the product.'); return; }
+    setSaving(true); setErr('');
+    const api = (window as unknown as { consoleData?: { mutate(b: any): Promise<{ ok: boolean; id?: string; error?: string }> } }).consoleData;
+    const body = { entity: 'demo_tour', op: tour?.id ? 'update' : 'create', id: tour?.id, data: { product_id: product.id, name: name.trim(), description: '', steps } };
+    const r: { ok: boolean; id?: string; error?: string } = await api?.mutate?.(body).catch(() => ({ ok: false, error: 'save failed' })) ?? { ok: false, error: 'no console bridge' };
+    if (!r.ok) { setErr(r.error || 'Save failed'); setSaving(false); return; }
+    onSaved({ id: tour?.id || r.id || `local-${Date.now()}`, productId: product.id, name: name.trim(), description: '', steps: steps.map((s) => ({ kind: s.kind, url: s.url ?? '', selector: s.selector ?? '', label: s.label ?? '', value: s.value ?? '', caption: s.caption ?? '' })) });
+  };
+
+  return (
+    <div style={{ flex: 1, display: 'flex', minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}><TourBrowser initialUrl={browserUrl} ctlRef={ctlRef} products={products} target={target} onApply={onApply} recording={recording} /></div>
+      <div style={{ width: 380, flexShrink: 0, borderLeft: '1px solid #e3e8ef', background: '#fff', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ padding: '12px 14px', borderBottom: '1px solid #eef2f7' }}>
+          <div style={{ fontWeight: 800, color: '#002855', fontSize: 14, marginBottom: 8 }}>{tour ? 'Edit demo' : 'Record a demo'}</div>
+          <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Demo name (e.g. CFO approval walkthrough)" style={{ width: '100%', padding: '8px 10px', border: '1px solid #d4dbe5', borderRadius: 8, fontSize: 13 }} />
+          <button onClick={toggleRec} style={{ width: '100%', marginTop: 8, padding: '9px 14px', borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: 'pointer', border: '1px solid', borderColor: recording ? '#C54644' : '#0861CE', background: recording ? '#C54644' : '#0861CE', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+            <span style={{ width: 9, height: 9, borderRadius: recording ? 2 : '50%', background: '#fff', display: 'inline-block' }} />
+            {recording ? 'Stop recording' : 'Record — then just use the product'}
+          </button>
+          <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+            <button onClick={capturePage} style={smBtn}>+ This page</button>
+            <button onClick={addNote} style={smBtn}>+ Note</button>
+          </div>
+          {recording && <div style={{ fontSize: 11.5, color: '#0861CE', marginTop: 8, fontWeight: 600 }}>● Recording — every click, typed value, dropdown, date and checkbox in the product (left) is being captured.</div>}
+        </div>
+        <div style={{ flex: 1, overflow: 'auto', padding: 12, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {!steps.length && <div style={{ color: '#76859a', fontSize: 12 }}>Log in + open the form on the left, press <strong>● Record</strong>, then fill it out normally — every field you type or choose becomes a step. Press <strong>Stop</strong> when done.</div>}
+          {steps.map((s, i) => (
+            <div key={i} style={{ background: '#f7f9fc', border: '1px solid #e3e8ef', borderRadius: 8, padding: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: 11, fontWeight: 800, color: '#0861CE' }}>{i + 1}.</span>
+                <span style={{ fontSize: 12.5, fontWeight: 600, color: '#283e5b', flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stepLabel(s)}</span>
+                <button onClick={() => move(i, -1)} disabled={i === 0} style={tinyBtn}>↑</button>
+                <button onClick={() => move(i, 1)} disabled={i === steps.length - 1} style={tinyBtn}>↓</button>
+                <button onClick={() => removeAt(i)} style={tinyBtn}>✕</button>
+              </div>
+              <input value={s.caption} onChange={(e) => setCap(i, e.target.value)} placeholder="what to say here (optional)" style={{ width: '100%', marginTop: 6, padding: '6px 8px', border: '1px solid #d4dbe5', borderRadius: 6, fontSize: 12 }} />
+            </div>
+          ))}
+        </div>
+        {err && <div style={{ color: '#C54644', fontSize: 12, padding: '0 12px 8px' }}>{err}</div>}
+        <div style={{ padding: 12, borderTop: '1px solid #eef2f7', display: 'flex', gap: 8, alignItems: 'center' }}>
+          <button onClick={onClose} style={ctlBtnLight(false)}>Cancel</button>
+          <button onClick={save} disabled={saving} style={{ ...primaryCtl(saving), marginLeft: 'auto' }}>{saving ? 'Saving…' : 'Save demo'}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* PLAY: replay the recorded steps on the real product — navigate / click each step, show the caption,
+   advance on Next. Everything happens in the embedded browser (no server, no LLM). */
+function TourPlay({ tour, browserUrl, products, target, onApply, onExit }: { tour: RealTour; browserUrl: string; products: RealProduct[]; target: DemoTarget | null; onApply: (t: DemoTarget) => void; onExit: () => void }) {
+  const ctlRef = useRef<TourCtl | null>(null);
+  const [idx, setIdx] = useState(-1);
+  const [busy, setBusy] = useState(false);
+  const steps = tour.steps;
+  const product = products.find((p) => p.id === tour.productId) ?? null;
+
+  const runStep = async (i: number) => {
+    if (i < 0 || i >= steps.length || busy) return;
+    setBusy(true); setIdx(i);
+    const s = steps[i];
+    const sels = s.selector ? [s.selector] : [];
+    try {
+      if (s.kind === 'navigate' && s.url) { ctlRef.current?.navigate(s.url); await wait(1500); }
+      else if (s.kind === 'click') { await ctlRef.current?.click(s.label || '', sels); await wait(1200); }
+      else if (s.kind === 'input' || s.kind === 'select' || s.kind === 'check') { await ctlRef.current?.setField(sels, s.label || '', s.value || '', s.kind); await wait(1100); }
+      // 'note' → caption only, no product action
+    } catch { /* */ }
+    setBusy(false);
+  };
+  const cur = idx >= 0 ? steps[idx] : null;
+  const atFirst = idx <= 0; const atLast = idx >= steps.length - 1;
+  const status = idx < 0 ? `${tour.name} · ${steps.length} step${steps.length === 1 ? '' : 's'}` : `${tour.name} · Step ${idx + 1} / ${steps.length}`;
+
+  return (
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}><TourBrowser initialUrl={browserUrl} ctlRef={ctlRef} products={products} target={target} onApply={onApply} /></div>
+      {cur && cur.caption && <div className="tour-caption">{cur.caption}</div>}
+      {/* Native control — the SAME .transport bar Ask/Reel use (not a bespoke overlay). */}
+      <div className="transport">
+        <div className={`agent-status ${busy ? 'run' : ''}`}>
+          <span className="agent-status__dot" />
+          <div><div className="agent-status__l">Guided demo</div><div className="agent-status__s">{status}</div></div>
+        </div>
+        <div className="tp-btns">
+          <button className="tp-btn" onClick={() => runStep(0)} disabled={busy} title="Restart from the first step"><Icon name="restart" size={14} /></button>
+          <button className="tp-btn" onClick={() => runStep(idx - 1)} disabled={atFirst || busy} title="Previous step" style={{ opacity: atFirst || busy ? .4 : 1 }}><Icon name="step" size={14} style={{ transform: 'scaleX(-1)' }} /></button>
+          <button className="tp-run" onClick={() => (idx < 0 ? runStep(0) : atLast ? onExit() : runStep(idx + 1))} title={idx < 0 ? 'Start the demo' : atLast ? 'Finish' : 'Next step'}>
+            <Icon name={busy ? 'pause' : 'play'} size={15} className="solid" /> {idx < 0 ? 'Start' : atLast ? 'Finish' : busy ? 'Working…' : 'Next step'}
+          </button>
+          <button className="tp-ctl" onClick={onExit}>Exit</button>
+        </div>
+        <div className="loop" style={{ justifyContent: 'flex-end' }}>
+          <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--cr-fg3)' }}>{product?.name ?? 'po.vin'}</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* V5 Phase 4 — Start Experience: an OPTIONAL pre-flight ABOVE Ask/Talk/Reel/Scripted. Reads the current
+   product's authored journeys / outcomes / buying committee (from the web SSOT) and lets the operator review
+   the experience and pick a journey — which sets the opening scenario and drops into Ask. FULLY ISOLATED: it
+   never touches the LiveBrowser / TargetPicker / TourRunner render (mirrors how Scripted is isolated).
+   Skippable — picking any other tab goes straight to today's flow. */
+/* Readable foreground for a filled swatch: dark navy on light brand colors (e.g. the gold #B9975B), white on
+   dark ones — so the ▶ Start label never washes out. Relative luminance of the sRGB color (0..1). */
+function readableOn(color: string): string {
+  const m = /^#?([0-9a-f]{3}|[0-9a-f]{6})$/i.exec((color || '').trim());
+  if (!m) return '#fff';
+  let h = m[1]; if (h.length === 3) h = h.split('').map((c) => c + c).join('');
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255 > 0.6 ? '#0a1f3c' : '#fff';
+}
+
+/* Launcher = the home screen: ALL products, each with its list of JOURNEYS. Click a journey → VIN logs into
+   the live product and the voice-led WALK begins. (Isolated, like Scripted — no LiveBrowser/TargetPicker.) */
+function StartExperience({ products, target, onApply, onLaunch }: { products: RealProduct[]; target: DemoTarget | null; onApply: (t: DemoTarget) => void; onLaunch: (m: 'ask' | 'talk') => void }) {
+  if (!products.length) return <div style={{ flex: 1, display: 'grid', placeItems: 'center', opacity: .6 }}>Loading products…</div>;
+  // Click a journey → pin the product + journey on the target and start the voice-led walk. The engine logs
+  // into the live product (adapter.open) and walks the journey's story_flow, narrating each step.
+  const launch = (p: RealProduct, j: RealJourney) => {
+    onApply({ productId: p.id, host: p.domain, mk: p.mk, color: p.color, role: target?.role ?? 'admin', mode: p.defaultMode ?? target?.mode ?? 'read-only', url: '', scenario: '', journeyId: j.id });
+    onLaunch('talk');
+  };
+  // Only products that actually HAVE a journey are worth showing as a launch choice; an empty product is
+  // a one-line "author one" hint at the end so the screen isn't padded with dead sections (less scroll).
+  const withJourneys = products.filter((p) => (p.journeys ?? []).length);
+  const without = products.filter((p) => !(p.journeys ?? []).length);
+  return (
+    <div className="cr-stagearea" style={{ flex: 1, overflow: 'auto', padding: '22px 26px' }}>
+      <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+        <div style={{ fontSize: 21, fontWeight: 800, color: 'var(--cr-fg)' }}>Pick a journey to demo</div>
+        <div style={{ color: 'var(--cr-fg2)', fontSize: 13, marginTop: 4 }}>Click a journey — VIN logs into the live product and the voice-led walk begins.</div>
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 22, marginTop: 22 }}>
+          {withJourneys.map((p) => {
+            const journeys = p.journeys ?? [];
+            return (
+              <section key={p.id}>
+                {/* PRODUCT header — the underlined section title, with its journey count. */}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, paddingBottom: 7, borderBottom: `2px solid ${p.color || 'var(--cr-accent)'}` }}>
+                  <span style={{ width: 10, height: 10, borderRadius: 3, background: p.color || 'var(--cr-accent)', flexShrink: 0, alignSelf: 'center' }} />
+                  <span style={{ fontWeight: 800, fontSize: 15.5, color: 'var(--cr-fg)' }}>{p.name}</span>
+                  <span style={{ color: 'var(--cr-fg3)', fontSize: 12 }}>{p.domain}</span>
+                  <span style={{ color: 'var(--cr-fg3)', fontSize: 11.5, marginLeft: 'auto', fontWeight: 700 }}>{journeys.length} journey{journeys.length === 1 ? '' : 's'}</span>
+                </div>
+                {/* Journeys for this product — each a readable row (title + goal + committee) with an inline Start. */}
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {journeys.map((j) => {
+                    const committee = j.stakeholderNames?.length ? j.stakeholderNames.slice(0, 4).join(' · ') : '';
+                    return (
+                      <div key={j.id} className="cr-jrow" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 4px', borderBottom: '1px solid var(--cr-line-2)' }}>
+                        <div style={{ minWidth: 0, flex: 1 }}>
+                          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--cr-fg)' }}>
+                            {j.name}
+                            {j.missingCount > 0 && <span style={{ color: '#c2761a', fontSize: 11.5, fontWeight: 700 }}> · {j.missingCount} broken ref{j.missingCount === 1 ? '' : 's'}</span>}
+                          </div>
+                          {(j.businessGoal || j.outcomeTitle) && <div style={{ color: 'var(--cr-fg2)', fontSize: 12.5, marginTop: 3 }}>{j.businessGoal || j.outcomeTitle}</div>}
+                          {committee && <div style={{ color: 'var(--cr-fg3)', fontSize: 11.5, marginTop: 3 }}>For {committee}</div>}
+                        </div>
+                        <button onClick={() => launch(p, j)} title={`Log into ${p.name} and walk "${j.name}"`}
+                          style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, background: p.color || '#0861CE', color: readableOn(p.color || '#0861CE'), fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer' }}>
+                          ▶ Start
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
+        </div>
+
+        {without.length > 0 && (
+          <div style={{ marginTop: 22, color: 'var(--cr-fg3)', fontSize: 12 }}>
+            No journeys yet for: {without.map((p) => p.name).join(', ')}. Author one in the web console → Pipeline → Journeys.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}) {
   // Input mode: ASK = live interactive (type any question), REEL ('live') = canned 3-question run on
   // the real engine, SCRIPTED = offline canned beats (QA). All three render the same panels.
-  type RT = 'ask' | 'talk' | 'live' | 'scripted';
-  const [runtime, setRuntime] = useState<RT>(() => {
-    try { const v = localStorage.getItem('vd-runtime'); return v === 'scripted' ? 'scripted' : v === 'talk' ? 'talk' : v === 'ask' ? 'ask' : 'live'; } catch { return 'live'; }
-  });
+  type RT = 'start' | 'ask' | 'talk' | 'live' | 'scripted';
+  // Always open on the Start launcher (the journey-selection home: all products + their journeys). The other
+  // modes live behind the ⚙ gear; setMode still persists within a session, but each launch lands here so a
+  // journey is always selectable (a stale stored mode must never hide the launcher).
+  const [runtime, setRuntime] = useState<RT>('start');
   const setMode = (m: RT) => { setRuntime(m); try { localStorage.setItem('vd-runtime', m); } catch { /* */ } };
   const isLive = runtime === 'live';
-  const engine = runtime !== 'scripted'; // ask + reel both consume the real streamed engine state
+  const engine = runtime !== 'scripted' && runtime !== 'start'; // ask + reel both consume the real streamed engine state; start = offline pre-flight
+  const scriptedMode = runtime === 'scripted'; // REAL scripted workflow runner (isolated ScriptedRunner), not the old beats theater
+  const startMode = runtime === 'start'; // V5 Phase 4 — Start Experience pre-flight (isolated; no live session, mirrors scripted's isolation)
 
   // Scripted playback state (QA).
   const [idx, setIdx] = useState(() => { try { return parseInt(localStorage.getItem('vd-cr-beat') || '0', 10); } catch { return 0; } });
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(1);
-  const [secs, setSecs] = useState(724);
+  const [secs, setSecs] = useState(0); // real elapsed-session clock (engine: ticks while running; scripted: while playing)
   // Live engine session.
   const { live, start, startInteractive, ask, stop, pushEvent, reset } = useLiveSession();
   const vcRef = useRef<VoiceClient | null>(null);
-  const browserCtl = useRef<{ snapshot: () => Promise<any>; clickRef: (r: number) => Promise<any>; typeInto: (r: number, v: string) => Promise<any>; selectOption: (r: number, v: string) => Promise<any> } | null>(null);
+  const browserCtl = useRef<{ snapshot: () => Promise<any>; clickRef: (r: number) => Promise<any>; typeInto: (r: number, v: string) => Promise<any>; selectOption: (r: number, v: string) => Promise<any>; comboPick: (r: number, v: string) => Promise<any> } | null>(null);
   const driving = useRef(false);
   const [driveActive, setDriveActive] = useState(false);
   const [voiceState, setVoiceState] = useState<string>('idle');
   const [listening, setListening] = useState(false);
+  const [autoWalk, setAutoWalk] = useState(false); // V5 voice-walk: auto-advance vs operator-paced (Next ▶)
+  const [modeMenu, setModeMenu] = useState(false);  // demo-mode picker tucked behind the gear
   const startVoice = async (t?: TargetParams) => {
     reset(); setVoiceState('connecting'); setListening(false);
     const api = (window as unknown as { auth?: { voiceToken(): Promise<{ token: string | null; engineUrl: string }> } }).auth;
@@ -703,6 +1292,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   };
   const stopVoice = () => { vcRef.current?.close(); vcRef.current = null; setListening(false); setVoiceState('idle'); };
   const toggleMic = () => { const vc = vcRef.current; if (!vc) return; if (listening) { vc.stopMic(); setListening(false); } else { void vc.startMic(); setListening(true); } };
+  const advanceWalk = () => vcRef.current?.next(); // advance the voice-led journey walk one step
 
   const [panelOpen, setPanelOpen] = useState(true);
   const [tab, setTab] = useState('convo');
@@ -721,20 +1311,29 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   // The execution mode shown in the top strip reflects the operator's chosen target (default read-only).
   const mode = target?.mode ?? 'read-only';
   const targetParams: TargetParams | undefined = target
-    ? { productId: target.productId || undefined, role: target.role, mode: target.mode, url: target.url || undefined, scenario: target.scenario || undefined, clientNav: '1' }
+    ? { productId: target.productId || undefined, role: target.role, mode: target.mode, url: target.url || undefined, scenario: target.scenario || undefined, clientNav: '1', journeyId: target.journeyId || undefined }
     : undefined;
-  const tkey = target ? `${target.productId}|${target.role}|${target.mode}|${target.url}|${target.scenario}` : '';
+  const tkey = target ? `${target.productId}|${target.role}|${target.mode}|${target.url}|${target.scenario}|${target.journeyId ?? ''}` : '';
   // The URL the embedded browser opens: an explicit override/ad-hoc URL, else the product's domain.
   const browserUrl = target ? (target.url?.trim() ? (/^https?:\/\//.test(target.url) ? target.url : `https://${target.url.replace(/^https?:\/\//, '')}`) : `https://${target.host}`) : '';
 
   // Active specialist persona (hand-off). Approved personas available for the current site (or unassigned).
   const [activePersona, setActivePersona] = useState<RealPersona | null>(null);
-  const specialists = (real?.personas ?? []).filter((p) => p.status === 'approved' && (p.lead || !p.productIds.length || (target ? p.productIds.includes(target.productId) : true)));
+  const specialists = (real?.personas ?? []).filter((p) => p.status === 'approved' && !p.archived && (p.lead || !p.productIds.length || (target ? p.productIds.includes(target.productId) : true)));
   const handoffSpecialist = (p: RealPersona | null) => {
     const fromId = activePersona?.id ?? null;
     setActivePersona(p);
-    (window as unknown as { session?: { handoff(x: any): void } }).session?.handoff?.({ fromId, toId: p?.id ?? null, trigger: 'operator' });
-    pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: p ? `Handing off to the ${p.name} — I'll focus on their scope and stay within their guardrails.` : 'Back to the Lead Consultant.' });
+    // Pass the real sessionId so the hand-off is recorded in ALL modes (Talk/Reel too), not only when an
+    // interactive SSE happens to be open. The engine then activates the specialist's overlay for next turns.
+    (window as unknown as { session?: { handoff(x: any): void } }).session?.handoff?.({ fromId, toId: p?.id ?? null, sessionId: live.sessionId ?? undefined, trigger: 'operator' });
+    pushEvent({ type: 'message', side: 'ai', who: p?.name ?? 'Consultant', role: 'VIN Demo', text: p ? `Handing off to the ${p.name} — I'll focus on their scope and stay within their guardrails.` : 'Back to the Lead Consultant.' });
+  };
+  // Act on a hand-off SUGGESTION (the consultant proposed a better specialist) — match by name, then hand off.
+  const handoffByName = (name: string) => {
+    const p = (real?.personas ?? []).find((x) => x.name.toLowerCase() === name.toLowerCase() || x.name.toLowerCase().includes(name.toLowerCase()));
+    if (p) handoffSpecialist(p);
+    // No matching specialist on the roster → say so instead of silently doing nothing (the chip click looked dead).
+    else pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: `I don't have a "${name}" specialist on the roster to bring in — I'll stay with the current consultant.`, uncertain: true });
   };
 
   useEffect(() => { try { localStorage.setItem('vd-cr-beat', String(idx)); } catch { /* */ } }, [idx]);
@@ -748,6 +1347,19 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
     if (runtime === 'ask') { startInteractive(targetParams); return () => stop(); }
     if (runtime === 'talk') { void startVoice(targetParams); return () => stopVoice(); }
   }, [runtime, tkey]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // V5 voice-walk auto-advance — keyed on turn_done (live.turnSeq), NOT voiceState. A step's turn_done fires
+  // only AFTER its narration completes AND the engine is idle, so the timer can never fire before step 0 is
+  // spoken (the premature-advance race) and never lands mid-step (no swallowed/wasted advance). Pauses while
+  // the mic is open; stops at journey end; manual mode (autoWalk=false) never fires.
+  const isJourneyWalk = runtime === 'talk' && !!target?.journeyId;
+  useEffect(() => {
+    if (!isJourneyWalk || !autoWalk) return;
+    if (!live.journeyName || live.journeyDone || live.turnSeq === 0) return; // wait for the first completed step
+    if (listening) return;
+    const t = setTimeout(() => vcRef.current?.next(), 1800);
+    return () => clearTimeout(t);
+  }, [isJourneyWalk, autoWalk, live.journeyName, live.journeyDone, live.turnSeq, listening]);
 
   // Scripted autoplay (scripted mode only).
   useEffect(() => {
@@ -763,6 +1375,14 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
       return () => clearInterval(t);
     }
   }, [isLive, playing]);
+  // Engine modes: reset the clock when a new real session starts, then tick while it's running.
+  useEffect(() => { if (engine) setSecs(0); }, [engine, live.sessionId]);
+  useEffect(() => {
+    if (engine && (live.running || live.ready)) {
+      const t = setInterval(() => setSecs((s) => s + 1), 1000);
+      return () => clearInterval(t);
+    }
+  }, [engine, live.running, live.ready]);
 
   // Unified render inputs from whichever runtime is active.
   const scriptedBeat = BEATS[idx];
@@ -772,6 +1392,16 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   const typing = engine ? (live.running || driveActive) : (playing && idx > 0 && idx < BEATS.length - 1);
   const canAsk = runtime === 'ask' ? (live.ready && !live.running && !driveActive)
     : runtime === 'talk' ? (voiceState === 'ready' && !listening && !driveActive) : false;
+  // ── Talk-vs-Ask drive boundary ───────────────────────────────────────────────────────────────────
+  // TALK (runtime==='talk'): voice. Spoken input → STT → server runTurn (answer · navigate · explain) →
+  //   TTS. Conversational — it SHOWS and EXPLAINS screens, but does not drive multi-step forms. (Typed
+  //   text in Talk also flows server-side via the voice channel.)
+  // ASK  (runtime==='ask'): typed. WITH a live embedded browser → driveGoal() below = the agentic
+  //   perceive→reason→act loop that steps THROUGH a multi-step flow (e.g. fill out a new-PO form). WITHOUT
+  //   a live pane → it falls back to ask() = a server runTurn (answer · navigate), same brain as Talk.
+  // Both default READ-ONLY: a CONFIRMED mutating click (Submit/Approve/Pay) is refused engine-side at
+  //   /agent/step regardless of mode UNLESS the operator chose EXECUTION; the loop then stops and hands back.
+  //
   // Agentic DRIVE loop: perceive the live pane → ask the engine for the next action → click/type →
   // repeat, narrating each step. Read-only is enforced engine-side (mutating clicks are refused).
   const driveGoal = async (goal: string) => {
@@ -784,23 +1414,51 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
     pushEvent({ type: 'beat', loopIdx: 2, phase: 'Driving the demo', brain: 'Reading the live screen and taking the next step.', sub: goal });
     const history: string[] = [];
     const say = (text: string, uncertain?: boolean) => pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text, uncertain });
-    let lastSig = ''; let finished = false;
+    let lastSig = ''; let finished = false; const filledDates = new Set<string>();
     try {
-      for (let i = 0; i < 14; i++) { // forms need several steps; stuck-detection (below) ends it early if it's not progressing
+      for (let i = 0; i < 32; i++) { // a 5-step wizard needs many actions; stuck-detection + `done` end it early
         const page = await ctl.snapshot().catch(() => null);
         if (!page) { say("I can't read the page yet — make sure it's loaded (and you're logged in), then ask again.", true); finished = true; break; }
-        const res = await api.agentStep({ goal, page, history, role: target?.role, mode: target?.mode, personaId: activePersona?.id });
+        // ── Deterministic date safety net ──────────────────────────────────────────────────────────────
+        // The model is unreliable on native date inputs (a calendar popup isn't clickable), so BEFORE asking
+        // it, fill any empty date/time field visible on this step directly with a valid FUTURE date — once
+        // each (tracked by label). This guarantees the wizard never stalls on a "Needed by" gate regardless
+        // of the model, and without spending an agent step. The snapshot only lists visible elements, so this
+        // is scoped to the current wizard step.
+        const dueDates = (Array.isArray(page.elements) ? page.elements : []).filter((e: any) =>
+          /^(date|datetime-local|month|week|time)$/.test(String(e.kind || '')) && !e.filled && !filledDates.has(String(e.text || e.ref)));
+        if (dueDates.length) {
+          for (const f of dueDates) { filledDates.add(String(f.text || f.ref)); await ctl.typeInto(f.ref, '').catch(() => {}); } // '' → filler synthesizes a valid future date
+          say(dueDates.length === 1 ? `I'll set ${dueDates[0].text && dueDates[0].text !== 'dd/mm/yyyy' ? `“${dueDates[0].text}”` : 'the required date'} to a valid date in the future.` : `I'll set the date fields to valid future dates.`);
+          await wait(900); continue; // re-perceive so the model sees them filled and advances
+        }
+        const res = await api.agentStep({ goal, page, history, role: target?.role, mode: target?.mode, personaId: activePersona?.id, sessionId: live.sessionId ?? undefined, productId: target?.productId });
         if (!res) { say('Lost the connection to the engine for a moment — try again.', true); finished = true; break; }
         if (res.say) { say(res.say, res.action === 'done' && i === 0 ? false : undefined); history.push(res.say); }
         if (res.action === 'done') { finished = true; break; }
-        // Never freeze: if the agent repeats the exact same action, it's stuck (e.g. a dropdown it can't
-        // resolve) — hand the wheel back gracefully instead of looping.
+        // Date/time fields: a native calendar popup isn't DOM-clickable, so the executor (typeInto/clickRef)
+        // coerces the value into a valid FUTURE date and fills it directly. Because that ALWAYS makes the
+        // field non-empty on the next snapshot, route any action on a temporal target to the filler AND
+        // exempt it from stuck-detection so a repeated value never trips the "I've gone as far as I can"
+        // hand-back. This is the fix for the date-picker stall.
+        const tgt = Array.isArray(page.elements) ? page.elements.find((e: any) => e.ref === res.ref) : null;
+        const tKind = String(tgt?.kind || ''), tRole = String(tgt?.role || '');
+        const temporal = /^(date|datetime-local|month|week|time)$/.test(tKind);
+        // A dropdown the resolver should handle: native <select>, an ARIA combobox/listbox, or anything the
+        // model issued `select` on. (A searchable typeahead the snapshot saw as a plain text input is caught
+        // live inside clickRef/typeInto via __vinIsCombo.) These resolve atomically and may keep their input
+        // visually empty after selection, so they must NOT count as a stuck repeat.
+        const dropdown = tKind === 'select' || tRole === 'combobox' || tRole === 'listbox' || (Array.isArray(tgt?.options) && tgt.options.length > 0);
+        // Never freeze: a repeated NON-resolving action is stuck — hand the wheel back gracefully. Temporal,
+        // dropdowns, and any `select` are exempt (they always make progress on the real control).
         const sig = `${res.action}:${res.ref}:${res.value ?? ''}`;
-        if (sig === lastSig) { say("I've gone as far as I can automatically here — could you set that field, then tell me to continue? I'll pick it right back up.", true); finished = true; break; }
+        if (sig === lastSig && !temporal && !dropdown && res.action !== 'select') { say("I've gone as far as I can automatically here — could you set that field, then tell me to continue? I'll pick it right back up.", true); finished = true; break; }
         lastSig = sig;
-        if (res.action === 'click') await ctl.clickRef(res.ref).catch(() => {});
+        if (temporal) await ctl.typeInto(res.ref, res.value ?? '').catch(() => {});                 // click/type/select on a date field → future-date filler
+        else if (res.action === 'select') await ctl.comboPick(res.ref, res.value ?? '').catch(() => {}); // any dropdown → open + filter + pick, in one shot
+        else if (dropdown && res.action === 'click') await ctl.comboPick(res.ref, res.value ?? '').catch(() => {}); // model clicked a dropdown → resolve it
+        else if (res.action === 'click') await ctl.clickRef(res.ref).catch(() => {});               // (clickRef itself resolves a typeahead it detects live)
         else if (res.action === 'type') await ctl.typeInto(res.ref, res.value ?? '').catch(() => {});
-        else if (res.action === 'select') await ctl.selectOption(res.ref, res.value ?? '').catch(() => {});
         await new Promise((r) => setTimeout(r, 1500)); // let the page settle before the next perception
       }
       if (!finished) say("That's as far as I'll take this automatically — your turn to finish up, then ask me to continue.", true);
@@ -814,14 +1472,18 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
       <div className="cr-strip">
         <div className="cr-strip__brand"><img src="./assets/VIN-light.svg" alt="VIN" /><span className="cr-strip__div" />
           <div><div className="cr-strip__product">Demo</div><div className="cr-strip__sub">Control Room</div></div></div>
-        <div className="cr-strip__live"><span className="rec" /><span>{runtime === 'scripted' ? 'Scripted' : runtime === 'ask' ? 'Ask · live' : runtime === 'talk' ? 'Talk · live' : 'Reel · live'}</span></div>
-        <div className="cr-strip__meta"><b>Procurement</b> · {(engine && target?.host) || 'po.vin'} · {target?.scenario?.trim() ? 'Custom scenario' : 'Approval delegation'}</div>
+        <div className="cr-strip__live"><span className="rec" /><span>{runtime === 'start' ? 'Start Experience' : runtime === 'scripted' ? 'Scripted' : runtime === 'ask' ? 'Ask · live' : runtime === 'talk' ? 'Talk · live' : 'Reel · live'}</span></div>
+        <div className="cr-strip__meta"><b>{activePersona?.name ?? 'Lead Consultant'}</b> · {(engine && target?.host) || (target?.host ?? 'po.vin')} · {target?.scenario?.trim() ? target.scenario.trim().slice(0, 40) : 'Interactive'}</div>
         <div className="cr-strip__spacer" />
-        <div style={{ display: 'flex', gap: 2, padding: 2, borderRadius: 8, background: 'rgba(255,255,255,.08)', border: '1px solid rgba(255,255,255,.12)' }} title="Input mode — Ask: type · Talk: speak · Reel: canned scenario · Scripted: offline beats (QA). Ask/Talk/Reel use the live engine.">
-          <button style={{ ...SEG_BTN, ...(runtime === 'ask' ? SEG_ON : {}) }} onClick={() => setMode('ask')}>Ask</button>
-          <button style={{ ...SEG_BTN, ...(runtime === 'talk' ? SEG_ON : {}) }} onClick={() => setMode('talk')}>Talk</button>
-          <button style={{ ...SEG_BTN, ...(runtime === 'live' ? SEG_ON : {}) }} onClick={() => setMode('live')}>Reel</button>
-          <button style={{ ...SEG_BTN, ...(runtime === 'scripted' ? SEG_ON : {}) }} onClick={() => setMode('scripted')}>Scripted</button>
+        <div style={{ position: 'relative' }}>
+          <button onClick={() => setModeMenu((v) => !v)} className="cr-icon-btn" title="Demo modes (Start · Ask · Talk · Reel · Scripted)" style={{ fontSize: 16 }}>⚙</button>
+          {modeMenu && (
+            <div style={{ position: 'absolute', right: 0, top: '120%', zIndex: 60, background: 'var(--color-navy, #001b3a)', border: '1px solid rgba(255,255,255,.15)', borderRadius: 8, padding: 4, minWidth: 168, boxShadow: '0 10px 28px rgba(0,0,0,.45)' }}>
+              {([['start', 'Start · launcher'], ['ask', 'Ask · type'], ['talk', 'Talk · voice'], ['live', 'Reel · canned'], ['scripted', 'Scripted · recorder']] as [RT, string][]).map(([m, lbl]) => (
+                <button key={m} onClick={() => { setMode(m); setModeMenu(false); }} style={{ ...SEG_BTN, display: 'block', width: '100%', textAlign: 'left', textTransform: 'none', letterSpacing: 0, fontSize: 12, padding: '7px 10px', ...(runtime === m ? SEG_ON : {}) }}>{lbl}</button>
+              ))}
+            </div>
+          )}
         </div>
         <span className={`cr-mode ${MODE_META[mode].cls}`} title="Read-only is the AI agent's limit — it never fires a mutating action. You're logged in yourself and have full control of your live session; take over and click anything, anytime."><Icon name={MODE_META[mode].icon} size={12} /> {MODE_META[mode].label}</span>
         <span className="cr-clock">{fmt(secs)}</span>
@@ -829,7 +1491,26 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
         <button className="cr-icon-btn" onClick={onLogout} title="Log out"><Icon name="logout" size={16} /></button>
       </div>
 
+      {isJourneyWalk && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 16px', background: 'var(--cr-navy, #002855)', color: '#fff', borderBottom: '1px solid rgba(0,0,0,.2)', flexShrink: 0 }}>
+          {live.journeyName ? <>
+            <span style={{ fontWeight: 800, fontSize: 12.5 }}>▶ {live.journeyName}</span>
+            <span style={{ opacity: .7, fontSize: 12 }}>{live.journeyDone ? 'Complete' : `Step ${Math.min(live.journeyStep + 1, live.journeyTotal || 1)} / ${live.journeyTotal || '…'}`}</span>
+            <div style={{ flex: 1 }} />
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, cursor: 'pointer', opacity: .85 }} title="Auto-advance through steps, or click Next yourself">
+              <input type="checkbox" checked={autoWalk} onChange={(e) => setAutoWalk(e.target.checked)} /> Auto-advance
+            </label>
+            <button disabled={live.journeyDone || voiceState !== 'ready'} onClick={advanceWalk} style={{ padding: '5px 14px', borderRadius: 7, border: 'none', background: (live.journeyDone || voiceState !== 'ready') ? 'rgba(255,255,255,.12)' : '#0097A9', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: (live.journeyDone || voiceState !== 'ready') ? 'default' : 'pointer' }}>{live.journeyDone ? '✓ Done' : 'Next ▶'}</button>
+          </> : <>
+            <span style={{ fontSize: 12.5, color: '#e8a33d' }}>{live.error ?? 'Preparing the journey…'}</span>
+            <div style={{ flex: 1 }} />
+          </>}
+          <button onClick={() => { stopVoice(); setMode('start'); }} title="Back to the launcher" style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid rgba(255,255,255,.2)', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer' }}>Exit</button>
+        </div>
+      )}
       <div className="cr-body">
+        {startMode ? <StartExperience products={products} target={target} onApply={setTarget} onLaunch={setMode} />
+        : scriptedMode ? <TourRunner products={products} target={target} onApplyTarget={setTarget} /> : <>
         <div className="cr-stagearea">
           <Stage beat={beat} onResolve={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
             screenshot={engine ? live.screenshot : null} blocked={engine ? live.blocked : undefined} url={engine ? live.url : undefined}
@@ -842,16 +1523,19 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
         <RightPanel beat={beat} mode={mode} open={panelOpen} setOpen={setPanelOpen} tab={tab} setTab={setTab} messages={messages} typing={typing}
           onAsk={(runtime === 'ask' || runtime === 'talk') ? onAsk : undefined} canAsk={canAsk}
           onMic={runtime === 'talk' ? toggleMic : undefined} micActive={listening}
+          onKill={engine ? stop : undefined} target={target} activePersona={activePersona}
+          handoffSuggestion={engine ? live.handoffSuggestion : null} onHandoff={handoffByName} engine={engine}
           liveCite={engine ? live.cite : undefined} liveCost={engine ? { total: live.cost, byType: live.byType } : undefined} />
+        </>}
       </div>
 
-      <Transport beat={beat} idx={idx} playing={playing} speed={speed}
+      {!scriptedMode && !startMode && !isJourneyWalk && <Transport beat={beat} idx={idx} playing={playing} speed={speed}
         live={engine} liveRunning={live.running} liveDone={live.done}
-        onPlay={() => { if (runtime === 'live') { if (live.running) stop(); else start(targetParams); } else if (runtime === 'ask') { if (live.running) stop(); else startInteractive(targetParams); } else { if (idx >= BEATS.length - 1) { setIdx(0); setSecs(724); } setPlaying((p) => !p); } }}
+        onPlay={() => { if (runtime === 'live') { if (live.running) stop(); else start(targetParams); } else if (runtime === 'ask') { if (live.running) stop(); else startInteractive(targetParams); } else { if (idx >= BEATS.length - 1) { setIdx(0); setSecs(0); } setPlaying((p) => !p); } }}
         onStep={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
         onBack={() => setIdx((i) => Math.max(i - 1, 0))}
-        onRestart={() => { setIdx(0); setPlaying(false); setSecs(724); }}
-        onSpeed={() => setSpeed((s) => (s === 1 ? 2 : s === 2 ? 4 : 1))} />
+        onRestart={() => { setIdx(0); setPlaying(false); setSecs(0); }}
+        onSpeed={() => setSpeed((s) => (s === 1 ? 2 : s === 2 ? 4 : 1))} />}
     </div>
   );
 }

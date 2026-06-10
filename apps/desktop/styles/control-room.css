@@ -14,7 +14,11 @@
   --cr-warn: #9a6b1a; --cr-warn-bg: rgba(183,93,4,.13); --cr-warn-bd: rgba(183,93,4,.38);
   --cr-danger: #a8332f; --cr-danger-bg: rgba(197,70,68,.1); --cr-danger-bd: rgba(197,70,68,.38);
   --cr-cite-hd: rgba(0,40,85,.05); --cr-shadow: 0 10px 25px rgba(16,42,67,.12), 0 4px 10px rgba(16,42,67,.08);
-  height: 100%; display: grid; grid-template-rows: auto 1fr auto;
+  /* Flex column (was a fixed 3-row grid) so an OPTIONAL extra bar — e.g. the journey-walk progress bar between
+     the strip and the body — can't steal the flexible row. Only .cr-body grows; every other row is its natural
+     height. (The old `grid-template-rows: auto 1fr auto` gave the 1fr to whatever child landed in row 2, which
+     collapsed the live browser when the walk bar was inserted.) */
+  height: 100%; display: flex; flex-direction: column;
   background: var(--cr-bg); color: var(--cr-fg); font-family: var(--font-family); overflow: hidden;
 }
 .cr * { box-sizing: border-box; }
@@ -59,12 +63,15 @@
 .kill svg { width: 12px; height: 12px; }
 
 /* ---- Body grid ---- */
-.cr-body { display: flex; min-height: 0; overflow: hidden; }
+.cr-body { flex: 1 1 auto; display: flex; min-height: 0; overflow: hidden; }
 .cr-stagearea { flex: 1; min-width: 0; display: flex; flex-direction: column; background: var(--cr-bg); overflow: hidden; }
 .cr-col { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; }
 .cr-left { background: var(--cr-panel); border-right: 1px solid var(--cr-line); }
 .cr-right { background: var(--cr-panel); border-left: 1px solid var(--cr-line); }
 .cr-center { background: var(--cr-bg); display: grid; grid-template-rows: 1fr auto; overflow: hidden; }
+/* Start-Experience launcher: a journey row reacts on hover so the whole product list reads as clickable. */
+.cr-jrow { border-radius: 8px; transition: background var(--duration-fast, .12s) var(--easing-out, ease); }
+.cr-jrow:hover { background: var(--cr-panel-2); }
 
 /* collapsible right panel (Brief / Reasoning tabs) */
 .cr-panel { width: 372px; flex-shrink: 0; background: var(--cr-panel); border-left: 1px solid var(--cr-line); display: flex; flex-direction: column; min-height: 0; }
@@ -279,6 +286,8 @@
 
 /* ---- Transport bar (AI agent controls) ---- */
 .transport { display: flex; align-items: center; gap: 16px; padding: 11px 18px; background: var(--cr-panel); border-top: 1px solid var(--cr-line); }
+/* Guided-demo caption strip — sits above the native transport bar during tour playback. */
+.tour-caption { padding: 13px 18px; background: var(--cr-panel-2); border-top: 1px solid var(--cr-line); color: var(--cr-fg); font-size: 15px; line-height: 1.5; font-weight: 600; }
 .agent-status { display: flex; align-items: center; gap: 10px; padding-right: 16px; border-right: 1px solid var(--cr-line); flex-shrink: 0; }
 .agent-status__dot { width: 10px; height: 10px; border-radius: 50%; background: var(--cr-fg3); flex-shrink: 0; }
 .agent-status.run .agent-status__dot { background: var(--color-green); box-shadow: 0 0 0 3px rgba(0,125,97,.2); animation: recpulse 1.6s var(--easing-out) infinite; }

@@ -47,19 +47,23 @@ Defer the features hanging off these (billing, lifecycle automation, self-servic
 - **P5+:** new modalities/deployments, demand-driven, along existing seams.
 
 ## 8. Deferred — build only when the trigger fires
-| Item | Trigger |
+> STATUS (live SSOT = `~/.claude` memory `vin-demo-phase-status`): several items below have since been
+> BUILT — the founder directed the desktop + UI build, and P1–P4 fired their triggers. The DISCIPLINE
+> still holds for everything NOT yet built: don't build the rest for completeness.
+
+| Item | Trigger / Status |
 |---|---|
-| Multi-agent split | Real scaling/owner boundary or loop over budget |
-| Desktop/Citrix/vision | Signed non-web customer |
-| Self-service onboarding | Adapter contract stable across 3 manual products |
-| pgvector → Pinecone | Scale/latency exceeds pgvector |
-| Air-gapped/on-prem/gov | Signed customer + security requirement |
-| Voice/Avatars | Text loop reliable + customer pull |
-| Product Lifecycle engine | Onboarding product #3 / first version bump |
-| Active discovery behavior | P1 loop reliable (fields already captured) |
-| Competitive content | Sales/customer asks (category already in schema) |
-| Billing/metering | Pricing validated + first paying customer |
-| `execution` (full-write) mode | Customer authorizes mutating actions in their env |
+| Multi-agent split | Real scaling/owner boundary or loop over budget — NOT yet (still one loop) |
+| Desktop/Citrix/vision | ✅ Desktop BUILT (Electron "Control Room" thin client, founder-directed) · Citrix/vision still deferred |
+| Self-service onboarding | ✅ BUILT (P4 — declarative manifest + interactive wizard) |
+| pgvector → Pinecone | Scale/latency exceeds pgvector — NOT yet |
+| Air-gapped/on-prem/gov | Signed customer + security requirement — NOT yet |
+| Voice/Avatars | ✅ Voice BUILT (Google STT/TTS over the same brain) · avatars still deferred |
+| Product Lifecycle engine | ✅ BUILT (P3, Gap B — versioning; a superseded version degrades at the gate) |
+| Active discovery behavior | ✅ BUILT (P2) |
+| Competitive content | Sales/customer asks (category already in schema) — NOT yet |
+| Billing/metering | Pricing validated + first paying customer — NOT yet |
+| `execution` (full-write) mode | ✅ BUILT (operator-selectable per session; default stays read-only) |
 
 ## 9. Ask the user before going past the spike
 What VIN Demo is · first web target + automation access · hallucination tolerance · persona legal/brand limits · deployment target + security reqs · team/timeline · **where demo data comes from + who resets it** · **pricing hypothesis / value of one demo** · **default execution mode per customer (is read-only OK for first demos?)**.
@@ -68,4 +72,4 @@ What VIN Demo is · first web target + automation access · hallucination tolera
 On one web product, **read-only**, against a **demo environment**: the approval-delegation scenario runs end-to-end with source/confidence/version-cited answers, recovers from an interruption, returns to context, answers "why did you show that?", says "I'm not certain" on low confidence/stale knowledge, **never fires a mutating action**, and **records the demo's cost** — repeatably, per the eval harness. Only then expand.
 
 ## 11. Stack
-React/TS/Next.js · Node/TS · PostgreSQL (+pgvector) · Redis · LangGraph · Playwright · LangSmith · OpenTelemetry · GitHub · Railway→AWS later. **No Electron yet** (web only through P4). Pinecone deferred.
+React/TS/Next.js · Node/TS · PostgreSQL (+pgvector) · Redis · LangGraph · Playwright · LangSmith · OpenTelemetry · GitHub · Railway→AWS later. **Electron desktop IS built** — the "Control Room" thin client over the hosted Railway engine (web + desktop + voice all live; see `vin-demo-phase-status` memory). Pinecone still deferred.

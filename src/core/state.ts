@@ -3,9 +3,10 @@
  *  onto the entity model. Increment 1 fills utterance → interpretation → retrieved. */
 import { Annotation } from '@langchain/langgraph';
 import type { Interpretation } from './llm.js';
-import type { NavResult, ActionScan } from './driver.js';
+import type { NavResult } from './driver.js';
 import type { ExecutionMode } from './safety.js';
 import type { Stakeholder } from './stakeholders.js';
+import type { ConfidenceBand } from './retrieval.js';
 
 /** A place in the demo we can return to after a detour (mid-flight pivot support). */
 export interface Position {
@@ -24,6 +25,14 @@ export interface RetrievedChunk {
   product_version_status: string | null; // active | deprecated | retired (Gap B lifecycle)
   validation_status: string;
   distance: number; // cosine distance (lower = closer)
+  // Provenance (migration 0011; lifecycle_state from the chunk, source_* from LEFT JOIN knowledge_sources).
+  // Optional so constructed/test chunks and older callers don't need to supply them.
+  lifecycle_state?: string;       // draft | pending_review | validated | deprecated | archived
+  source_owner?: string | null;   // who owns the source (provenance the AI can state)
+  source_title?: string | null;   // the source's governed title
+  source_type?: string | null;    // doc | faq | sop | release_note | competitor_positioning | recon | manual
+  validated_by?: string | null;   // who validated this chunk (provenance the AI can state)
+  validated_at?: string | null;   // when it was validated (ISO date string)
 }
 
 export const DemoState = Annotation.Root({
@@ -33,6 +42,16 @@ export const DemoState = Annotation.Root({
   sessionId: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
   role: Annotation<string>({ reducer: (_, b) => b, default: () => 'admin' }),
   mode: Annotation<ExecutionMode>({ reducer: (_, b) => b, default: () => 'read-only' }),
+  // V5 Journey-driven runtime (mig 0026): when journeyId is set, the loop WALKS the pinned journey's
+  // story_flow instead of free-roaming. journeyStep is the current step index — it PERSISTS across turns
+  // via the thread checkpointer and must NOT be passed as a per-turn invoke input (so it advances, not
+  // resets). null journeyId / absent = today's intent-driven default, unchanged.
+  journeyId: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
+  journeyStep: Annotation<number>({ reducer: (_, b) => b, default: () => 0 }),
+  // Per-turn: TRUE only on an explicit journey WALK turn (set by walkJourney). An off-script question on a
+  // journey-pinned session leaves this false → it's answered normally (free-roam) and consumes NO journey step.
+  // Always passed explicitly per turn (never omitted) so it can't retain a stale `true` via the checkpointer.
+  journeyAdvance: Annotation<boolean>({ reducer: (_, b) => b, default: () => false }),
   // Per-session URL override (operator picked a product but pointed its adapter at a different host,
   // e.g. a staging URL). null → use the product's configured baseUrl. The driver merges it over the
   // resolved ProductWebConfig; everything else (login, selectors, knowledge) is unchanged.
@@ -42,8 +61,20 @@ export const DemoState = Annotation.Root({
   // emits a click instruction the embedded browser performs in the operator's OWN logged-in session.
   // No server creds, no screenshot latency, and the human can take over the same pane.
   clientNav: Annotation<boolean>({ reducer: (_, b) => b, default: () => false }),
+  // Optional per-turn navigation HINT (Phase 4 REEL→node re-model): a node intent_label the turn declares it
+  // targets. driveTo PREFERS this node when it's among the verified candidates (a deterministic scripted path);
+  // it falls back to the LLM pickNode when absent or unmatched, so the intent-driven default is unchanged.
+  navHint: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
   // Per-turn output: the navigation instruction for the client to perform (clientNav only).
   navAction: Annotation<{ label?: string; selectors?: string[]; url?: string } | null>({ reducer: (_, b) => b, default: () => null }),
+  // Active specialist persona (when handed off): its system-prompt overlay shapes the LLM-generated
+  // text (explain / discovery) and its confidence threshold tightens the retrieval gate. Empty/undefined
+  // = the lead consultant (no overlay) — the default behavior is unchanged.
+  personaPreamble: Annotation<string>({ reducer: (_, b) => b, default: () => '' }),
+  minConfidence: Annotation<number | null>({ reducer: (_, b) => b, default: () => null }),
+  // Persona knowledge hierarchy (re-ranks retrieval) + the graded confidence band the gate produced.
+  knowledgePriority: Annotation<string[]>({ reducer: (_, b) => b, default: () => [] }),
+  band: Annotation<ConfidenceBand>({ reducer: (_, b) => b, default: () => 'high' }),
 
   // interpret node
   interpretation: Annotation<Interpretation | null>({ reducer: (_, b) => b, default: () => null }),
@@ -56,7 +87,8 @@ export const DemoState = Annotation.Root({
 
   // navigate node
   navigation: Annotation<NavResult | null>({ reducer: (_, b) => b, default: () => null }),
-  actionScan: Annotation<ActionScan[]>({ reducer: (_, b) => b, default: () => [] }),
+  // (The raw page scan stays local to driveTo, which derives blockedMutations from it; it was never read
+  // off state, so the dead `actionScan` channel was removed. scanActions()/ActionScan remain — they're live.)
   blockedMutations: Annotation<string[]>({ reducer: (_, b) => b, default: () => [] }),
 
   // multi-turn: where we are, the breadcrumb stack for return-to-context, and explain output

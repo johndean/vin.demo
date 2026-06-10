@@ -1,12 +1,11 @@
-/* Desktop login — SAME design as the web login (app/login on demofor.vin). Gates the
-   control room. Local demo gate: any email + password continues (per the design's note);
-   a deployed/thin-client build would authenticate against the hosted engine instead. */
+/* Desktop login — SAME design as the web login (app/login on demofor.vin). Gates the control
+   room by authenticating against the hosted engine (the SAME source of truth as the web console)
+   via the main process; the signed session cookie is captured and reused for engine calls. */
 import { useState } from 'react';
 
 export function Login({ onDone }: { onDone: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [remember, setRemember] = useState(true);
   const [busy, setBusy] = useState(false);
   const [label, setLabel] = useState('Sign in');
   const [error, setError] = useState('');
@@ -55,15 +54,6 @@ export function Login({ onDone }: { onDone: () => void }) {
             <input type="password" id="password" name="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
           </div>
 
-          <div className="row">
-            <label className="remember">
-              <input type="checkbox" id="remember" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-              <span className="box"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg></span>
-              Keep me signed in
-            </label>
-            <a className="forgot" href="#" onClick={(e) => e.preventDefault()}>Forgot password?</a>
-          </div>
-
           <button className="signin" type="submit" disabled={busy}>{label}</button>
 
           {error && <div className="error" role="alert">{error}</div>}
@@ -72,7 +62,7 @@ export function Login({ onDone }: { onDone: () => void }) {
         </div>
       </form>
 
-      <div className="footer"><span className="demo">VIN Demo</span> · © 2026 Veterinary Information Network · <a href="#" onClick={(e) => e.preventDefault()}>Privacy</a> · <a href="#" onClick={(e) => e.preventDefault()}>Support</a></div>
+      <div className="footer"><span className="demo">VIN Demo</span> · AI Guided Product Experience Platform · © 2026</div>
     </div>
   );
 }

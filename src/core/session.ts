@@ -11,10 +11,15 @@ export interface DemoSession {
   id: string;
   productId: string;
   mode: ExecutionMode;
+  journeyId: string | null;
 }
 
-/** Create a demo session for a product, wiring its latest version + an environment. */
-export async function createDemoSession(productId: string, mode: ExecutionMode): Promise<DemoSession> {
+/** Create a demo session for a product, wiring its latest version + an environment.
+ *  `seedRoom` controls whether the synthetic multi-stakeholder fixture (Dana/Morgan) is seeded — that
+ *  collection is a SCRIPTED-demo device (the reel, convo.ts, eval-phase2's speaker-switch). LIVE
+ *  interactive/voice sessions pass `false`: there's one real operator in the room, so fabricating named
+ *  attendees made the AI address people who don't exist. Default stays true for CLI/eval/reel callers. */
+export async function createDemoSession(productId: string, mode: ExecutionMode, seedRoom = true, journeyId: string | null = null): Promise<DemoSession> {
   const ws = await db().query<{ workspace_id: string }>('SELECT workspace_id FROM products WHERE id = $1', [productId]);
   const workspaceId = ws.rows[0]?.workspace_id;
   if (!workspaceId) throw new Error(`No product ${productId}`);
@@ -36,13 +41,13 @@ export async function createDemoSession(productId: string, mode: ExecutionMode):
   const env = await db().query<{ id: string }>('SELECT id FROM environments WHERE product_id=$1 ORDER BY created_at LIMIT 1', [productId]);
 
   const res = await db().query<{ id: string }>(
-    `INSERT INTO demo_sessions (customer_id, product_version_id, environment_id, execution_mode)
-     VALUES ($1, $2, $3, $4) RETURNING id`,
-    [customerId, ver.rows[0]?.id ?? null, env.rows[0]?.id ?? null, mode],
+    `INSERT INTO demo_sessions (customer_id, product_version_id, environment_id, execution_mode, journey_id)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`,
+    [customerId, ver.rows[0]?.id ?? null, env.rows[0]?.id ?? null, mode, journeyId],
   );
   const sessionId = res.rows[0].id;
-  await seedStakeholders(sessionId); // F: every session opens with its stakeholder collection
-  return { id: sessionId, productId, mode };
+  if (seedRoom) await seedStakeholders(sessionId, productId); // F: scripted demos open with the product's room
+  return { id: sessionId, productId, mode, journeyId };
 }
 
 /**

@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { chromium } from 'playwright';
 import { db, toVector } from './db.js';
 import { getEmbeddingProvider } from './embeddings.js';
+import { ensureSource, inferSourceType, mapLifecycle } from './knowledge.js';
 import type { ProductWebConfig } from './driver.js';
 
 interface KnowledgeItem { category?: string; content: string; confidence?: number; source?: string; lastVerified?: string; validationStatus?: string }
@@ -74,10 +75,18 @@ export async function onboard(m: Manifest): Promise<string> {
     const embs = await getEmbeddingProvider().embed(missing.map((i) => i.content));
     for (let i = 0; i < missing.length; i++) {
       const it = missing[i];
+      const cat = it.category ?? 'docs';
+      const title = it.source ?? `${m.name} manifest`;
+      const isRecon = title.startsWith('recon:');
+      // Provenance (0011): a real source row + source_id + lifecycle_state per chunk at insert.
+      const sourceId = await ensureSource(productId, {
+        title, sourceType: isRecon ? 'recon' : inferSourceType(cat), owner: 'VIN Demo (internal)',
+        uri: isRecon ? m.knowledgeRecon?.url ?? null : null, lastVerified: it.lastVerified ?? '2026-06-06', versionId, createdBy: 'onboard',
+      });
       await db().query(
-        `INSERT INTO knowledge_chunks (knowledge_base_id, product_version_id, category, content, embedding, confidence, source, last_verified, validation_status)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-        [kbId, versionId, it.category ?? 'docs', it.content, toVector(embs[i]), it.confidence ?? 0.8, it.source ?? `${m.name} manifest`, it.lastVerified ?? '2026-06-06', it.validationStatus ?? 'validated'],
+        `INSERT INTO knowledge_chunks (knowledge_base_id, product_version_id, category, content, embedding, confidence, source, last_verified, validation_status, source_id, lifecycle_state)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [kbId, versionId, cat, it.content, toVector(embs[i]), it.confidence ?? 0.8, title, it.lastVerified ?? '2026-06-06', it.validationStatus ?? 'validated', sourceId, mapLifecycle(it.validationStatus ?? 'validated')],
       );
     }
   }

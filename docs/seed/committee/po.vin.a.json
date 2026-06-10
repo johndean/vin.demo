@@ -1,0 +1,624 @@
+{
+  "product": "PO.vin",
+  "outcomes": [
+    {
+      "title": "Reduce purchase approval delays",
+      "description": "Compress the elapsed time between a staff member submitting a purchase request and receiving a decision, so operational needs are met without staff resorting to workarounds. Approval queues, urgent flagging, delegation, and escalation tools remove the wait caused by absent or overloaded approvers.",
+      "successIndicators": [
+        "Average time from PO submission to first manager decision drops measurably quarter-over-quarter",
+        "Percentage of requests cleared within a target SLA (e.g., 48 hours) rises across manager and owner queues",
+        "Volume of POs sitting in a manager or owner queue beyond a set aging threshold falls month-over-month",
+        "Number of escalations initiated because an approver was unreachable decreases as delegation is used proactively",
+        "Staff-reported instances of purchasing delays blocking operational work decline in periodic check-ins"
+      ]
+    },
+    {
+      "title": "Improve purchasing visibility",
+      "description": "Give managers, finance, and ownership a real-time, role-appropriate view of every purchase request at every stage — from draft through closed — so no spend commitment is invisible until after the fact. The Registry, role-scoped dashboards, and Reports surface a single version of the truth.",
+      "successIndicators": [
+        "Proportion of active POs visible to the appropriate approver within their queue or registry without manual inquiry rises toward 100%",
+        "Time to answer the question 'what is outstanding with this vendor right now?' drops from days to minutes using the vendor directory and registry filters",
+        "Owner dashboard accurately reflects total authorized spend quarter-to-date without requiring a manual spreadsheet reconciliation",
+        "Number of surprise invoices for purchases not tracked in PO.vin decreases quarter-over-quarter",
+        "Finance manager can produce a current open-PO aging report from the Reports page without requesting a data extract from IT"
+      ]
+    },
+    {
+      "title": "Increase purchasing accountability",
+      "description": "Create an unambiguous record of who requested, who approved, who paid, and who received every purchase, so responsibility can never be diffused across informal channels. The per-PO Activity tab, Audit tab, and audit-bundle CSV make every decision and its author traceable.",
+      "successIndicators": [
+        "Every purchase order has a named requester, a named approving manager, and a named owner or bypass record — zero anonymous decisions",
+        "Percentage of POs with a complete justification and business description meeting the minimum-character requirement trends toward 100%",
+        "Number of 'who approved this?' inquiries fielded by the comptroller or finance team drops significantly",
+        "Separation-of-duties violations caught and rejected by the system (SOD_VIOLATION events) are visible and reviewed monthly",
+        "Audit bundle CSVs are available on demand for any PO, eliminating the need to reconstruct approval history from email threads"
+      ]
+    },
+    {
+      "title": "Reduce manual procurement administration",
+      "description": "Replace the email chains, spreadsheet trackers, and verbal approvals that staff use today to move purchase requests forward. PO.vin's wizard, automatic routing, threshold-based stage skipping, notification rules, and bulk CSV imports absorb the coordination work that otherwise falls on individuals.",
+      "successIndicators": [
+        "Time staff spend per week chasing approval status via email or messaging falls measurably after go-live",
+        "Number of purchase requests tracked in spreadsheets outside PO.vin drops to zero within a defined transition period",
+        "Admin time spent on manual user and vendor onboarding drops after bulk CSV import capability is used for initial data load",
+        "Notification rules eliminate the need for manual email reminders when POs cross a workflow stage",
+        "Managers report spending less time reconstructing PO history before making an approval decision"
+      ]
+    },
+    {
+      "title": "Improve spend control before purchases occur",
+      "description": "Enforce a structured review and authorization gate on every purchase commitment before a vendor is engaged or an invoice is received. Configurable approval thresholds, two-stage manager-then-owner routing, and budget-category tagging ensure the right eyes see the right requests before money moves.",
+      "successIndicators": [
+        "Zero purchases exceeding the owner-approval threshold are authorized without an owner approval or a recorded bypass",
+        "Percentage of POs with a budget category assigned at submission rises to near 100% within a quarter of go-live",
+        "Spend authorized without an approval record (off-system purchases) drops measurably after rollout",
+        "Number of POs returned via the clarification cycle for insufficient justification or missing cost detail trends downward as staff learn the standard",
+        "Owner approval queue response time stays within the configured SLA, evidenced by dashboard and Reports data"
+      ]
+    },
+    {
+      "title": "Standardize purchasing processes",
+      "description": "Replace department-specific or person-specific purchasing habits with a single, documented workflow that all staff follow. The five-step PO wizard enforces consistent fields, classifications, and justification standards; threshold settings apply uniformly across the organization.",
+      "successIndicators": [
+        "All purchase requests originate through the PO wizard — zero requests processed via email approval alone",
+        "Line-item classification rates (asset / consumable / service / software / subscription / other) are populated on 100% of submitted POs within one quarter",
+        "Variance in required field completeness across departments falls to near zero (e.g., business justification ≥ 20 characters on all submissions)",
+        "New staff can submit a correctly structured purchase request without one-on-one coaching, using the wizard's built-in step validation",
+        "Threshold configuration is reviewed and updated on a defined schedule, documented in Admin Settings rather than informal policy memos"
+      ]
+    },
+    {
+      "title": "Reduce purchasing bottlenecks",
+      "description": "Prevent individual approvers from becoming single points of failure that stall entire request queues. Delegation lets a manager hand authority to a peer when unavailable; escalation pushes a stalled PO to the owner stage; urgent flagging surfaces time-sensitive requests at the top of the queue.",
+      "successIndicators": [
+        "Number of POs aging beyond an SLA threshold in any single approver's queue falls after delegation and escalation features are adopted",
+        "Delegation events per quarter track as a ratio of total approvals — meaningful use indicates the feature is preventing stalls rather than being ignored",
+        "Manager Review Queue empties to zero pending items at least once per week for each active manager",
+        "Urgent-flagged POs receive a first decision within a tighter SLA than standard requests, measurable in the Reports stage-timing data",
+        "No single approver holds more than a defined percentage of all in-flight approvals at any one time"
+      ]
+    },
+    {
+      "title": "Improve supplier request tracking",
+      "description": "Maintain a structured record of every purchase request associated with each vendor — covering all open, in-progress, and historical POs — so supplier relationships and commitments are managed proactively rather than reconstructed from invoices. The vendor directory with inline PO history and the Registry's vendor filter deliver this view.",
+      "successIndicators": [
+        "Any staff member or manager can pull the complete history of POs against a specific vendor from the vendor directory in under a minute",
+        "Duplicate-vendor banners surface prior POs to the same supplier at the point of a new request, reducing unintentional double-ordering",
+        "Vendor relationship owners are assigned in the directory, creating clear accountability for each supplier relationship",
+        "Open PO aging CSV from Reports identifies vendors with overdue receipt or unresolved payment, allowing proactive follow-up",
+        "Number of vendor-related disputes attributable to missing or misrouted purchase records drops year-over-year"
+      ]
+    },
+    {
+      "title": "Improve purchasing compliance",
+      "description": "Ensure that the organization's purchasing policy — including approval tiers, separation-of-duties requirements, and documentation standards — is enforced by the system rather than relying on individual memory or manual checks. PO.vin's threshold engine, SOD controls, and required-field validation make policy structural.",
+      "successIndicators": [
+        "Separation-of-duties rejections are logged and reviewed; the count of attempted violations trends downward as staff learn the rules",
+        "Bypassed Approvals queue is reviewed on a defined cycle, with no bypass left unacknowledged beyond a set window",
+        "Percentage of finalized POs with all GL accounts assigned reaches 100% — the Finalize gate enforces this structurally",
+        "Policy-required attachments (quotes, contracts, proof of delivery) are present on the required PO types at a defined completeness rate",
+        "Internal or external audit findings related to purchasing compliance that reference missing documentation or unauthorized approvals drop to zero"
+      ]
+    },
+    {
+      "title": "Increase approval turnaround speed",
+      "description": "Reduce the clock time from when a purchase request enters an approval queue to when it exits with a decision. Notification rules alert approvers immediately on queue entry; urgent flagging and dashboard stat tiles keep pending counts visible; the mobile-accessible approval interface means decisions happen in the field, not just at a desk.",
+      "successIndicators": [
+        "Median manager-queue decision time (approve / reject / clarify) drops measurably in the first quarter after go-live",
+        "Owner-queue median decision time on high-value requests stays within a defined target, tracked on the owner dashboard",
+        "Percentage of POs receiving a first-touch decision within 24 hours of submission rises above a defined threshold",
+        "Notification emails (triggered by workflow-event rules) are confirmed delivered and opened within the session window by approvers",
+        "Reports stage-timing chart shows consistent improvement in Pending Manager and Pending Owner dwell times quarter-over-quarter"
+      ]
+    },
+    {
+      "title": "Improve procurement audit readiness",
+      "description": "Ensure that at any moment — including mid-cycle — the organization can produce a complete, tamper-evident record of every purchase decision, payment, receipt, and asset creation without manual reconstruction. The per-PO Audit tab, audit-bundle CSV, and Activity timeline make this instantaneous.",
+      "successIndicators": [
+        "Any individual PO's full audit bundle can be exported to CSV from the PO detail in under two minutes, covering every governed mutation",
+        "No gaps exist in the audit timeline — every approve, reject, clarify, pay, and receive action is recorded with the acting user and timestamp",
+        "Year-end or spot-check audit requests are satisfied without any manual compilation from email or spreadsheets",
+        "Registry CSV exports are available on demand and include all filter dimensions (status, department, amount, date range)",
+        "Bypassed Approvals records show the threshold-routing rationale for every auto-cleared PO, satisfying auditor questions about missing owner sign-off"
+      ]
+    },
+    {
+      "title": "Reduce unauthorized purchasing",
+      "description": "Eliminate purchases committed outside the approval workflow — whether through verbal authority, personal credit cards, or direct vendor invoices — by making the PO wizard the required path for every purchase commitment. Separation-of-duties controls and the owner-approval gate close the gaps that allow unauthorized spend.",
+      "successIndicators": [
+        "Invoices received from vendors without a corresponding approved PO in PO.vin drop to zero within a defined transition period",
+        "Credit card or petty-cash purchases that bypass the PO workflow are formally categorized, tracked, and subject to a separate policy with defined limits",
+        "Separation-of-duties violations caught by the system are reviewed and addressed; no SOD bypass goes unlogged",
+        "All staff with purchasing authority are active in PO.vin with their manager assignment set, so no requests are routed informally",
+        "Post-period audits find no approved expenses that lack a PO record in the system"
+      ]
+    },
+    {
+      "title": "Improve budget adherence",
+      "description": "Connect every purchase request to a budget category before authorization so that spending against each budget line is visible and defensible throughout the period — not just at period close. Budget-category tagging on every PO line, combined with the spend-by-category report, provides a running picture of consumption.",
+      "successIndicators": [
+        "100% of submitted POs carry a budget category by the end of the first quarter of use",
+        "Spend-by-category report from Reports shows variance to plan on a monthly review cadence without manual reconciliation",
+        "Number of over-budget surprises discovered at period close falls measurably after real-time category tracking is in place",
+        "Finance manager can produce a budget-versus-authorized-spend view for any department from Reports without a data request",
+        "Owner approval of high-value requests consistently references the budget category and available balance, visible in PO comments and justifications"
+      ]
+    },
+    {
+      "title": "Improve purchasing transparency",
+      "description": "Make the status, value, and history of every purchase request visible to the people who need it — requesters tracking their own submissions, managers seeing their team's spend, and owners reviewing cross-department activity — without anyone having to ask. Role-scoped dashboards, the Registry, and real-time status badges deliver this without oversharing.",
+      "successIndicators": [
+        "Requesters can see the current stage of every PO they submitted from My Requests without contacting their manager",
+        "Managers can view all POs for their direct reports across all stages from the Registry with a single department filter",
+        "Owner dashboard stat tiles accurately reflect awaiting-sign-off and QTD authorized spend without a manual pull",
+        "Number of status-inquiry messages sent outside PO.vin (email, chat) drops measurably in the first 60 days",
+        "Finance and accounting staff can identify any PO's payment status from the Registry In Accounting or In Receive tab in under 30 seconds"
+      ]
+    },
+    {
+      "title": "Reduce procurement errors",
+      "description": "Catch mistakes — wrong vendor, missing justification, incorrect line classification, absent GL account, duplicate order — before they become committed purchases or accounting corrections. The PO wizard's step validation, duplicate-vendor banners, Finalize GL gate, and dry-run CSV import pattern prevent errors at the source.",
+      "successIndicators": [
+        "Percentage of POs rejected at Finalize due to missing GL accounts drops to zero within two quarters as staff learn the standard",
+        "Duplicate-vendor banners are acknowledged on every PO submitted to a vendor with prior history, reducing unintentional double-orders",
+        "Number of POs requiring a clarification cycle for missing or invalid information falls quarter-over-quarter",
+        "CSV bulk-import dry-run errors are resolved before commit, producing a zero-error commit rate as staff learn the templates",
+        "Finance team reports fewer journal-entry corrections attributable to misclassified PO lines or wrong GL assignments"
+      ]
+    },
+    {
+      "title": "Improve purchasing productivity",
+      "description": "Let staff spend less time navigating procurement bureaucracy and more time on their actual jobs. Auto-saving drafts, a clear five-step wizard, pre-populated requester fields, searchable vendor directory, and direct links from dashboards to queues cut the friction out of both submitting and approving requests.",
+      "successIndicators": [
+        "Average time to complete and submit a new purchase request (wizard submission time) falls measurably after initial learning curve",
+        "Staff-reported satisfaction with the purchasing process improves in periodic surveys after PO.vin replaces email-based workflows",
+        "Manager time-to-decision per PO in the review queue drops as approvers become familiar with the one-click approve/reject/clarify interface",
+        "Number of abandoned drafts (saved but never submitted) decreases, indicating staff are completing requests rather than giving up mid-process",
+        "Accounting team time spent on payment-queue management per week decreases as the structured queue replaces manual tracking"
+      ]
+    },
+    {
+      "title": "Create complete purchasing audit trails",
+      "description": "Ensure that the full lifecycle of every purchase — from the initial draft through every approval, hold, clarification, payment, receipt, and asset registration — is captured in an immutable, exportable record. The Activity timeline, Audit tab, and audit-bundle CSV on each PO deliver this without any additional manual logging.",
+      "successIndicators": [
+        "Audit-bundle CSV for any PO contains every governed mutation with actor, timestamp, and prior/new state — zero gaps",
+        "Activity timeline on every PO shows color-coded events for every stage transition, including bypass chips on override rows",
+        "No purchase that has reached the Paid stage lacks a corresponding receipt record or a documented reason for the gap",
+        "Asset-line POs have corresponding equipment records in the asset registry, with custody history traceable back to the originating PO",
+        "Compliance or audit requests are satisfied from PO.vin exports alone, with no need to cross-reference email or external files"
+      ]
+    },
+    {
+      "title": "Improve operational governance",
+      "description": "Give ownership and finance reliable, system-enforced oversight of the purchasing function — including threshold configuration, role assignments, separation-of-duties enforcement, and bypassed-approval review — so governance is built into day-to-day operations rather than bolted on at audit time.",
+      "successIndicators": [
+        "Approval threshold bands are documented in Admin Settings and reviewed on a defined schedule, with changes logged",
+        "Bypassed Approvals queue is reviewed weekly by the owner role, with zero unreviewed bypasses beyond a set window",
+        "Every active staff member has a correct role and manager assignment in Manage Hub Users, ensuring queues route accurately",
+        "Separation-of-duties policy is enforced structurally — the system rejects violations without relying on individual discipline",
+        "Admin dashboard SLA Compliance metric is populated and reviewed monthly, with targets configured for each approval stage"
+      ]
+    },
+    {
+      "title": "Reduce procurement-related risk",
+      "description": "Lower the operational and financial exposure created by informal purchasing — unauthorized commitments, undocumented vendor relationships, missing receipts, and untraceable approvals. PO.vin's vendor risk tracking, SOD controls, attachment scanning, and complete audit trail reduce the surface area for procurement risk.",
+      "successIndicators": [
+        "Vendor directory includes risk classifications for all active suppliers, reviewed and updated on a defined cycle",
+        "Attachment virus scanning (VirusTotal integration) prevents quarantined files from being downloaded or acted on",
+        "Number of POs with no supporting documentation (no attachments where policy requires them) trends toward zero",
+        "High-value or new-vendor POs are consistently routed to owner approval — no qualifying PO bypasses the owner stage without a recorded threshold reason",
+        "Period-end review finds no purchase commitments made without a corresponding approved PO record in the system"
+      ]
+    },
+    {
+      "title": "Lower procurement operating costs",
+      "description": "Reduce the labor cost of running the purchasing function by automating routing, notifications, and record-keeping that staff currently do manually — and by surfacing spend patterns that reveal consolidation or renegotiation opportunities. Less time on administration means the same team handles higher purchase volume without adding headcount.",
+      "successIndicators": [
+        "Staff hours per week spent on purchasing administration (status chasing, manual routing, document retrieval) fall measurably in the first quarter",
+        "Vendor spend CSV from Reports identifies the top vendors by spend volume, enabling proactive volume-discount conversations",
+        "Accounting team processes the same or greater volume of payment-queue items without additional headcount after go-live",
+        "Cost per purchase order processed (labor time × hourly rate) decreases as wizard and automated routing replace manual steps",
+        "Number of rush or emergency purchases (urgent-flagged POs as a percentage of total) falls as better pipeline visibility enables earlier requisition"
+      ]
+    }
+  ],
+  "committee": [
+    {
+      "name": "Owner / Managing Director",
+      "role": "Owner / Managing Director",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "decision_maker",
+      "sortOrder": 0,
+      "interests": [
+        "Knowing that no purchase commitment can be made without her explicit sign-off above a set dollar threshold — enforced by the system, not by trust",
+        "A real-time view of total authorized spend across all departments without having to ask accounting for a spreadsheet",
+        "Ensuring the business never gets an invoice surprise for a purchase she didn't know was being made",
+        "The ability to see and review every PO that was auto-routed past her approval stage in the Bypassed Approvals queue",
+        "Confidence that the approval trail is clean enough to hold up to an accountant or bank asking about spending controls",
+        "Making sure urgent operational purchases aren't held up in a queue while she's traveling — delegation and escalation must work reliably",
+        "Knowing who owns each supplier relationship and what the business's total exposure to that vendor is at any moment",
+        "A system that new hires can use without extensive training so she isn't the bottleneck for procurement onboarding",
+        "Spend reporting by department and category that she can share with a bookkeeper or CPA without reformatting",
+        "Reducing the informal 'can you just buy this quickly?' requests that bypass any process and create accounting headaches later",
+        "Keeping procurement running when she's unavailable — the system should route or escalate, not stall",
+        "Understanding what the organization has already bought from a vendor before a new PO is raised to the same supplier"
+      ],
+      "decisionCriteria": [
+        "The owner approval queue is genuinely the second gate on high-value purchases — she can verify this by submitting a test PO above the threshold and confirming it reaches her queue before accounting sees it",
+        "Bypassed Approvals shows her every PO the threshold engine routed past her stage, with the routing reason, so nothing is invisible",
+        "Delegation lets her hand her approval authority to a trusted deputy for a defined period without losing the audit trail",
+        "The Reports spend-by-department and vendor-spend CSV give her the cross-department picture her bookkeeper needs at month-end",
+        "Setup and onboarding can be completed by the admin role without a consultant — she can't afford a long implementation",
+        "The system enforces separation of duties so the same person who requests a purchase can't approve it, even if she's unavailable",
+        "Notification rules can be configured so she gets an alert when a high-value PO hits her queue, not just when she logs in",
+        "The vendor directory holds risk classifications and prior PO history, so she knows before approving whether the vendor is new or established",
+        "Pricing is predictable on a per-user or flat-fee basis — no surprise charges when her team grows by two people",
+        "She can export the full audit bundle for any PO as a CSV and hand it to an external auditor without any explanation needed",
+        "The system works on a phone or tablet so she can action approvals from anywhere, not only from a desk",
+        "There is a clear, documented approval matrix she can point to when staff ask why a purchase requires her sign-off"
+      ],
+      "goals": [
+        "Never have an unplanned vendor invoice arrive for a purchase she was unaware of",
+        "Know at any moment what the organization has committed to spend and what is still pending approval",
+        "Have a clean, exportable record of every purchase decision ready for the accountant at year-end",
+        "Remove herself as a bottleneck for routine low-value requests while staying in control of high-value commitments",
+        "Give department managers autonomy to approve small purchases without creating a governance gap",
+        "Ensure new staff understand the purchasing process from day one without requiring her to explain it personally",
+        "Have supplier relationships tracked so she knows who owns each vendor and what the business owes or has committed",
+        "Reduce the time her team spends on purchasing admin so they focus on operational work instead",
+        "Be able to demonstrate to a lender, investor, or auditor that the business has real spend controls in place",
+        "Stop being copied on email threads asking for purchasing approvals — the system should handle the routing",
+        "Have the purchase workflow survive her absence — delegation and notifications must keep things moving",
+        "Catch duplicate or near-duplicate vendor orders before they become committed spend"
+      ],
+      "objections": [
+        "My team is small — if this adds steps to every small purchase, people will work around it instead of using it",
+        "I already have an accounting system; what does PO.vin add that a shared spreadsheet and an email approval chain can't?",
+        "Implementation cost and time — I can't afford to have my office manager tied up for weeks configuring a new system",
+        "If I'm the approver for everything above the threshold, won't I just be approving things on my phone all day?",
+        "What happens to in-flight purchases when we first go live — do I have to enter historical orders manually?",
+        "My team already forwards me emails for approvals; I'm not sure they'll switch to logging into another system",
+        "I'm worried the system forces a rigid process that doesn't accommodate the occasional urgent purchase that needs to move in an hour",
+        "If the threshold engine routes a PO past my stage automatically, how do I know I'm not missing something I should have seen?",
+        "What if someone in accounting has access they shouldn't — can they approve their own purchases?",
+        "How does this handle purchases that don't fit neatly into a category — one-off consultant fees, event costs, unusual capex?",
+        "I don't want to pay per-seat fees for users who submit one purchase a year — the pricing model needs to make sense for a small team"
+      ],
+      "openQuestions": [
+        "Show me exactly what I see when a PO above my threshold lands in my owner approval queue — what information is on the screen before I click approve?",
+        "If I'm away for a week, how do I delegate my approval authority to my COO without losing the audit record of who actually approved it?",
+        "Walk me through the Bypassed Approvals queue — what exactly triggers a PO to bypass my stage, and what does the bypass record show?",
+        "Can I configure different thresholds for different departments, or is it a single threshold across the whole organization?",
+        "What does the vendor directory show me about a supplier before I approve a PO to them — risk level, prior spend, open orders?",
+        "If accounting marks a PO paid but it was never received, where does that show up so I can follow up with the vendor?",
+        "How does the audit-bundle CSV look — is it readable by my CPA, or is it an internal system dump with codes I'd have to explain?",
+        "Can I see a spend-by-department report for the current quarter without running a CSV export every time?",
+        "If a manager approves a PO for one of their own purchases, does the system catch that as a separation-of-duties issue?",
+        "What happens to a PO if the manager it's routed to is deactivated in the system — does it stall, or does it escalate automatically?",
+        "Can I get a notification on my phone when a high-value PO hits my queue, without having to log in to check?",
+        "How long does it realistically take to get the system configured with our vendors, users, and threshold rules before we go live?",
+        "Is there a report that shows me every purchase we've made from a vendor over the past 12 months, so I can use it in a renegotiation?",
+        "If a staff member submits a PO with an inadequate justification, does the system catch that before it reaches my queue or does it come to me incomplete?",
+        "Walk me through what happens when I approve a PO with conditions — what does 'approved with conditions' actually mean downstream in accounting?"
+      ]
+    },
+    {
+      "name": "CEO",
+      "role": "CEO",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "approver",
+      "sortOrder": 1,
+      "interests": [
+        "Ensuring the organization's procurement process reflects well on the business to lenders, investors, and professional advisors",
+        "Having a clear picture of authorized spend and pending commitments when preparing for board discussions or financing conversations",
+        "Knowing that high-value purchases require a documented business justification before they are committed, not after",
+        "Reducing the operational risk of a key approver being a single point of failure when they're traveling or ill",
+        "Receiving timely notification when a PO in his approval queue has been waiting beyond a reasonable window",
+        "Having procurement policy encoded in the system so it doesn't depend on individuals remembering the rules",
+        "Trusting that the separation-of-duties controls prevent anyone from approving their own purchases without oversight",
+        "Being able to review the organization's vendor relationships and identify concentration risk or underused suppliers",
+        "Ensuring the approval process doesn't create friction that pushes operational managers to bypass procurement entirely",
+        "A reporting view that connects purchasing activity to operational departments so he can have fact-based budget conversations with department heads",
+        "Knowing that asset purchases are tracked through receipt and registration, not just approved and forgotten",
+        "Reducing the CEO-as-bottleneck dynamic where operational spend stalls because he's unavailable"
+      ],
+      "decisionCriteria": [
+        "The two-stage approval structure (manager then owner) maps cleanly to how the organization actually operates, without requiring a major restructure of who reports to whom",
+        "He can configure approval thresholds that match the organization's risk appetite — not just a binary all-or-nothing gate",
+        "The system's audit trail is sufficient to satisfy external parties (auditors, bank covenants, due-diligence requests) without supplemental documentation",
+        "Delegation and escalation work reliably so operational spend doesn't stall when he or another approver is unavailable",
+        "The vendor directory and vendor-spend report give him enough visibility to have informed conversations with the finance team about supplier consolidation",
+        "The system can be deployed and adopted by the existing team without a dedicated implementation project or external consultant",
+        "Notification rules alert him when his queue has aging items, so he doesn't need to log in daily to check for stragglers",
+        "The Bypassed Approvals queue gives him retrospective visibility into what the threshold engine cleared without his direct review",
+        "Pricing is predictable and justified relative to the risk and labor cost the system replaces — not a large SaaS commitment for a small team",
+        "The Reports page gives him the cross-department spend summary he currently has to request manually from finance",
+        "Staff adoption is supported by a system that is genuinely simpler than the current email-approval workaround, not just a different interface",
+        "There is a documented role-permission model he can explain to department heads so they understand what they can and can't do"
+      ],
+      "goals": [
+        "Have a procurement process that demonstrates organizational maturity to external parties without requiring a dedicated procurement team",
+        "Reduce the time spent personally adjudicating purchasing requests that should be handled at the manager level",
+        "Ensure that large or unusual purchases have a paper trail that supports the business decision if it's ever questioned",
+        "Give department heads visibility into their own teams' spending without granting them access to other departments' data",
+        "Remove the operational risk of informal purchasing that creates unbudgeted liabilities",
+        "Connect purchasing activity to budget categories so financial reporting reflects real operational spend, not just invoices received",
+        "Have confidence that asset purchases are tracked from approval through receipt and registration, not lost after payment",
+        "Build a procurement foundation that scales as the organization grows without requiring a full process overhaul",
+        "Ensure that vendor relationships are documented and owned, not managed informally through personal relationships",
+        "Reduce the number of surprise invoices that arrive without a corresponding purchase record in the system",
+        "Have a reliable escalation path for urgent purchases so operational needs are met without bypassing all controls",
+        "Create conditions where finance can close each period without scrambling to account for undocumented purchases"
+      ],
+      "objections": [
+        "If I'm listed as an owner-stage approver, am I going to be the second bottleneck on every significant purchase in the organization?",
+        "We've tried to implement purchasing processes before and they fell apart because managers just emailed me directly — what makes adoption stick this time?",
+        "I'm concerned about the threshold configuration — if we set it too low, everything hits my queue; too high, and the control is meaningless",
+        "What's the implementation timeline, and who on my team owns the configuration — I can't spare my office manager for a long setup project",
+        "If the system routes a purchase to the wrong person because the manager assignment wasn't set correctly, who catches that?",
+        "How does this integrate with our accounting system — do we duplicate entry, or is there a data flow that reduces that work?",
+        "I worry that adding a formal system will slow down genuinely urgent purchases that need to move in a day",
+        "What happens to the existing vendor relationships and historical purchase data — do we start from scratch?",
+        "If the system goes down, what's the fallback process so operations don't stall waiting for an approval?",
+        "Separation of duties is important to me, but I also need to be pragmatic — can I grant exceptions for specific roles in specific situations?",
+        "The cost needs to justify itself against the labor we're currently spending on email-based approval coordination"
+      ],
+      "openQuestions": [
+        "Show me the owner approval queue — when a PO arrives requiring my sign-off, what does my screen look like and what information do I have before I decide?",
+        "Walk me through how approval thresholds are configured — can I set different bands for capital vs. expense purchases, or is it purely by dollar amount?",
+        "What does the Bypassed Approvals queue show me — specifically, what was the routing logic that cleared a PO past my stage without my review?",
+        "If I want to approve a PO but with a specific condition attached — for example, 'order only after budget confirmation' — how does that get captured and communicated to accounting?",
+        "Can I see a spend-by-department summary for the current period without exporting a CSV every time I want to check in?",
+        "How does delegation work in practice — if I assign my approval authority to the COO for two weeks, what exactly changes in the routing, and is my delegation logged?",
+        "If a manager approves a PO raised by one of their own direct reports and then also processes the payment, does the system flag that?",
+        "Walk me through the Bypassed Approvals view for a PO that was auto-cleared — what justification is recorded, and who can review it?",
+        "What's the process for a vendor that's flagged as high-risk in the directory — does that change the approval routing, or is it just informational?",
+        "Can the system generate a report showing all purchases over a threshold value in the past 12 months, suitable for a due-diligence request?",
+        "How long does initial configuration realistically take — setting up users, vendors, thresholds, and notification rules — and who does that work?",
+        "What happens if a manager approves a PO and then leaves the organization before the payment is processed — is the approval still valid, or does it require re-approval?",
+        "Can I configure the system so that new-vendor POs always route to the owner stage regardless of dollar amount?",
+        "If I want to put a department's purchasing activity on hold while we review their budget, can I do that without deactivating users?",
+        "Show me the audit-bundle CSV for a PO — what does a CPA or external auditor actually see when I hand them that file?"
+      ]
+    },
+    {
+      "name": "COO",
+      "role": "COO",
+      "influence": "high",
+      "riskLevel": "medium",
+      "decisionAuthority": "approver",
+      "sortOrder": 2,
+      "interests": [
+        "Making sure operational purchases move through the approval workflow quickly enough that staff aren't waiting on procurement when they have work to do",
+        "Having a clear view of what each department has pending, approved, and received so she can manage operational capacity and resources accurately",
+        "Knowing that urgent-flagged POs are treated differently in the queue so time-sensitive operational needs get a faster response",
+        "Understanding how the delegation feature works so she can cover for the owner or CEO during periods when they're unavailable",
+        "Ensuring the system doesn't add so much friction that operational managers start working around it with verbal or email approvals",
+        "Tracking the status of equipment and asset purchases from approval through receipt so she knows when operational capacity is actually expanding",
+        "Having enough visibility into the manager review queues to identify when a specific manager is sitting on approvals that are blocking operations",
+        "Ensuring supplier requests tied to operational projects are tracked and can be pulled up quickly when a project team needs to reference them",
+        "Being able to see what purchases are on hold and why, so she can unblock them when the hold reason is resolved",
+        "Reducing the number of 'where is that PO?' conversations she has with managers and accounting every week",
+        "Knowing that the SLA compliance metric on the admin dashboard reflects realistic service-level expectations for each approval stage",
+        "Receiving escalations directly when a PO in the manager queue is aging beyond a reasonable window and no action has been taken"
+      ],
+      "decisionCriteria": [
+        "The manager review queue UI makes it fast for managers to approve, reject, or clarify a PO — ideally in under a minute for routine requests",
+        "Urgent flagging is visible in the queue and actually changes the sort order so time-critical items don't get buried",
+        "The escalation path from manager to owner is reliable and fast — she needs confidence that an unresponsive manager won't stall operations",
+        "She can see all POs for a department from the Registry with a department filter, without needing accounting-level access",
+        "The Reports stage-timing chart gives her objective data on where approvals are slowing down, not just anecdotal manager feedback",
+        "Delegation can be assigned quickly when a manager is unexpectedly unavailable — she doesn't want to wait for an admin to reconfigure routing",
+        "The system's notification rules alert managers to their queue without requiring daily logins, so approvals don't depend on check-in behavior",
+        "Asset-line POs show equipment records after receipt so she knows operational assets are registered, not just paid for and forgotten",
+        "The Receive Queue and Receive Mode give her team a clear picture of what has been paid but not yet received",
+        "Hold and Resume actions work cleanly so she can pause a purchase while verifying a budget or vendor situation without losing the PO",
+        "The system is usable on a phone or tablet so field managers can action queue items without needing to be at a desk",
+        "Manager queue scoping works correctly — each manager only sees their own direct reports' POs, not the whole organization's"
+      ],
+      "goals": [
+        "Eliminate the scenario where an operational purchase is delayed because it's sitting in an approver's queue unnoticed",
+        "Have a real-time view of what each department is spending and what's pending approval so she can manage budgets proactively",
+        "Make sure that urgent operational needs — equipment, supplies, services — can be approved and processed within the same business day when necessary",
+        "Remove herself as a verbal escalation path for stuck approvals by having a formal escalation function in the system",
+        "Ensure operational managers adopt the system willingly because it genuinely simplifies their approval workflow, not because they're mandated to use it",
+        "Track asset purchases from approval through registration so she has an accurate picture of operational capacity at any time",
+        "Reduce the time she spends each week fielding status questions about specific purchase orders from managers and staff",
+        "Have a reliable record of what each vendor has been contracted for, so operational project planning is based on facts not memory",
+        "Ensure the approval SLA for routine operational purchases is met consistently, measurable from Reports stage-timing data",
+        "Give the CEO confidence that operational spend is controlled without requiring her to escalate every decision",
+        "Streamline the month-end process so accounting isn't chasing department managers for missing receipts or PO references",
+        "Have a clear audit trail for asset purchases that tracks custody from the point of receipt through reassignment or retirement"
+      ],
+      "objections": [
+        "If every manager has their own queue and I can't see across queues as COO, how do I catch a situation where approvals are stacking up because a manager is absent?",
+        "Escalation sounds useful in theory, but if it just fires the PO up to the CEO's queue, I'm not solving the bottleneck — I'm just moving it",
+        "Operational managers are already stretched — adding a daily login to a new system to check a queue is a habit change I'm not sure they'll sustain",
+        "If a manager is set up incorrectly in the system (wrong direct reports assigned), how quickly can an admin fix that, and what happens to POs already in the queue?",
+        "I'm worried about the 'clarification cycle' — if a PO bounces back for clarification repeatedly, it could stall for days; is there a way to track how many times a PO has been returned?",
+        "What happens to urgent purchases when the system is unavailable — do we have a documented fallback, or does everything stop?",
+        "I need to be able to reassign an aging approval to myself or another manager without the original manager being available to log in and delegate",
+        "The equipment registration feature sounds valuable, but only if the accounting team actually completes the asset metadata during receipt — what enforces that?",
+        "I'm concerned that the hold function could be misused to park inconvenient POs indefinitely — is there a way to see all POs on hold and how long they've been there?",
+        "If approvals route through me, will I get buried in low-value sign-offs instead of only the exceptions that actually need an operator’s call?"
+      ],
+      "openQuestions": [
+        "Show me the manager review queue from a manager's perspective — when they log in, what do they see first, and how is the queue sorted?",
+        "How does the urgent flag on a PO affect its position in the manager queue — does it go to the top automatically, or does the manager have to filter for it?",
+        "If I need to cover for the CEO on owner approvals while they're away, how does delegation actually work from a workflow perspective — does the routing change immediately?",
+        "Walk me through what happens when I escalate a PO from the manager stage to the owner stage — what does the owner see, and does the original manager still see the PO?",
+        "Can I see the full Registry filtered by department and status as a COO without having accounting-level access to the system?",
+        "How does the stage-timing report break down dwell time by approval stage — can I see which specific manager queues are consistently slow?",
+        "If a manager's direct-report assignment is wrong and their queue is empty, how quickly can an admin fix that and will it pull the correct POs in retroactively?",
+        "Walk me through the hold and resume workflow on a PO — who can put a PO on hold, who can resume it, and is there an audit record of both actions?",
+        "When a PO with asset lines is received, what does the equipment registration process look like — is it a required step before the PO can be closed?",
+        "Can I run a report showing all POs that are currently on hold, sorted by how long they've been in that state?",
+        "What does the Receive Queue look like from accounting's perspective — does it show all paid POs awaiting receipt, and can I see which ones are aging?",
+        "If a manager approves a PO and then needs to revoke that approval — for example, budget was cut — is that possible, or is an approval terminal?",
+        "How does the duplicate-vendor banner work in practice — when does it appear, and what information does it show about prior POs to that vendor?",
+        "Can I see the SLA compliance metric broken down by approval stage on the admin dashboard, or is it a single aggregate number?",
+        "Walk me through how a PO looks in the Activity timeline after it's been through a clarification cycle — can I see each back-and-forth exchange as a discrete event?"
+      ]
+    },
+    {
+      "name": "Comptroller",
+      "role": "Comptroller",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "approver",
+      "sortOrder": 3,
+      "interests": [
+        "Ensuring every purchase order that reaches the payment stage has a complete, valid GL account on every line — the Finalize gate must be enforced, not optional",
+        "Having a documented separation-of-duties structure that prevents the person who initiates a payment from also marking it paid",
+        "Knowing that the audit trail for every PO is complete and exportable without any manual reconstruction before month-end close",
+        "Ensuring that approval bypasses are visible and logged — he needs to know what the threshold engine cleared without an owner review",
+        "Having reliable controls over who can access the GL accounts chart and make changes that affect how PO lines are coded",
+        "Tracking which POs are in the payment queue vs. in-flight vs. awaiting receipt, so he can reconcile cash disbursements accurately",
+        "Ensuring that asset-line POs create corresponding equipment records on receipt, so fixed-asset schedules don't require manual reconstruction from invoices",
+        "Having the ability to reassign aging approvals in the accounting payment queue if a staff member is absent during a critical close window",
+        "Understanding what the 'approved-conditional' status means in practice — what conditions are recorded and whether accounting staff can see them",
+        "Having a reporting view that shows authorized spend by GL account and department for the current period without a manual export every time",
+        "Ensuring that vendor payments are tied back to a specific approved PO so every disbursement has a corresponding authorization record",
+        "Knowing that the system's GL account archive function prevents deletion of accounts referenced by finalized POs, preserving the integrity of historical records"
+      ],
+      "decisionCriteria": [
+        "The Finalize gate structurally refuses to close a PO with any line missing a GL account — this must be demonstrably enforced, not just documented",
+        "Separation of duties on payment is real: the user who starts payment processing cannot also mark the PO paid — verified by attempting it in a demo environment",
+        "Every governed mutation (approve, reject, pay, receive, finalize, override) is captured in the Audit tab and exportable via the audit-bundle CSV",
+        "Bypassed Approvals queue shows the specific threshold-routing logic that cleared each PO, so he can answer auditor questions about missing owner sign-off",
+        "GL accounts cannot be deleted — only archived — so finalized POs never reference a code that no longer exists in the chart",
+        "The accounting payment queue separates Pending Payment from In Payment so his staff can see exactly what is waiting to be processed vs. already in flight",
+        "Asset receipts automatically create equipment records in the asset registry — he can verify this by receiving an asset-line PO in a demo",
+        "The CSV exports (audit bundle, open-PO aging, vendor spend) are formatted so his bookkeeper or external CPA can use them without reformatting",
+        "Approved-conditional POs show the recorded condition in the PO detail so accounting staff know what to verify before processing payment",
+        "The system's role model gives accounting access to GL accounts, locations, and the receive queue without requiring admin-level access to all settings",
+        "Notification rules alert accounting staff when a PO enters the payment queue, so items don't sit unprocessed because no one checked the queue",
+        "A SOD override is possible for specific situations, but the override is recorded in the audit trail — he can see who overrode what and when"
+      ],
+      "goals": [
+        "Close each accounting period without chasing department managers for missing PO references or undocumented purchases",
+        "Have a complete, exportable audit record for every PO that satisfies an external auditor without supplemental documentation",
+        "Eliminate the risk of a disbursement being made without a corresponding approved PO in the system",
+        "Ensure that every GL code on every finalized PO is valid and traceable to the chart of accounts at the time of finalization",
+        "Maintain a fixed-asset schedule that is populated automatically from PO receipts rather than manually from invoices",
+        "Have clear visibility into the payment pipeline — what is approved and waiting, what is in processing, what has been paid and not yet received",
+        "Enforce the organization's separation-of-duties policy structurally so it doesn't depend on individual staff following a procedure",
+        "Reduce the time his team spends per month on payment-queue management and receipt reconciliation",
+        "Ensure that conditional approvals are clearly communicated to accounting so no PO is paid without the stated condition being verified",
+        "Have a vendor spend report that shows total disbursements by vendor for the period, usable in cash-flow analysis and vendor negotiations",
+        "Ensure the organization can respond to a bank or auditor request for purchasing controls documentation within a day, not a week",
+        "Maintain GL account integrity — archived accounts must not affect finalized PO records, and new accounts must go through a controlled creation process"
+      ],
+      "objections": [
+        "If a manager approves a PO and then goes on leave before it reaches accounting, can I reassign the accounting-stage actions without the original approver being available — or does it stall at the payment queue?",
+        "The separation-of-duties control on payments sounds correct on paper, but what happens in a small team where the same two people handle all accounting functions — does the system have a practical workaround that is still logged?",
+        "I need to see conditional approvals before I authorize payment — if the owner records a condition in a comment field that my staff might miss, that's a control gap",
+        "How does the Finalize step interact with our accounting system — does it produce output I can import into the GL, or does my team still do manual journal entries?",
+        "If the audit-bundle CSV is the primary evidence for an auditor, I need to know it is tamper-evident — how do I know no one has edited the audit trail after the fact?",
+        "The asset registry auto-creation on receipt sounds useful, but if my team skips the asset metadata fields during receipt, the records are incomplete — what enforces completeness?",
+        "I'm concerned about a scenario where accounting staff mark a PO paid, the PO is then received, but the vendor invoice is different from the PO amount — where is that discrepancy visible?",
+        "If we archive a GL account mid-year, what happens to draft POs that already reference that account — do they fail silently or is there an explicit error?",
+        "What is the system's process for voiding or cancelling a PO that is already in the payment queue — can accounting do that, or does it require owner action?",
+        "When an auditor asks who approved a PO and why, can I pull the full approval trail in seconds, or am I reconstructing it from emails again?"
+      ],
+      "openQuestions": [
+        "Show me the accounting payment queue — what does my staff see for a PO in Pending Payment vs. one that's moved to In Payment, and what actions are available at each stage?",
+        "Walk me through the Finalize step — what exactly happens when I click Finalize on a fully received PO, and what does the system check before it allows it?",
+        "If a manager is out and a PO is aging in the payment queue, how does accounting escalate or reassign it without the original approver's involvement?",
+        "Demonstrate the separation-of-duties enforcement on payment — show me what happens when the user who started the payment tries to also mark it paid",
+        "What does an approved-conditional PO look like in the accounting queue — is the condition text visible to my staff before they initiate payment?",
+        "Walk me through the audit-bundle CSV for a completed PO — specifically, does it capture the bypass record if the owner stage was skipped by the threshold engine?",
+        "How does the GL accounts admin work — can my accounting staff create, edit, and archive accounts, or does that require admin access?",
+        "Show me what happens when I receive an asset-line PO — what equipment record is created, what metadata is required, and where does it appear in the asset registry?",
+        "If I archive a GL account that a draft PO already references, does the system surface an explicit error on the draft, or does it only fail at Finalize?",
+        "Can the open-PO aging CSV be scheduled or does it require a manual download each time — and what date range does it cover?",
+        "Walk me through a SOD override — when and how can it be done, who can authorize it, and what exactly does the audit trail record?",
+        "What does the vendor spend CSV show me — is it per-period by vendor, or cumulative, and does it include only paid POs or all authorized POs?",
+        "If a PO is in the payment queue and we discover the vendor is wrong, what is the correct workflow — cancel and re-raise, or can it be corrected from the detail page?",
+        "How do I configure notification rules so my accounting team gets alerted when a PO enters the payment queue without waiting for a manager to tell them?",
+        "Show me the Bypassed Approvals queue — specifically, what threshold-routing information is recorded so I can explain to an auditor why a large PO didn't require owner sign-off?"
+      ]
+    },
+    {
+      "name": "Finance Manager",
+      "role": "Finance Manager",
+      "influence": "medium",
+      "riskLevel": "medium",
+      "decisionAuthority": "evaluator",
+      "sortOrder": 4,
+      "interests": [
+        "Having a real-time view of authorized spend by department and budget category so she can produce variance reports without waiting for accounting to send a spreadsheet",
+        "Knowing that every PO submitted links to a budget category, so spend reports reflect actual purchasing intent rather than invoices received after the fact",
+        "Tracking which POs are at what stage so she can forecast cash requirements accurately — especially the split between approved-but-not-paid and paid-but-not-received",
+        "Having an open-PO aging report that identifies purchases that have been approved but not received within an expected window",
+        "Ensuring that the GL coding on PO lines is completed before Finalize, so her GL import reflects the correct account classifications from day one",
+        "Having a vendor-spend report that she can use as a starting point for periodic vendor review conversations with department heads",
+        "Ensuring that budget-category tagging on PO submissions is enforced, not optional — a blank budget category creates blind spots in her reporting",
+        "Understanding how the Receive Queue works so she can track the gap between authorized spend (approved POs) and recognized spend (received goods)",
+        "Having access to the asset custody CSV so she can reconcile fixed-asset records without manually cross-referencing invoices and the asset registry",
+        "Being notified when a high-value PO enters the payment queue so she can review the GL coding and conditions before payment is initiated",
+        "Knowing that duplicate vendor orders are surfaced at the point of submission, so the same purchase isn't committed twice and recorded as two separate transactions",
+        "Having the Reports spend analytics cover the correct time window — she needs to be able to pull last quarter vs. current quarter vs. trailing 90 days"
+      ],
+      "decisionCriteria": [
+        "The spend-by-department and spend-by-category report is accurate and current without requiring a manual data extract from accounting",
+        "Budget category is a required field on every PO submission — the wizard enforces it so her reports don't have a blanket 'uncategorized' line",
+        "Open-PO aging CSV shows POs by approved date and remaining-to-receive status so she can identify stale commitments before period close",
+        "The Reports quarter selector allows her to compare current-quarter spend to prior quarters with a single UI change, not a re-export",
+        "Vendor spend CSV breaks down disbursements by vendor so she can identify concentration risk and over-reliance on single suppliers",
+        "Asset custody CSV from Reports reconciles with the asset registry so fixed-asset reporting doesn't require a separate manual process",
+        "GL account assignment at Finalize is enforced structurally — she can demonstrate that a PO without complete GL coding cannot be finalized",
+        "The accounting payment queue separates pending from in-flight payments so she can project cash outflows for the week without calling accounting",
+        "The Registry's CSV export includes amount, department, budget category, and status so she can do ad-hoc spend analysis without a BI tool",
+        "Notification rules can be configured to alert her when a PO over a threshold enters the payment queue, giving her time to review coding before payment",
+        "The system's reporting window covers at least rolling 12 months so she can do year-over-year comparisons for budget-planning season",
+        "Her role gives her read access to all POs across departments in the Registry without requiring admin credentials"
+      ],
+      "goals": [
+        "Produce accurate, current budget-versus-actual reports for each department without waiting for accounting to send a spreadsheet",
+        "Forecast cash requirements accurately by knowing what is approved-and-unpaid vs. paid-and-unreceived at any point in the month",
+        "Ensure that every purchase commitment is coded to the correct GL account and budget category before it becomes a line item in the general ledger",
+        "Identify stale open POs — approved but not received within a reasonable window — so she can investigate or close them before period end",
+        "Have a vendor spend view that she can bring to a vendor review meeting without extracting and formatting data from multiple sources",
+        "Reduce the time she spends at month-end reconciling fixed-asset purchases against invoices because the asset registry is populated automatically on receipt",
+        "Ensure that conditional approvals don't result in payments being made before the stated conditions are verified by someone in finance",
+        "Have a reporting view that covers both authorized spend (approved POs) and committed spend (paid POs) so she can track both sides of the cash position",
+        "Build the habit among department managers of including accurate budget categories and cost centers on PO submissions so her reports are reliable from submission, not just at finalize",
+        "Reduce the end-of-period scramble to identify undocumented purchases by having a complete PO registry that accounts staff can reference",
+        "Have enough visibility into the receive queue to follow up on paid POs that are overdue for receipt, reducing accrual estimates at period close",
+        "Support the comptroller's audit-readiness goals by ensuring that the GL data in PO.vin and the accounting system are in sync after each Finalize event"
+      ],
+      "objections": [
+        "The spend reports are only useful if managers actually complete the budget category field on every submission — what happens to POs submitted with a blank category?",
+        "I need the GL coding to match our chart of accounts exactly — if a submitter can type a free-text GL account that doesn't exist in the master list, that creates reconciliation work for me",
+        "If the open-PO aging CSV only covers the current quarter, it won't help me with long-running capital commitments that span multiple periods",
+        "I'm concerned that 'approved spend' and 'authorized spend' are used differently in the Reports tiles — can you clarify exactly what each stat tile counts and excludes?",
+        "If I'm the Finance Manager but not the Comptroller, what read access do I actually have — can I see all departments' POs in the Registry, or only the ones I'm assigned to?",
+        "The vendor spend CSV is only useful for period analysis — I also need to see current open POs per vendor to manage concentration risk in real time",
+        "How does the system handle a PO where the invoice amount differs from the approved PO amount — is there any variance capture, or does that live entirely in the accounting system?",
+        "If we have a large number of POs to import at go-live, is the bulk CSV importer reliable enough for the initial data load, and what's the recovery process if the commit has errors?",
+        "I need the asset custody report to reconcile with our fixed-asset register — if the asset registry in PO.vin uses different category names than our accounting system, the reconciliation creates manual work",
+        "If a PO is raised against a budget line that’s already overcommitted, does PO.vin stop it at request time or do I only find out at month-end?"
+      ],
+      "openQuestions": [
+        "Show me the Reports page — specifically the spend-by-department and spend-by-category views for the current quarter, and tell me exactly what is included in the 'Authorized' stat tile vs. the 'Total Requested' tile",
+        "Walk me through the quarter selector on Reports — can I pull a comparison between Q1 and Q2 spend by department without exporting two separate CSVs?",
+        "What does the open-PO aging CSV show me — specifically, does it include POs that are approved but not yet paid, or only POs that are paid but not yet received?",
+        "If a manager submits a PO without a budget category, does the wizard reject it, or does it allow submission and flag it somewhere for review?",
+        "How does the GL account picker in the PO wizard work — is it constrained to the chart of accounts in GL Accounts Admin, or can a submitter enter a free-text value?",
+        "Show me the vendor spend CSV — does it show total authorized spend or total paid spend per vendor, and what date range does it default to?",
+        "Walk me through what happens when an asset-line PO is received — what exactly appears in the asset registry, and does the asset custody CSV on Reports reflect it immediately?",
+        "As Finance Manager with a non-admin role, what can I see in the Registry — is it all POs across all departments, or scoped to my department?",
+        "How does the system handle a situation where the same vendor submits invoices against multiple open POs — can I see all open POs for a vendor in one view?",
+        "What is the difference between a PO in 'In Accounting' status and one in 'Processing Payment' status from a cash-flow forecasting perspective?",
+        "Can I export the full Registry list — including status, department, budget category, amount, and vendor — as a CSV for ad-hoc analysis in a spreadsheet?",
+        "Show me what the accounting dashboard looks like — specifically the 'Ready for Payment' and 'Awaiting Receipt' counts and whether I can drill into each from that screen",
+        "If I need to flag a PO for finance review before payment is initiated, is there a mechanism for that within the workflow, or do I need to contact accounting directly?",
+        "How does the inventory aging CSV differ from the open-PO aging CSV — what question does each answer, and when would I use one vs. the other?",
+        "Walk me through the bulk CSV import for GL accounts — what does the dry-run output look like if I have rows with errors, and can I fix and re-run without re-uploading the whole file?"
+      ]
+    }
+  ]
+}

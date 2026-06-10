@@ -9,10 +9,16 @@
  */
 import { readFile, mkdir } from 'node:fs/promises';
 import { buildGraph } from './graph.js';
+import { getLlm } from './llm.js';
 import { createDemoSession } from './session.js';
+import { journeyWalkPlan, startJourneyRun, completeJourneyRun } from './journeys.js';
 import { beginCostSession, sessionCost } from './cost.js';
 import { db } from './db.js';
 import type { ExecutionMode } from './safety.js';
+import { loadPersona, personaPreamble, handoffSuggestionFor, type Persona } from './persona.js';
+import { getStakeholders, type Stakeholder } from './stakeholders.js';
+import { getDiscovery } from './discovery.js';
+import { validateCompliance, shouldCite, recordEscalation, recordAuditTurn, type ComplianceResult } from './governance.js';
 
 export type Emit = (ev: Record<string, unknown>) => void;
 
@@ -25,6 +31,11 @@ export interface SessionTarget {
   baseUrl?: string | null;    // optional per-session URL override for the chosen product's adapter
   scenario?: string | null;   // optional opening question/scenario the engine asks first (entry-point concern)
   clientNav?: boolean | null; // desktop embedded browser drives navigation (no server Playwright/screenshot)
+  personaId?: string | null;  // active specialist persona (hand-off); null = the lead consultant (no overlay)
+  seedRoom?: boolean | null;  // seed the synthetic multi-stakeholder fixture? Scripted demos only — LIVE
+                              // interactive/voice default OFF so the AI never addresses people who don't exist.
+  journeyId?: string | null;  // V5: pin a journey — the loop WALKS its story_flow on verified rails instead
+                              // of free-roaming. null = ad-hoc/off-script (today's intent-driven default).
 }
 
 // Operator-selectable execution modes. 'execution' (full-write) is an explicit, warned per-session
@@ -40,11 +51,23 @@ export interface SessionCtx {
   baseUrl: string | null;
   clientNav: boolean;
   sessionId: string;
+  // Active specialist persona id (mutable — a hand-off updates it so subsequent turns use the new
+  // specialist's overlay/voice/gate). null = the lead consultant (no overlay; default behavior).
+  personaId: string | null;
+  journeyId: string | null; // pinned journey the loop walks (null = off-script / intent-driven default)
   graph: ReturnType<typeof buildGraph>;
   thread: { configurable: { thread_id: string } };
 }
 
 export const LOOP = ['Intent', 'Retrieve', 'Navigate', 'Demonstrate', 'Explain', 'Follow-up', 'Return'];
+
+// Baseline "brain" for the always-on Lead Consultant (no specialist handed off). Gives the default
+// voice a real consultant personality so answers are composed + human — not a robotic canned line.
+const LEAD_PREAMBLE =
+  'You are the VIN Lead Consultant running a live product demo for enterprise stakeholders. You are ' +
+  'consultative, clear, and outcome-oriented: understand intent, connect features to business value, ' +
+  'and keep the room engaged. You coordinate specialist hand-offs when a question needs deep expertise. ' +
+  'Never over-commit on legal, security, pricing, or roadmap. Speak naturally and concisely, never robotically.';
 
 async function shot(): Promise<string | null> {
   try { return 'data:image/png;base64,' + (await readFile('tmp/live/last.png')).toString('base64'); }
@@ -72,28 +95,76 @@ export async function bootSession(threadPrefix = 'live', target: SessionTarget =
   const productName = p.rows[0]?.name;
   if (!productName) return null; // unknown product id (operator picked something not in this workspace)
 
-  const session = await createDemoSession(productId, mode);
+  // Default OFF for bootSession callers: interactive + voice are LIVE single-operator sessions where a
+  // fabricated audience made the AI address fictional attendees. The reel opts back in (scripted showcase).
+  const journeyId = target.journeyId?.trim() || null;
+  const session = await createDemoSession(productId, mode, target.seedRoom ?? false, journeyId);
   beginCostSession(session.id);
   const graph = buildGraph();
   const thread = { configurable: { thread_id: `${threadPrefix}-${session.id}` } };
-  return { productId, productName, role, mode, baseUrl, clientNav, sessionId: session.id, graph, thread };
+  const personaId = target.personaId?.trim() || null;
+  return { productId, productName, role, mode, baseUrl, clientNav, sessionId: session.id, personaId, journeyId, graph, thread };
+}
+
+/** Stakeholder intelligence + relationship memory (REUSES the existing session stakeholder collection +
+ *  discovery — no new memory model). Builds an `audience` line (who's in the room) + `priorContext`
+ *  (objective / pain points / signals raised so far) the composer can reference per participationMode. */
+async function gatherRoom(sessionId: string | null, active: Stakeholder | null | undefined): Promise<{ audience: string; priorContext: string }> {
+  if (!sessionId) return { audience: '', priorContext: '' };
+  try {
+    const [people, disc] = await Promise.all([getStakeholders(sessionId), getDiscovery(sessionId)]);
+    // Stakeholder governance the specialist should weigh: decision authority · influence · risk level.
+    // (riskLevel was seeded + shown in the console but never reached the brain — now it does.)
+    const auth = (s: Stakeholder) => {
+      const bits = [
+        s.decisionAuthority && s.decisionAuthority !== 'none' ? s.decisionAuthority.replace(/_/g, ' ') : '',
+        s.influence ? `${s.influence} influence` : '',
+        s.riskLevel ? `${s.riskLevel} risk` : '',
+      ].filter(Boolean);
+      return bits.length ? `, ${bits.join('/')}` : '';
+    };
+    const fmt = (s: Stakeholder) => `${s.name ?? 'someone'}${s.role ? ` (${s.role}${auth(s)})` : ''}${s.interests.length ? ` — cares about ${s.interests.slice(0, 2).join(', ')}` : ''}${s.openItems.length ? `; open items: ${s.openItems.slice(0, 2).join(', ')}` : ''}`;
+    const activeP = active ?? people.find((p) => p.isActive) ?? null;
+    const others = people.filter((p) => p.id !== activeP?.id);
+    const audience = people.length
+      ? `Speaking now: ${activeP ? fmt(activeP) : 'unknown'}.${others.length ? ` Also in the room: ${others.map(fmt).join('; ')}.` : ''}`
+      : '';
+    const priorContext = [
+      disc.businessObjective ? `objective — ${disc.businessObjective}` : '',
+      disc.painPoints.length ? `pain points raised — ${disc.painPoints.slice(0, 3).join('; ')}` : '',
+      disc.buyingSignals.length ? `buying signals — ${disc.buyingSignals.slice(0, 3).join('; ')}` : '',
+    ].filter(Boolean).join(' · ');
+    return { audience, priorContext };
+  } catch { return { audience: '', priorContext: '' }; }
 }
 
 /** Run ONE turn through the brain and emit its events. Same logic whether the utterance came from the
  *  reel, a typed message, or speech — that's how voice/text stay a thin channel over one brain. */
-export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: string; loop?: number }, emit: Emit): Promise<void> {
+export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: string; loop?: number; node?: string; advance?: boolean }, emit: Emit): Promise<void> {
   emit({ type: 'message', side: 'them', who: turn.speaker, role: turn.speaker, text: turn.text, tag: 'question' });
   emit({ type: 'beat', loopIdx: 0, phase: 'Understand intent', brain: `Parsing the question and planning the demo.`, sub: 'interpret' });
 
+  // Active specialist (if handed off): its overlay shapes the explain/discovery text and its confidence
+  // threshold tightens the gate — a real per-persona effect on the interactive/voice answer path, not
+  // just the desktop drive loop. null personaId / non-approved persona → lead consultant (no overlay).
+  const persona: Persona | null = await loadPersona(ctx.personaId);
+  // Every answer is composed in a real voice — the active specialist's, or the Lead Consultant's baseline.
+  const preamble = persona ? personaPreamble(persona) : LEAD_PREAMBLE;
+  const minConfidence = persona?.confidenceThreshold ?? null;
+  const knowledgePriority = persona?.knowledgePriority ?? [];
+  const aiWho = persona?.name ?? 'Consultant'; // surface the active specialist as the answering voice
+
   let out: any;
   try {
-    out = await ctx.graph.invoke({ utterance: turn.text, speaker: turn.speaker, productId: ctx.productId, sessionId: ctx.sessionId, role: ctx.role, mode: ctx.mode, baseUrl: ctx.baseUrl, clientNav: ctx.clientNav }, ctx.thread);
+    out = await ctx.graph.invoke({ utterance: turn.text, speaker: turn.speaker, productId: ctx.productId, sessionId: ctx.sessionId, role: ctx.role, mode: ctx.mode, baseUrl: ctx.baseUrl, clientNav: ctx.clientNav, navHint: turn.node ?? null, journeyId: ctx.journeyId, journeyAdvance: turn.advance ?? false, personaPreamble: preamble, minConfidence, knowledgePriority }, ctx.thread);
   } catch (e: any) {
-    emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: `(engine error: ${e?.message ?? e})`, uncertain: true });
+    emit({ type: 'message', side: 'ai', who: aiWho, role: 'VIN Demo', text: `(engine error: ${e?.message ?? e})`, uncertain: true });
     return;
   }
 
   const top = out.retrieved?.[0];
+  // Recency (days since last verified) — feeds the trust panel + the AI's recency-honest hedging (Phase B).
+  const recencyDays = top?.last_verified ? Math.floor((Date.now() - Date.parse(top.last_verified)) / 86_400_000) : null;
   emit({
     type: 'beat',
     loopIdx: turn.loop ?? (out.interpretation?.isMetaExplain ? 4 : out.gated ? 2 : 3),
@@ -104,35 +175,95 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
   });
 
   const navigated = !!out.navAction || !!out.navigation?.ok;
-  // Show the closest source when we have one and either it's confident OR we still navigated to a screen.
+  const band: 'high' | 'medium' | 'low' | 'very_low' = out.band ?? (out.gated ? 'very_low' : 'medium');
+  const hasSource = !!(!out.gated && top);
+  // Knowledge governance: the trust panel shows the source (operator transparency) when present + relevant.
   if (top && (!out.gated || navigated)) {
-    emit({ type: 'cite', k: { title: String(top.content).slice(0, 64), content: top.content, source: top.source, conf: top.confidence, ver: String(top.product_version ?? '').replace(/^v/i, ''), status: top.validation_status, verified: top.last_verified, type: top.category ?? 'docs' } });
+    emit({ type: 'cite', k: { title: top.source_title ?? String(top.content).slice(0, 64), content: top.content, source: top.source, conf: top.confidence, ver: String(top.product_version ?? '').replace(/^v/i, ''), status: top.validation_status, verified: top.last_verified, type: top.category ?? 'docs', lifecycle: top.lifecycle_state ?? null, owner: top.source_owner ?? null, validatedBy: top.validated_by ?? null, validatedAt: top.validated_at ?? null, recencyDays } });
   }
   if (out.navAction) {
-    // Client-driven: tell the embedded browser to navigate (click the labeled element) in the operator's
-    // own logged-in session. No server screenshot — the live pane IS the view.
     emit({ type: 'nav', clientDriven: true, label: out.navAction.label, selectors: out.navAction.selectors ?? [], url: out.navAction.url ?? '', healedVia: null });
   } else if (out.navigation?.url) {
     emit({ type: 'nav', url: out.navigation.url, healedVia: out.navigation.healedVia ?? null, screenshot: await shot() });
   }
   if (out.blockedMutations?.length) emit({ type: 'blocked', actions: out.blockedMutations });
 
-  const screen = out.navAction?.label ?? 'the relevant screen';
-  if (out.explanation) emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: out.explanation, uncertain: !!out.gated });
-  else if (!out.gated && top) emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: String(top.content) });
-  // Gated but we still navigated: show the live product, be honest about the specifics (never invent).
-  else if (out.gated && navigated) emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: `Here's ${screen} — I'm taking you to the live product. I don't have a verified source for the exact details of that, so I won't guess; want me to walk through what's on screen?`, uncertain: true });
-  else emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: "I'm not certain about that — let me show you the source rather than guess.", uncertain: true });
+  const screen = out.navAction?.label ?? out.navigation?.url ?? 'the relevant screen';
+  // ── COMPLIANCE GATE (Behavior + Knowledge governance) — validate BEFORE generating the answer.
+  const compliance: ComplianceResult = validateCompliance({ persona, text: `${turn.text} ${out.interpretation?.intent ?? ''}`, band, hasSource });
+  let escalation: { trigger: string; reason: string; toPersona: string | null } | null = null;
 
-  if (out.discoveryPrompt) emit({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text: out.discoveryPrompt, tag: 'discovery' });
+  if (out.explanation) {
+    // Meta-explain / govern / resume — already composed in-voice via explainWhy.
+    emit({ type: 'message', side: 'ai', who: aiWho, role: 'VIN Demo', text: out.explanation, uncertain: !!out.gated });
+  } else if (!compliance.ok) {
+    // A guardrail fired → DEGRADE: never emit the ungoverned answer. Record + (on escalate) suggest a hand-off.
+    const cat = (compliance.violations.find((v) => v.layer === 'behavior')?.rule.split(':')[0] ?? 'that').replace(/_/g, ' ');
+    if (compliance.action === 'block') {
+      emit({ type: 'message', side: 'ai', who: aiWho, role: 'VIN Demo', text: `I'm not able to commit to anything on ${cat} — that's outside what I can stand behind. I can show you the relevant screen, or bring in the right specialist.`, uncertain: true });
+    } else { // escalate
+      const to = compliance.escalateTo ?? 'Lead Consultant';
+      escalation = { trigger: 'guardrail', reason: compliance.violations.map((v) => v.detail).join('; '), toPersona: to };
+      await recordEscalation(ctx.sessionId, persona?.id ?? null, to, 'guardrail', escalation.reason);
+      emit({ type: 'message', side: 'ai', who: aiWho, role: 'VIN Demo', text: `That's really a ${cat} question — as the ${aiWho} I won't commit to that, so I'd bring in the ${to} to give you a straight answer. Want me to?`, uncertain: true });
+      if (compliance.escalateTo) emit({ type: 'handoff_suggestion', topic: cat, toPersona: compliance.escalateTo });
+    }
+  } else {
+    // ALLOWED → grounded composition in the active voice; citation policy decides inline citing.
+    const room = await gatherRoom(ctx.sessionId, out.activeStakeholder);
+    let text: string;
+    try {
+      text = await getLlm().answerAs({
+        personaPreamble: preamble,
+        question: turn.text,
+        intent: out.interpretation?.intent ?? turn.text,
+        band,
+        source: hasSource ? { content: top.content, source: top.source, version: top.product_version, confidence: top.confidence, owner: top.source_owner, validatedBy: top.validated_by, validatedAt: top.validated_at, sourceType: top.source_type, recencyDays } : null,
+        screen: navigated ? screen : undefined,
+        audience: room.audience || undefined,
+        priorContext: room.priorContext || undefined,
+        cite: shouldCite(persona?.citationPolicy, band, hasSource),
+      });
+    } catch {
+      text = hasSource ? String(top.content) : "Let me show you on the screen rather than guess at the specifics.";
+    }
+    emit({ type: 'message', side: 'ai', who: aiWho, role: 'VIN Demo', text, uncertain: band === 'very_low' || band === 'low' });
+  }
+
+  if (out.discoveryPrompt) emit({ type: 'message', side: 'ai', who: aiWho, role: 'VIN Demo', text: out.discoveryPrompt, tag: 'discovery' });
+
+  // Collaboration intelligence: out-of-scope hand-off SUGGESTION (skip if we already escalated above).
+  // Captured so the audit row records WHICH specialist was suggested (was always null before P2).
+  let handoffSuggestion: { topic: string; toPersona: string } | null = null;
+  if (!escalation) {
+    const suggestion = handoffSuggestionFor(persona, turn.text);
+    if (suggestion) {
+      handoffSuggestion = { topic: suggestion.topic, toPersona: suggestion.toPersona };
+      emit({ type: 'handoff_suggestion', topic: suggestion.topic, toPersona: suggestion.toPersona });
+    }
+  }
 
   const c = await sessionCost(ctx.sessionId);
   emit({ type: 'cost', total: c.totalUsd, byType: c.byType });
+
+  // ── Meeting audit trail — record the full turn so it's reconstructable (best-effort).
+  await recordAuditTurn({
+    sessionId: ctx.sessionId, personaId: persona?.id ?? null, personaName: aiWho, promptVersion: persona?.version ?? 1,
+    utterance: turn.text, intent: out.interpretation?.intent ?? '',
+    knowledgeUsed: top ? [{ source: top.source, confidence: top.confidence, product_version: top.product_version, validation_status: top.validation_status }] : [],
+    citations: hasSource ? [{ source: top.source, product_version: top.product_version }] : [],
+    confidenceBand: band,
+    actionsConsidered: out.blockedMutations ?? [], actionsRejected: out.blockedMutations ?? [],
+    handoff: handoffSuggestion, escalation, compliance,
+  });
 }
 
-const REEL = [
-  { speaker: 'Procurement', text: 'How does approval delegation work?', loop: 3 },
-  { speaker: 'CFO', text: 'Our approvals stall when I travel — show me the bypassed / delegated approvals.', loop: 3 },
+// REEL→node re-model (Phase 4): each scripted turn DECLARES the node it targets (`node` = a verified node's
+// intent_label). driveTo prefers it when it's a candidate (deterministic scripted path), else falls back to
+// the intent-driven pickNode — so a hint that doesn't match this product's graph is simply ignored (safe).
+const REEL: { speaker: string; text: string; loop?: number; node?: string }[] = [
+  { speaker: 'Procurement', text: 'How does approval delegation work?', loop: 3, node: 'delegation settings' },
+  { speaker: 'CFO', text: 'Our approvals stall when I travel — show me the bypassed / delegated approvals.', loop: 3, node: 'bypassed approvals' },
   { speaker: 'Procurement', text: 'Why did you show me that screen?', loop: 4 },
 ];
 
@@ -141,12 +272,44 @@ const REEL = [
  * brain. Resolves when complete; never calls process.exit (the hosted engine is long-lived).
  */
 export async function runLiveSession(emit: Emit, target: SessionTarget = {}): Promise<void> {
-  const ctx = await bootSession('live', target);
+  // The reel is the SCRIPTED multi-stakeholder demo — seed the room so the showcase (addressing the CFO,
+  // tailoring to each role) works as designed. Live interactive/voice keep it off.
+  const ctx = await bootSession('live', { ...target, seedRoom: target.seedRoom ?? true });
   if (!ctx) { emit({ type: 'error', message: 'No product configured — pick a target or set PO_VIN_PRODUCT_ID (run `npm run seed`).' }); return; }
 
   emit({ type: 'start', product: ctx.productName, scenario: 'Approval delegation', mode: ctx.mode, loop: LOOP, sessionId: ctx.sessionId });
   for (const turn of REEL) await runTurn(ctx, turn, emit);
   emit({ type: 'beat', loopIdx: 6, phase: 'Demo complete', brain: 'Scenario complete — never fired a mutating action; cost recorded to the session.', sub: 'done' });
+  emit({ type: 'done' });
+}
+
+/**
+ * WALK a pinned journey end to end — the journey RUNS the demo. Each turn advances exactly one story step
+ * (the graph's navigateJourneyStep drives the screen on the journey's verified rails AND composes the warm
+ * spoken narration into `explanation`, which runTurn emits as the voice line). The JOURNEY decides where the
+ * demo goes and in what order — the per-step utterance is just narration context. Owns the journey_run
+ * lifecycle. Off-script questions are NOT walked here: the operator/voice routes those through runTurn
+ * directly, and the walk resumes at the next step (journeyStep persists via the checkpointer).
+ */
+export async function walkJourney(ctx: SessionCtx, emit: Emit): Promise<void> {
+  if (!ctx.journeyId) { emit({ type: 'error', message: 'No journey pinned for this session.' }); return; }
+  const wp = await journeyWalkPlan(ctx.journeyId).catch(() => null);
+  if (!wp || !wp.plan.length) { emit({ type: 'error', message: 'This journey has no walkable steps yet — author its workflow(s) first.' }); return; }
+  emit({ type: 'journey_start', journey: wp.journey.name, goal: wp.journey.businessGoal ?? '', steps: wp.plan.length, sessionId: ctx.sessionId });
+  const run = await startJourneyRun(ctx.journeyId, ctx.sessionId).catch(() => null);
+  try {
+    for (let i = 0; i < wp.plan.length; i++) {
+      const entry = wp.plan[i];
+      emit({ type: 'journey_step', index: i, total: wp.plan.length, kind: entry.stepKind, node: entry.nodeLabel ?? null });
+      // The JOURNEY decides the screen (navigateJourneyStep); the utterance is only narration context.
+      await runTurn(ctx, { speaker: 'Presenter', text: entry.caption ?? `Step ${i + 1}`, loop: 3, advance: true }, emit);
+    }
+    if (run) await completeJourneyRun(run.runId, 'completed').catch(() => {});
+    emit({ type: 'journey_complete', journey: wp.journey.name, steps: wp.plan.length });
+  } catch (e: any) {
+    if (run) await completeJourneyRun(run.runId, 'aborted').catch(() => {});
+    emit({ type: 'error', message: `Journey walk error: ${e?.message ?? e}` });
+  }
   emit({ type: 'done' });
 }
 

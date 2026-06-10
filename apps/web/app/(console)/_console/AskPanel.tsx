@@ -39,6 +39,9 @@ export function AskPanel({ onClose }: { onClose: () => void }) {
       case 'cite': setCite(ev.k); break;
       case 'nav': if (ev.screenshot) setShot(ev.screenshot); if (ev.url) setUrl(ev.url); break;
       case 'cost': setCost(ev.total ?? 0); break;
+      // Governance: when a guardrail escalates, surface the suggested specialist as a system note
+      // (the web Ask panel can't switch personas mid-session like the desktop Control Room can).
+      case 'handoff_suggestion': setMessages((m) => [...m, { side: 'ai', who: 'VIN Demo', role: 'system', text: `↪ This ${ev.topic ?? 'topic'} is better handled by the ${ev.toPersona ?? 'right specialist'} — hand off in the Control Room.`, tag: 'discovery' }]); break;
       case 'turn_done': setStatus('ready'); break;
       case 'busy': setStatus('busy'); setMessages((m) => [...m, { side: 'ai', who: 'VIN Demo', role: 'system', text: ev.message || 'Engine busy.', uncertain: true }]); break;
       case 'error': case 'stt_error': setStatus('error'); setMessages((m) => [...m, { side: 'ai', who: 'VIN Demo', role: 'system', text: ev.message || 'Engine error.', uncertain: true }]); break;

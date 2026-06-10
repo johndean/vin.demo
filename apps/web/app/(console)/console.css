@@ -78,7 +78,8 @@ button { font-family: inherit; }
 
 /* ---- Main / pages ---- */
 .main { overflow-y: auto; min-height: 0; }
-.page { padding: 28px clamp(20px, 3.4vw, 44px) 64px; max-width: 1320px; margin: 0 auto; }
+/* Full-bleed content — pages use the entire area beside the sidebar (no fictitious centered column). */
+.page { padding: 28px clamp(20px, 2.6vw, 40px) 64px; width: 100%; }
 @keyframes fadeUp { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 
 .page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 22px; flex-wrap: wrap; }
@@ -234,11 +235,26 @@ button { font-family: inherit; }
 .drawer__ft { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border-subtle); }
 
 /* ============================================================ INLINE FORM (in content area, under header — no popups) */
-.form-shell { background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); max-width: 780px; }
-.form-shell__hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border-subtle); }
+/* Fills the content width by default; small confirm dialogs opt into a narrow column via the `width` prop. */
+.form-shell { background: var(--surface-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); width: 100%; }
+.form-shell__hd { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 24px; border-bottom: 1px solid var(--border-subtle); }
 .form-shell__title { font-weight: 800; font-size: 16px; color: var(--text-primary); }
 .form-shell__sub { font-size: 12px; color: var(--color-steel); margin-top: 2px; }
 .form-shell__x { background: none; border: none; cursor: pointer; color: var(--color-steel); font-size: 24px; line-height: 1; padding: 0 4px; }
 .form-shell__x:hover { color: var(--text-primary); }
-.form-shell__body { padding: 18px 20px; display: flex; flex-direction: column; gap: 14px; }
-.form-shell__ft { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border-subtle); }
+.form-shell__body { padding: 20px 24px; display: flex; flex-direction: column; gap: 16px; }
+/* Wide create/edit forms: responsive multi-column field grid that uses the whole area and cuts vertical scrolling. */
+.form-shell__body--grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 16px 22px; align-items: start; }
+.fld--full { grid-column: 1 / -1; }
+.form-shell__ft { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 24px; border-top: 1px solid var(--border-subtle); }
+
+/* Experience — Outcomes & Buying Committee: compact list rows (content left, fixed Edit/Archive rail right —
+   always aligned, no wide-table cell drift) + a sticky inline Inspector in the 3rd grid column. */
+.exp-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; padding: 11px 8px; border-bottom: 1px solid var(--border-subtle); border-radius: 8px; }
+.exp-row:last-child { border-bottom: none; }
+.exp-row[data-active="true"] { background: var(--app-active); box-shadow: inset 3px 0 0 var(--color-navy-deep); }
+.exp-row__main { min-width: 0; }
+.exp-row__main .cell-sub { margin-top: 3px; }
+.exp-row__side { display: flex; align-items: center; gap: 7px; flex-shrink: 0; flex-wrap: nowrap; }
+.exp-insp { position: sticky; top: 16px; align-self: start; }
+.exp-insp__empty { line-height: 1.6; }

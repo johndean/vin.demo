@@ -11,16 +11,28 @@ import { db } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 type FieldType = 'text' | 'json' | 'int' | 'bool';
-interface Spec { table: string; workspaceScoped?: boolean; fields: Record<string, FieldType>; del: 'hard' | { col: string; val: string }; }
+interface Spec { table: string; workspaceScoped?: boolean; fields: Record<string, FieldType>; archivable: boolean; pk?: string; }
 
 const SPECS: Record<string, Spec> = {
-  // First entity (template). The presentation fields (scope/limits/brand/color/calls) live in the
-  // definition jsonb, so they become real + editable here. More entities register below as we roll out.
-  persona: { table: 'personas', workspaceScoped: true, fields: { name: 'text', status: 'text', definition: 'json' }, del: 'hard' },
-  // Environment belongs to a product (form supplies product_id). Config row → hard delete (demo_sessions FK is ON DELETE SET NULL).
-  environment: { table: 'environments', fields: { product_id: 'text', name: 'text', connection_target: 'text', reset_mechanism: 'text', refresh_cadence: 'text', seed_dataset: 'json', is_production: 'bool', default_mode: 'text' }, del: 'hard' },
-  // Customer (account) — workspace-scoped; metadata holds seg/stage/next/color. Soft archive keeps demo history.
-  customer: { table: 'customers', workspaceScoped: true, fields: { name: 'text', metadata: 'json' }, del: 'hard' },
+  // Config + records all SOFT-archive (archived_at/by) — no hard deletes, auditability preserved.
+  persona: { table: 'personas', workspaceScoped: true, fields: { name: 'text', status: 'text', owner: 'text', approver: 'text', definition: 'json' }, archivable: true },
+  // Environment belongs to a product (form supplies product_id).
+  environment: { table: 'environments', fields: { product_id: 'text', name: 'text', connection_target: 'text', reset_mechanism: 'text', refresh_cadence: 'text', seed_dataset: 'json', is_production: 'bool', default_mode: 'text', certification_status: 'text', verification_state: 'text', seed_version: 'text', data_version: 'text', readiness_state: 'text', known_issues: 'json' }, archivable: true },
+  // Customer (account) — workspace-scoped; metadata holds seg/stage/next/color.
+  customer: { table: 'customers', workspaceScoped: true, fields: { name: 'text', metadata: 'json' }, archivable: true },
+  // Scripted demo-room member — belongs to a product (form supplies product_id). Defines the named people
+  // the reel/convo address; live interactive/voice sessions seed no room (see stakeholders.ts).
+  product_stakeholder: { table: 'product_stakeholders', fields: { product_id: 'text', name: 'text', role: 'text', interests: 'json', influence: 'text', risk_level: 'text', decision_authority: 'text', sort_order: 'int' }, archivable: true },
+  // Product (basic create/edit — a thin slice of self-service onboarding; KB/versions/env/graph stay
+  // CLI/engine-onboarded). metadata holds presentation (tagline/mk/color). status = lifecycle stage.
+  product: { table: 'products', workspaceScoped: true, fields: { name: 'text', status: 'text', metadata: 'json' }, archivable: true },
+  // Plan a demo session (pre-staged). FK columns supplied by the form (resolved client-side from the picked
+  // product/customer). status='planned' is honest — the demo hasn't run; the Control Room flips it live.
+  demo_session: { table: 'demo_sessions', fields: { customer_id: 'text', product_version_id: 'text', environment_id: 'text', persona_id: 'text', execution_mode: 'text', status: 'text' }, archivable: true },
+  // Session discovery (1:1 with a session, PK = demo_session_id) — captures the planned business objective.
+  session_discovery: { table: 'session_discovery', pk: 'demo_session_id', fields: { demo_session_id: 'text', business_objective: 'text' }, archivable: false },
+  // Guided demo TOUR (record-and-replay) — belongs to a product. `steps` is the recorded action list (jsonb).
+  demo_tour: { table: 'demo_tours', fields: { product_id: 'text', name: 'text', description: 'text', steps: 'json' }, archivable: true },
 };
 
 function coerce(t: FieldType, v: any) {
@@ -56,7 +68,8 @@ export async function POST(req: Request) {
         vals.push(coerce(t, data[f])); cols.push(f); ph.push(`$${vals.length}${t === 'json' ? '::jsonb' : ''}`);
       }
       if (!cols.length) return NextResponse.json({ error: 'no fields to insert' }, { status: 400 });
-      const r = await db().query(`INSERT INTO ${spec.table} (${cols.join(', ')}) VALUES (${ph.join(', ')}) RETURNING id`, vals);
+      const pk = spec.pk ?? 'id';
+      const r = await db().query(`INSERT INTO ${spec.table} (${cols.join(', ')}) VALUES (${ph.join(', ')}) RETURNING ${pk} AS id`, vals);
       return NextResponse.json({ ok: true, id: r.rows[0]?.id });
     }
     if (op === 'update') {
@@ -68,13 +81,14 @@ export async function POST(req: Request) {
       }
       if (!sets.length) return NextResponse.json({ error: 'no fields to update' }, { status: 400 });
       vals.push(body.id);
-      await db().query(`UPDATE ${spec.table} SET ${sets.join(', ')} WHERE id = $${vals.length}`, vals);
+      await db().query(`UPDATE ${spec.table} SET ${sets.join(', ')} WHERE ${spec.pk ?? 'id'} = $${vals.length}`, vals);
       return NextResponse.json({ ok: true, id: body.id });
     }
-    if (op === 'delete') {
+    if (op === 'archive' || op === 'unarchive') {
       if (!body?.id) return NextResponse.json({ error: 'id required' }, { status: 400 });
-      if (spec.del === 'hard') await db().query(`DELETE FROM ${spec.table} WHERE id = $1`, [body.id]);
-      else await db().query(`UPDATE ${spec.table} SET ${spec.del.col} = $2 WHERE id = $1`, [body.id, spec.del.val]);
+      if (!spec.archivable) return NextResponse.json({ error: 'entity is not archivable' }, { status: 400 });
+      if (op === 'archive') await db().query(`UPDATE ${spec.table} SET archived_at = now(), archived_by = $2 WHERE id = $1`, [body.id, session.email]);
+      else await db().query(`UPDATE ${spec.table} SET archived_at = NULL, archived_by = NULL WHERE id = $1`, [body.id]);
       return NextResponse.json({ ok: true, id: body.id });
     }
     return NextResponse.json({ error: `unknown op: ${op}` }, { status: 400 });

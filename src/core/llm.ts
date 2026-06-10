@@ -1,16 +1,23 @@
 /**
- * LLM provider — narrow interface, cloud-only build (Claude, claude-opus-4-8),
- * per plan §4. The walking skeleton's `interpret` step lives here; `narrate`
+ * LLM provider — narrow interface, cloud-only build (Claude; model from ANTHROPIC_MODEL, default
+ * claude-opus-4-8), per plan §4. The walking skeleton's `interpret` step lives here; `narrate`
  * (explain node) lands in increment 3.
  */
 import Anthropic from '@anthropic-ai/sdk';
 import { config as loadEnv } from 'dotenv';
-import { record } from './cost.js';
+import { record, currentSession } from './cost.js';
+import { db } from './db.js';
+import { rp } from './prompts.js';
+import { currentModel, providerForModel } from './settings.js';
+import { GeminiProvider } from './llm-gemini.js';
 import type { ExecutionMode } from './safety.js';
 
 loadEnv();
 
-const MODEL = 'claude-opus-4-8';
+// The model is now a LIVE setting (settings.ts): the operator switches it from the web console and it applies
+// on the next turn — no redeploy. Default stays the known-good claude-opus-4-8 (env ANTHROPIC_MODEL still seeds
+// the default). Each method reads currentModel() so a mid-session switch is picked up. getLlm() selects the
+// provider (Claude or Gemini, see GeminiProvider in llm-gemini.ts) from the chosen model.
 
 /** Intent-driven, never script-driven (rule §3): classify what the stakeholder is doing. */
 export type UtteranceKind = 'question' | 'clarification' | 'objection' | 'curiosity' | 'business_objective';
@@ -30,12 +37,35 @@ export interface ExplainContext {
   answer: string;
   navUrl: string;
   trace: string[];
+  personaPreamble?: string; // active specialist overlay (system prompt + scope + hard limits), if handed off
 }
 
 export interface DiscoverContext {
   utterance: string;
   kind: UtteranceKind;
   answer: string; // the chunk just shown, to ground the discovery question
+  personaPreamble?: string; // active specialist overlay, if handed off
+}
+
+/** Grounded persona answer: re-express the CITED source in the specialist's voice/framework/audience-
+ *  awareness, instructed to use only the source's facts. Grounding is PROMPT-ENFORCED (the system prompt
+ *  hard-instructs "ground only in the SOURCE; if it doesn't answer, say so") + gated upstream by the
+ *  confidence band — it is not output-verified, so treat it as strong mitigation, not a hard guarantee. */
+export interface AnswerContext {
+  personaPreamble: string;        // the specialist "brain" overlay (voice, framework, traits, …)
+  question: string;
+  intent: string;
+  band: 'high' | 'medium' | 'low' | 'very_low';
+  // the cited chunk + its PROVENANCE (migration 0011) so the AI can prove itself when probed:
+  source?: {
+    content: string; source: string; version?: string | null; confidence?: number | null;
+    owner?: string | null; validatedBy?: string | null; validatedAt?: string | null;
+    sourceType?: string | null; recencyDays?: number | null;
+  } | null;
+  screen?: string;                // the live screen navigated to (context only)
+  audience?: string;              // who's in the room (active speaker + stakeholder collection) — Phase 2
+  priorContext?: string;          // prior concerns/objections/topics this session — Phase 2 relationship memory
+  cite?: boolean;                 // citation policy (governance) — name the source inline when true
 }
 
 export interface DiscoverResult {
@@ -47,6 +77,15 @@ export interface DiscoverResult {
 
 /** One element on the live page the agent can act on (perceived from the embedded browser's DOM). */
 export interface PageElement { ref: number; text: string; role?: string; kind?: string; options?: string[]; required?: boolean; filled?: boolean; }
+export interface NarrateContext {
+  personaPreamble: string;
+  stepKind: 'workflow' | 'tour' | 'knowledge' | 'note';
+  caption?: string | null;   // authored beat caption / step label — a HINT to paraphrase, never read verbatim
+  screen?: string | null;    // the screen now on display (node steps); null for a narration-only beat
+  audience?: string | null;  // who's in the room (committee role/summary)
+  outcome?: string | null;   // the business outcome this journey advances
+}
+
 export interface AgentStepContext {
   goal: string;            // the stakeholder's request — what to demonstrate / answer
   url: string;
@@ -57,6 +96,7 @@ export interface AgentStepContext {
   role: string;            // the persona the agent is driving as
   mode: ExecutionMode;     // read-only/safe/approval → never commit; execution → may save/submit
   personaPreamble?: string; // active specialist overlay (system prompt + scope + hard limits), if handed off
+  knownScreens?: { label: string; route: string | null }[]; // the product's VERIFIED demo-graph screens (the navigation authority) — prefer these (Phase 2 bridge)
 }
 /** The single next action the agent takes to drive the live demo (read-only: never commits). */
 export interface AgentStep {
@@ -65,6 +105,13 @@ export interface AgentStep {
   value: string;           // text to type, or the option to choose for 'select' ("" otherwise)
   say: string;             // one-sentence narration, grounded in what's on screen
 }
+
+/** Knowledge→graph derivation (Phase B): a candidate SCREEN strictly grounded in validated knowledge. */
+export interface DerivedScreen { intentLabel: string; screenName: string; screenType: string; evidence: string }
+/** Knowledge→graph derivation (Phase B): a candidate WORKFLOW over derived screen labels, grounded in knowledge. */
+export interface DerivedWorkflow { workflowName: string; businessPurpose: string; personaType: string; stakeholderType: string; nodeSequence: string[]; successCriteria: string; evidence: string }
+/** Knowledge→graph derivation: a candidate ELEMENT (button/action/form field/…) on a screen, grounded in knowledge. */
+export interface DerivedScreenElement { elementType: 'field' | 'button' | 'action' | 'tab' | 'error' | 'faq' | 'note'; label: string; description: string }
 
 export interface LlmProvider {
   readonly id: string;
@@ -77,25 +124,130 @@ export interface LlmProvider {
   discover(ctx: DiscoverContext): Promise<DiscoverResult>;
   /** Decide the next action to DRIVE a live demo from the current page (read-only ReAct step). */
   agentStep(ctx: AgentStepContext): Promise<AgentStep>;
+  /** Compose a persona-voiced answer grounded in the cited source (prompt-enforced, band-gated). */
+  answerAs(ctx: AnswerContext): Promise<string>;
+  /** Compose ONE warm, conversational spoken line for a journey step — what the specialist SAYS while the
+   *  screen is shown. Natural human speech (no labels, markdown, or JSON). Falls back to a clean caption line. */
+  narrate(ctx: NarrateContext): Promise<string>;
+  /** Recon-harvest (fact-rooted KB generator): extract knowledge statements STRICTLY grounded in captured screen text. */
+  harvestChunks(ctx: { product: string; screen: string; capturedText: string }): Promise<string[]>;
+  /** Faithfulness gate (zero-hallucination): is every claim in `statement` explicitly supported by `source`? */
+  verifyFaithful(ctx: { statement: string; source: string }): Promise<boolean>;
+  /** Knowledge→graph (Phase B): derive candidate SCREENS strictly grounded in the product's validated knowledge. */
+  deriveScreens(ctx: { product: string; knowledge: string }): Promise<DerivedScreen[]>;
+  /** Knowledge→graph (Phase B): derive candidate WORKFLOWS over the given screen labels, grounded in knowledge. */
+  deriveWorkflows(ctx: { product: string; knowledge: string; screens: string[] }): Promise<DerivedWorkflow[]>;
+  /** Knowledge→graph derivation: the buttons/actions/forms/fields/errors a screen exposes, grounded in knowledge. */
+  deriveScreenElements(ctx: { product: string; screenName: string; screenType: string; evidence: string; knowledge: string }): Promise<DerivedScreenElement[]>;
+}
+
+// Per-band posture for grounded persona answers — what the specialist DOES at each confidence level. The text
+// is now editable in the prompt registry (answerAs.band.*); this just maps the band enum to its key.
+const BAND_KEY: Record<AnswerContext['band'], string> = { high: 'answerAs.band.high', medium: 'answerAs.band.medium', low: 'answerAs.band.low', very_low: 'answerAs.band.veryLow' };
+export function bandPosture(band: AnswerContext['band']): string { return rp(BAND_KEY[band]); }
+
+// ── Shared system-prompt builders ─────────────────────────────────────────────────────────────────────
+// SINGLE SOURCE OF TRUTH for the assembled system prompt of every function — used by BOTH ClaudeProvider and
+// GeminiProvider so the two providers run BYTE-IDENTICAL prompts (the tuned, safety-critical text). Each
+// composes the editable registry spans (rp) with the in-code dynamic wrappers. The byte-identity eval
+// (eval-prompts.ts) captures these via the Claude path; keeping the providers on the same builders means
+// switching to Gemini cannot silently detune a prompt. Do NOT inline a system prompt in a provider method.
+export const sysInterpret = (): string => rp('interpret');
+export const sysPickNode = (): string => rp('pickNode');
+export const sysExplainWhy = (ctx: ExplainContext): string =>
+  (ctx.personaPreamble ? ctx.personaPreamble + '\n\n— — —\n' : '') +
+  rp('explainWhy') +
+  (ctx.personaPreamble ? ' Answer in this specialist\'s voice and stay within its scope and hard limits.' : '');
+export const sysAgentStep = (ctx: AgentStepContext): string =>
+  (ctx.personaPreamble ? ctx.personaPreamble + '\n\n— — —\n' : '') +
+  rp('agentStep.intro') +
+  (ctx.mode === 'execution' ? rp('agentStep.policyExecution') : rp('agentStep.policyReadonly')) + '\n' +
+  rp('agentStep.forms');
+export const sysAnswerAs = (ctx: AnswerContext): string => {
+  const grounded = ctx.band !== 'very_low' && ctx.source?.content;
+  const recencyHint = grounded && ctx.source?.recencyDays != null && ctx.source.recencyDays > 120
+    ? ` This source was last verified ${ctx.source.recencyDays} days ago — if it bears on the answer, hedge honestly that it may be due for review.`
+    : '';
+  const navHint = ctx.screen
+    ? ` You have already navigated to "${ctx.screen}" and are looking at it together — you are demonstrating RIGHT NOW. Walk through the steps that are actually on this screen, in order and concisely; do NOT ask permission to demonstrate, and never offer to perform an action you are not actually taking.`
+    : '';
+  return ctx.personaPreamble + '\n\n— — —\n' +
+    rp('answerAs.opening') + bandPosture(ctx.band) + recencyHint + '\n' +
+    (grounded
+      ? rp('answerAs.grounded') + (ctx.cite ? rp('answerAs.cite') : rp('answerAs.noCite')) + rp('answerAs.provenance')
+      : rp('answerAs.ungrounded')) +
+    rp('answerAs.style') + navHint + rp('answerAs.closing');
+};
+export const sysNarrate = (ctx: NarrateContext): string => ctx.personaPreamble + '\n\n— — —\n' + rp('narrate');
+export const sysDiscover = (ctx: DiscoverContext): string =>
+  (ctx.personaPreamble ? ctx.personaPreamble + '\n\n— — —\n' : '') +
+  rp('discover.intro') +
+  (ctx.personaPreamble ? ' and in this specialist\'s area of focus' : '') +
+  rp('discover.tail');
+export const sysHarvestChunks = (): string => rp('harvestChunks');
+export const sysVerifyFaithful = (): string => rp('verifyFaithful');
+export const sysDeriveScreens = (): string => rp('deriveScreens');
+export const sysDeriveWorkflows = (): string => rp('deriveWorkflows');
+export const sysDeriveScreenElements = (): string => rp('deriveScreenElements');
+
+// Label an LLM call by a stable phrase in its system prompt — best-effort, used to GROUP the AI Conversation
+// History by function. (Survives prompt edits as long as the phrase remains; unknown → 'llm'.)
+const FN_SIG: [string, string][] = [
+  ['You are the interpreter', 'interpret'],
+  ['Pick the demo screen', 'pickNode'],
+  ['justify your OWN previous action', 'explainWhy'],
+  ['DRIVING a live product demo', 'agentStep'],
+  ['answering live, out loud', 'answerAs'],
+  ['presenting a LIVE product demo, speaking OUT LOUD', 'narrate'],
+  ['live solution discovery during a product demo', 'discover'],
+  ['extracting VERIFIABLE, BUSINESS-FACING product knowledge', 'harvestChunks'],
+  ['STRICT faithfulness checker', 'verifyFaithful'],
+  ["map a real product's SCREENS", 'deriveScreens'],
+  ["map a real product's WORKFLOWS", 'deriveWorkflows'],
+  ['extract the interactive ELEMENTS of ONE screen', 'deriveScreenElements'],
+];
+export function detectFn(systemPrompt: string): string {
+  for (const [sig, fn] of FN_SIG) if (systemPrompt.includes(sig)) return fn;
+  return 'llm';
 }
 
 class ClaudeProvider implements LlmProvider {
   readonly id = 'claude';
   private client = new Anthropic();
 
+  constructor() {
+    // Capture EVERY LLM call (prompt -> reply) to ai_calls — the "AI Conversation History". Wrap the SDK's
+    // create() ONCE so all 12 functions are logged with zero call-site changes (no behavior risk). Best-effort.
+    const orig = this.client.messages.create.bind(this.client.messages);
+    (this.client.messages as unknown as { create: (a: any) => Promise<any> }).create = async (args: any) => {
+      const res = await orig(args);
+      void this.logAiCall(args, res);
+      return res;
+    };
+  }
+
+  private async logAiCall(args: any, res: any): Promise<void> {
+    try {
+      const sys = typeof args?.system === 'string' ? args.system : (args?.system != null ? JSON.stringify(args.system) : '');
+      const user = Array.isArray(args?.messages)
+        ? args.messages.map((m: any) => (typeof m?.content === 'string' ? m.content : JSON.stringify(m?.content))).join('\n\n')
+        : '';
+      const block = Array.isArray(res?.content) ? res.content.find((b: any) => b?.type === 'text') : null;
+      const reply = block && typeof block.text === 'string' ? block.text : '';
+      await db().query(
+        `INSERT INTO ai_calls (demo_session_id, fn, model, system_prompt, user_prompt, reply, input_tokens, output_tokens)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+        [currentSession(), detectFn(sys), args?.model ?? currentModel(), sys, user, reply, res?.usage?.input_tokens ?? null, res?.usage?.output_tokens ?? null],
+      );
+    } catch { /* best-effort: never break or slow a demo to log a call */ }
+  }
+
   async interpret(utterance: string): Promise<Interpretation> {
+    const MODEL = currentModel();
     const res = await this.client.messages.create({
       model: MODEL,
       max_tokens: 2048, // headroom so the JSON object (incl. reasoning) can't truncate
-      system:
-        'You are the interpreter for an autonomous solution consultant running a live product demo. ' +
-        'Classify the stakeholder utterance and distill the underlying information need into a concise ' +
-        'retrieval query (what to look up in the product knowledge base). Be literal; do not invent scope. ' +
-        'Set isMetaExplain=true when the stakeholder asks the agent to justify or explain its OWN last action ' +
-        '(e.g. "why did you show me that?", "what was that screen?"). Set isResume=true when they ask to go ' +
-        'back to where you were before a detour (e.g. "ok, back to what we were doing", "return to that"). ' +
-        'Set control to "pause" when they ask to pause/hold the demo, "stop" to end it, "continue" to resume ' +
-        'after a pause; otherwise "none". control governs the SESSION; isResume governs returning to a topic.',
+      system: sysInterpret(),
       messages: [{ role: 'user', content: utterance }],
       output_config: {
         format: {
@@ -143,16 +295,13 @@ class ClaudeProvider implements LlmProvider {
   }
 
   async pickNode(intent: string, labels: string[]): Promise<string> {
-    if (labels.length <= 1) return labels[0] ?? '';
+    if (labels.length === 0) return ''; // no candidates → nothing fits. (1 candidate still gets a real fit-check
+    // so an off-domain request to a single-screen product can correctly resolve to "" rather than force-mapping.)
+    const MODEL = currentModel();
     const res = await this.client.messages.create({
       model: MODEL,
       max_tokens: 512,
-      system:
-        'Pick the demo screen the stakeholder should be taken to. Prefer the PRIMARY workflow screen where the ' +
-        'feature is performed or explained; only choose a sub-view / result list (e.g. a "bypassed", "history", or ' +
-        '"completed" list) when the stakeholder EXPLICITLY asks for that sub-view. A GENERAL "how does X work?" ' +
-        'question (e.g. "how does delegation work?") maps to the PRIMARY screen, NOT a "bypassed"/"delegated"/"history" ' +
-        'sub-view — route to a sub-view only when its name is explicitly requested. Return "" if none fit.',
+      system: sysPickNode(),
       messages: [{ role: 'user', content: `Intent: ${JSON.stringify(intent)}\nScreens: ${JSON.stringify(labels)}` }],
       output_config: {
         format: {
@@ -176,13 +325,11 @@ class ClaudeProvider implements LlmProvider {
   }
 
   async explainWhy(ctx: ExplainContext): Promise<string> {
+    const MODEL = currentModel();
     const res = await this.client.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system:
-        'You are VIN Demo. The stakeholder is asking you to justify your OWN previous action. Explain, in 2-3 ' +
-        'sentences, WHY you showed what you showed — grounded ONLY in the decision trace and the answer you gave. ' +
-        'Reference the intent you detected and the screen you navigated to. Do not invent new product facts.',
+      system: sysExplainWhy(ctx),
       messages: [
         {
           role: 'user',
@@ -211,35 +358,11 @@ class ClaudeProvider implements LlmProvider {
       const opts = e.options && e.options.length ? ` options=[${e.options.slice(0, 25).map((o) => JSON.stringify(o)).join(', ')}]` : '';
       return `[${e.ref}] ${e.kind ?? e.role ?? 'el'}: ${JSON.stringify(e.text)}${flags ? ` (${flags})` : ''}${opts}`;
     }).join('\n');
-    const policy = ctx.mode === 'execution'
-      ? 'EXECUTION MODE — the operator authorized LIVE writes against their OWN demo environment, so you MAY ' +
-        'complete the workflow end to end, INCLUDING save/submit/create, to show it actually working. Type only ' +
-        'realistic demo values. Right before any final/destructive commit (submit/save/create/pay), narrate what ' +
-        'you are about to do in `say`. Do NOT delete/cancel/void existing records unless the goal explicitly asks.'
-      : 'READ-ONLY — you are NEVER allowed to click a control that commits/creates/submits/saves/deletes/pays/sends. ' +
-        'When the only way forward is such a commit, return done and say the human can complete it. You MAY still ' +
-        'open forms, fill fields, and walk wizard steps to demonstrate the flow up to (but not including) the commit.';
+    const MODEL = currentModel();
     const res = await this.client.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system:
-        (ctx.personaPreamble ? ctx.personaPreamble + '\n\n— — —\n' : '') +
-        'You are VIN, an autonomous solution consultant DRIVING a live product demo in the stakeholder\'s real, ' +
-        'logged-in browser. You work on ANY web product purely by reading the current screen — never assume a ' +
-        'specific app. Given the goal and the interactive elements visible NOW (each with a [ref]), decide the ' +
-        'SINGLE next action that best advances the demo:\n' +
-        '• click — open/navigate/act via an element [ref] (menus, tabs, rows, "New …" buttons, and in execution mode the commit).\n' +
-        '• type — enter a realistic demo value into a text field [ref] (never real/sensitive data).\n' +
-        '• select — choose an option for a dropdown. For a `select` element, set `value` to one of its listed options. ' +
-        'For a CUSTOM dropdown (a button/combobox that opens a list), first `click` it to open, then on the next step `click` the option that appears.\n' +
-        '• done — the goal is achieved, OR (outside execution mode) the only way forward is a commit, OR you are blocked.\n' +
-        policy + '\n' +
-        'FORMS: to complete a form, fill EVERY field marked REQUIRED and EMPTY with a realistic demo value before attempting submit — ' +
-        'a required dropdown left empty keeps Submit disabled. Use `select` for dropdowns. Do not repeat an action that already ran ' +
-        '(if a field still shows EMPTY after you tried, it likely needs a different approach). If you genuinely cannot complete a ' +
-        'required field, return done and say which field the human should set so you can continue — NEVER loop on the same step.\n' +
-        'Always narrate `say` in ONE concise, friendly sentence grounded ONLY in what is on screen — never invent. ' +
-        'Prefer the most direct path to the goal; do not wander.',
+      system: sysAgentStep(ctx),
       messages: [{
         role: 'user',
         content:
@@ -248,6 +371,7 @@ class ClaudeProvider implements LlmProvider {
           `Current URL: ${ctx.url}\nTitle: ${ctx.title}\n` +
           `Headings: ${JSON.stringify(ctx.headings.slice(0, 12))}\n` +
           `Steps already taken this turn:\n${ctx.history.length ? ctx.history.map((h, i) => `${i + 1}. ${h}`).join('\n') : '(none yet)'}\n\n` +
+          (ctx.knownScreens?.length ? `Verified demo-graph screens for this product (the navigation AUTHORITY — when the goal matches one of these, prefer reaching it by its name/route): ${ctx.knownScreens.map((s) => (s.route ? `${s.label} (${s.route})` : s.label)).join(' · ')}\n\n` : '') +
           `Interactive elements on screen:\n${elementList || '(none detected)'}`,
       }],
       output_config: {
@@ -280,17 +404,71 @@ class ClaudeProvider implements LlmProvider {
     }
   }
 
+  async answerAs(ctx: AnswerContext): Promise<string> {
+    const grounded = ctx.band !== 'very_low' && ctx.source?.content; // also gates the SOURCE block in the user content below
+    const MODEL = currentModel();
+    const res = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 900,
+      system: sysAnswerAs(ctx),
+      messages: [{
+        role: 'user',
+        content:
+          `Question: ${JSON.stringify(ctx.question)}\n` +
+          `Detected intent: ${ctx.intent}\n` +
+          (ctx.screen ? `Live screen now: ${ctx.screen}\n` : '') +
+          (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
+          (ctx.priorContext ? `Earlier in this session: ${ctx.priorContext}\n` : '') +
+          (grounded
+            ? `\nSOURCE (the only facts you may state — verbatim from the product knowledge base):\n"""\n${ctx.source!.content}\n"""\n` +
+              `Provenance: ${ctx.source!.source}` +
+              (ctx.source!.version ? ` · ${ctx.source!.version}` : '') +
+              (ctx.source!.owner ? ` · owned by ${ctx.source!.owner}` : '') +
+              (ctx.source!.validatedBy ? ` · validated by ${ctx.source!.validatedBy}${ctx.source!.validatedAt ? ` on ${String(ctx.source!.validatedAt).slice(0, 10)}` : ''}` : '') +
+              (ctx.source!.recencyDays != null ? ` · last verified ${ctx.source!.recencyDays}d ago` : '')
+            : `\n(No verified source is available for this question.)`),
+      }],
+    });
+    await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'answerAs' });
+    if (res.stop_reason === 'refusal') return "I'd rather not guess here — let me show you the screen instead.";
+    const b = res.content.find((x) => x.type === 'text');
+    const text = b && 'text' in b ? b.text.trim() : '';
+    return text || "Let me show you on the screen rather than guess at the specifics.";
+  }
+
+  async narrate(ctx: NarrateContext): Promise<string> {
+    const fallback = (ctx.caption?.trim()) || (ctx.screen ? `Here's the ${ctx.screen}.` : 'Let me walk you through this.');
+    try {
+      const MODEL = currentModel();
+      const res = await this.client.messages.create({
+        model: MODEL,
+        max_tokens: 160,
+        system: sysNarrate(ctx),
+        messages: [{
+          role: 'user',
+          content:
+            `Now showing: ${ctx.screen ?? '(a narration moment — no screen change)'}\n` +
+            (ctx.caption ? `Beat to convey (paraphrase naturally, do NOT read aloud): ${ctx.caption}\n` : '') +
+            (ctx.outcome ? `Outcome this advances: ${ctx.outcome}\n` : '') +
+            (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
+            `\nSpeak the one or two sentence narration now.`,
+        }],
+      });
+      await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'narrate' });
+      if (res.stop_reason === 'refusal') return fallback;
+      const b = res.content.find((x) => x.type === 'text');
+      const text = b && 'text' in b ? b.text.trim() : '';
+      return text || fallback;
+    } catch { return fallback; }
+  }
+
   async discover(ctx: DiscoverContext): Promise<DiscoverResult> {
     const empty: DiscoverResult = { painPoints: [], buyingSignals: [], businessObjective: null, question: '' };
+    const MODEL = currentModel();
     const res = await this.client.messages.create({
       model: MODEL,
       max_tokens: 1024,
-      system:
-        'You are VIN Demo doing live solution discovery during a product demo. From the stakeholder utterance, ' +
-        'extract ONLY what they actually expressed (never invent): painPoints (problems/frustrations), buyingSignals ' +
-        '(interest, timeline, budget, comparison), and businessObjective if explicitly stated (else ""). Then propose ' +
-        'ONE short, natural discovery question to learn more, grounded in the topic just shown. Empty arrays / "" are ' +
-        'the correct answer when nothing was expressed.',
+      system: sysDiscover(ctx),
       messages: [{
         role: 'user',
         content:
@@ -327,9 +505,119 @@ class ClaudeProvider implements LlmProvider {
       return empty;
     }
   }
+
+  async harvestChunks(ctx: { product: string; screen: string; capturedText: string }): Promise<string[]> {
+    if (!ctx.capturedText || ctx.capturedText.trim().length < 40) return [];
+    const MODEL = currentModel();
+    const res = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 1024,
+      system: sysHarvestChunks(),
+      messages: [{ role: 'user', content: `Product: ${ctx.product}\nScreen: ${ctx.screen}\n\nCAPTURED SCREEN TEXT (the ONLY source you may use):\n"""\n${ctx.capturedText.slice(0, 6000)}\n"""` }],
+      output_config: { format: { type: 'json_schema', schema: { type: 'object', properties: { chunks: { type: 'array', items: { type: 'string' } } }, required: ['chunks'], additionalProperties: false } } },
+    });
+    await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'harvestChunks' });
+    const b = res.content.find((x) => x.type === 'text');
+    if (res.stop_reason === 'refusal' || !b || !('text' in b)) return [];
+    try {
+      const p = JSON.parse(b.text);
+      return Array.isArray(p.chunks) ? p.chunks.filter((c: unknown): c is string => typeof c === 'string' && c.trim().length > 15).map((c: string) => c.trim()) : [];
+    } catch { return []; }
+  }
+
+  async verifyFaithful(ctx: { statement: string; source: string }): Promise<boolean> {
+    const MODEL = currentModel();
+    const res = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 256,
+      system: sysVerifyFaithful(),
+      messages: [{ role: 'user', content: `SOURCE:\n"""\n${ctx.source.slice(0, 6000)}\n"""\n\nSTATEMENT:\n"""\n${ctx.statement}\n"""` }],
+      output_config: { format: { type: 'json_schema', schema: { type: 'object', properties: { supported: { type: 'boolean' } }, required: ['supported'], additionalProperties: false } } },
+    });
+    await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'verifyFaithful' });
+    const b = res.content.find((x) => x.type === 'text');
+    if (res.stop_reason === 'refusal' || !b || !('text' in b)) return false;
+    try { return JSON.parse(b.text).supported === true; } catch { return false; }
+  }
+
+  async deriveScreens(ctx: { product: string; knowledge: string }): Promise<DerivedScreen[]> {
+    if (!ctx.knowledge || ctx.knowledge.trim().length < 40) return [];
+    const MODEL = currentModel();
+    const res = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 4096,
+      system: sysDeriveScreens(),
+      messages: [{ role: 'user', content: `Product: ${ctx.product}\n\nVERIFIED KNOWLEDGE (the ONLY source you may use):\n"""\n${ctx.knowledge.slice(0, 200000)}\n"""` }],
+      output_config: { format: { type: 'json_schema', schema: { type: 'object', properties: { screens: { type: 'array', items: { type: 'object', properties: { intentLabel: { type: 'string' }, screenName: { type: 'string' }, screenType: { type: 'string' }, evidence: { type: 'string' } }, required: ['intentLabel', 'screenName', 'screenType', 'evidence'], additionalProperties: false } } }, required: ['screens'], additionalProperties: false } } },
+    });
+    await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'deriveScreens' });
+    const b = res.content.find((x) => x.type === 'text');
+    if (res.stop_reason === 'refusal' || !b || !('text' in b)) return [];
+    try {
+      const p = JSON.parse(b.text);
+      return Array.isArray(p.screens)
+        ? p.screens.filter((s: any) => s && typeof s.intentLabel === 'string' && s.intentLabel.trim())
+            .map((s: any) => ({ intentLabel: String(s.intentLabel).trim().toLowerCase(), screenName: String(s.screenName ?? s.intentLabel).trim(), screenType: String(s.screenType ?? 'other').trim(), evidence: String(s.evidence ?? '').trim() }))
+        : [];
+    } catch { return []; }
+  }
+
+  async deriveWorkflows(ctx: { product: string; knowledge: string; screens: string[] }): Promise<DerivedWorkflow[]> {
+    if (!ctx.screens.length || !ctx.knowledge) return [];
+    const MODEL = currentModel();
+    const res = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 4096,
+      system: sysDeriveWorkflows(),
+      messages: [{ role: 'user', content: `Product: ${ctx.product}\nSCREEN LABELS (nodeSequence may use ONLY these): ${JSON.stringify(ctx.screens)}\n\nVERIFIED KNOWLEDGE (the ONLY source you may use):\n"""\n${ctx.knowledge.slice(0, 200000)}\n"""` }],
+      output_config: { format: { type: 'json_schema', schema: { type: 'object', properties: { workflows: { type: 'array', items: { type: 'object', properties: { workflowName: { type: 'string' }, businessPurpose: { type: 'string' }, personaType: { type: 'string' }, stakeholderType: { type: 'string' }, nodeSequence: { type: 'array', items: { type: 'string' } }, successCriteria: { type: 'string' }, evidence: { type: 'string' } }, required: ['workflowName', 'businessPurpose', 'personaType', 'stakeholderType', 'nodeSequence', 'successCriteria', 'evidence'], additionalProperties: false } } }, required: ['workflows'], additionalProperties: false } } },
+    });
+    await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'deriveWorkflows' });
+    const b = res.content.find((x) => x.type === 'text');
+    if (res.stop_reason === 'refusal' || !b || !('text' in b)) return [];
+    try {
+      const p = JSON.parse(b.text);
+      const allowed = new Set(ctx.screens.map((s) => s.toLowerCase()));
+      return Array.isArray(p.workflows)
+        ? p.workflows.filter((w: any) => w && typeof w.workflowName === 'string' && w.workflowName.trim())
+            .map((w: any) => ({ workflowName: String(w.workflowName).trim(), businessPurpose: String(w.businessPurpose ?? '').trim(), personaType: String(w.personaType ?? 'other').trim(), stakeholderType: String(w.stakeholderType ?? 'none').trim(), nodeSequence: Array.isArray(w.nodeSequence) ? w.nodeSequence.map((x: any) => String(x).trim().toLowerCase()).filter((x: string) => allowed.has(x)) : [], successCriteria: String(w.successCriteria ?? '').trim(), evidence: String(w.evidence ?? '').trim() }))
+        : [];
+    } catch { return []; }
+  }
+
+  async deriveScreenElements(ctx: { product: string; screenName: string; screenType: string; evidence: string; knowledge: string }): Promise<DerivedScreenElement[]> {
+    const evidence = (ctx.evidence ?? '').trim();
+    if (evidence.length < 20 && (!ctx.knowledge || ctx.knowledge.trim().length < 40)) return [];
+    const MODEL = currentModel();
+    const res = await this.client.messages.create({
+      model: MODEL,
+      max_tokens: 2048,
+      system: sysDeriveScreenElements(),
+      messages: [{ role: 'user', content: `Product: ${ctx.product}\nScreen: ${ctx.screenName} (${ctx.screenType})\n\nEVIDENCE for this screen:\n"""\n${evidence.slice(0, 4000)}\n"""\n\nBROADER VERIFIED KNOWLEDGE (supporting context):\n"""\n${ctx.knowledge.slice(0, 8000)}\n"""` }],
+      output_config: { format: { type: 'json_schema', schema: { type: 'object', properties: { elements: { type: 'array', items: { type: 'object', properties: { elementType: { type: 'string' }, label: { type: 'string' }, description: { type: 'string' } }, required: ['elementType', 'label', 'description'], additionalProperties: false } } }, required: ['elements'], additionalProperties: false } } },
+    });
+    await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'deriveScreenElements' });
+    const b = res.content.find((x) => x.type === 'text');
+    if (res.stop_reason === 'refusal' || !b || !('text' in b)) return [];
+    const ALLOWED = new Set(['field', 'button', 'action', 'tab', 'error', 'faq', 'note']);
+    try {
+      const p = JSON.parse(b.text);
+      return Array.isArray(p.elements)
+        ? p.elements
+            .filter((e: any) => e && typeof e.label === 'string' && e.label.trim() && ALLOWED.has(String(e.elementType)))
+            .map((e: any) => ({ elementType: String(e.elementType) as DerivedScreenElement['elementType'], label: String(e.label).trim(), description: String(e.description ?? '').trim() }))
+        : [];
+    } catch { return []; }
+  }
 }
 
 export function getLlm(): LlmProvider {
+  // Provider follows the operator's chosen model (AI Control). Gemini when a gemini-* model is selected,
+  // Claude otherwise. Each is constructed per call so a live model switch is picked up on the next turn.
+  if (providerForModel(currentModel()) === 'gemini') {
+    if (!process.env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not set — set it on the engine to use a Gemini model.');
+    return new GeminiProvider();
+  }
   if (!process.env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not set.');
   return new ClaudeProvider();
 }

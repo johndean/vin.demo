@@ -15,15 +15,20 @@ contextBridge.exposeInMainWorld('auth', {
   voiceToken: () => ipcRenderer.invoke('auth:voiceToken'),
 });
 
-// Real console data from the web SSOT (gated by the captured session cookie).
+// Real console data from the web SSOT (gated by the captured session cookie). `mutate` writes through the
+// web console's table-driven admin endpoint (used to save/update/archive guided demo tours from the desktop).
 contextBridge.exposeInMainWorld('consoleData', {
   fetch: () => ipcRenderer.invoke('data:fetch'),
+  mutate: (body) => ipcRenderer.invoke('admin:mutate', body),
 });
 
 // Live demo session service: start/stop the real engine loop + receive its streamed events.
 contextBridge.exposeInMainWorld('session', {
   start: (target) => ipcRenderer.invoke('session:start', { target }),
   startInteractive: (target) => ipcRenderer.invoke('session:startInteractive', { target }),
+  // Scripted workflow runner: open /session/scripted for a workflow + advance through its steps.
+  startScripted: (target, workflowId) => ipcRenderer.invoke('session:startScripted', { target, workflowId }),
+  advance: (dir, index) => ipcRenderer.invoke('session:advance', { dir, index }),
   ask: (text, speaker) => ipcRenderer.invoke('session:ask', { text, speaker }),
   // One step of the agentic drive loop — sends the live page + goal, gets back the next action.
   agentStep: (payload) => ipcRenderer.invoke('session:agentStep', payload),

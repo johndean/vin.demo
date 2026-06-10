@@ -1,0 +1,633 @@
+{
+  "product": "defensive.software",
+  "outcomes": [
+    {
+      "title": "Improve organizational risk visibility",
+      "description": "Give leadership a single, current view of every open risk across the organization — by category, owner, and severity — so nothing is hidden in a spreadsheet or lost in email. Executives can see the full risk landscape in one place and act before exposures become incidents.",
+      "successIndicators": [
+        "Percentage of organizational risks captured and actively tracked in defensive.software (target: 100% vs. prior spreadsheet baseline)",
+        "Reduction in risks discovered only at audit or after an incident vs. risks identified proactively through the risk register",
+        "Average time from risk identification to first documented owner assignment and action",
+        "Leadership-reported confidence in risk landscape completeness (quarterly survey score)",
+        "Number of unduplicated risk categories with at least one assigned owner and a current mitigation status"
+      ]
+    },
+    {
+      "title": "Improve compliance management",
+      "description": "Track every compliance obligation — regulatory, contractual, and internal — against a documented control or evidence record so no requirement falls through the cracks. Teams know what they're accountable for, can see current status at any time, and aren't scrambling when a deadline arrives.",
+      "successIndicators": [
+        "Percentage of compliance obligations with a linked control, documented evidence, and an assigned owner in the system",
+        "Reduction in compliance findings attributable to missed or undocumented obligations year over year",
+        "Average days past due on compliance tasks or control reviews across all active frameworks",
+        "Number of compliance requirements with no evidence attached when an assessment window opens",
+        "Staff self-reported time spent on manual compliance tracking vs. time after adoption"
+      ]
+    },
+    {
+      "title": "Improve audit readiness",
+      "description": "Maintain a continuously current, evidence-backed record for every control so the organization can walk into any audit — internal, external, or regulatory — without a last-minute scramble. Readiness is a standing posture, not a fire drill.",
+      "successIndicators": [
+        "Number of audit findings citing missing, stale, or undocumented evidence (target: zero)",
+        "Average time from audit notification to delivery of complete evidence package",
+        "Percentage of controls with evidence reviewed and refreshed within their required cycle at any given point in time",
+        "Reduction in staff hours spent on evidence collection and formatting per audit cycle",
+        "Number of corrective actions from prior audits still open at the start of the next audit window"
+      ]
+    },
+    {
+      "title": "Reduce operational risk",
+      "description": "Systematically identify, document, and drive down the operational risks that can disrupt day-to-day business — staffing gaps, process failures, vendor dependencies, and controls breakdowns — before they cause an incident or a compliance breach.",
+      "successIndicators": [
+        "Reduction in the number of operational risks rated 'high' or 'critical' in the active risk register quarter over quarter",
+        "Percentage of high-severity operational risks with a documented and in-progress mitigation plan",
+        "Number of operational incidents that trace back to a risk that was already documented in the register (early warning effectiveness)",
+        "Average residual risk score across the operational risk register after mitigations are applied",
+        "Percentage of operational control reviews completed on schedule within any rolling 90-day window"
+      ]
+    },
+    {
+      "title": "Improve incident tracking",
+      "description": "Capture every incident — compliance breach, operational failure, near-miss, or policy violation — in a structured record the moment it is identified so nothing is handled informally and every event has an owner, a timeline, and a resolution path.",
+      "successIndicators": [
+        "Percentage of reported incidents with a fully completed intake record (category, owner, severity, date) within 24 hours of report",
+        "Reduction in incidents closed with no documented root cause or corrective action",
+        "Average calendar days from incident report date to documented resolution",
+        "Number of repeat incidents of the same type within a 12-month rolling window",
+        "Percentage of incidents linked to at least one corrective action in the corrective action register"
+      ]
+    },
+    {
+      "title": "Improve corrective action management",
+      "description": "Turn every finding, incident, and audit observation into a tracked corrective action with an owner, a due date, and a documented outcome — so nothing stalls in someone's inbox and leadership can see closure progress in real time.",
+      "successIndicators": [
+        "Percentage of corrective actions with an assigned owner and a documented due date at the time of creation",
+        "Average age of open corrective actions in the system at any point in time",
+        "On-time closure rate for corrective actions (closed by original due date, not extended)",
+        "Number of corrective actions that have been extended more than once without documented justification",
+        "Reduction in repeat findings linked to corrective actions that were marked closed without verified effectiveness"
+      ]
+    },
+    {
+      "title": "Increase accountability",
+      "description": "Make ownership of every risk, compliance obligation, incident, and corrective action explicit and visible so individuals know what they are responsible for and leadership can see whether owners are acting. Accountability is built into the record, not assumed.",
+      "successIndicators": [
+        "Percentage of active risks, obligations, and corrective actions that have a named, confirmed owner in the system",
+        "Reduction in items in any register that are overdue and have had no owner activity in the past 30 days",
+        "Number of escalations triggered by the system for items approaching or past their due date",
+        "Manager-reported clarity on team ownership of compliance and risk items (quarterly pulse score)",
+        "Reduction in instances where a finding or incident could not be traced to a responsible owner after the fact"
+      ]
+    },
+    {
+      "title": "Improve governance visibility",
+      "description": "Give owners, senior managers, and the management team a real-time view of governance posture — where controls are operating, where they are not, and where oversight gaps exist — without having to chase status updates from every department.",
+      "successIndicators": [
+        "Number of governance domains (HR, finance, operations, IT, safety) with active controls and current status visible in the system",
+        "Reduction in management time spent collecting status updates before board or leadership reviews",
+        "Percentage of governance reviews completed using live data from defensive.software rather than manually assembled reports",
+        "Number of governance gaps (domains with no documented controls) identified and addressed after adoption",
+        "Leadership-reported confidence in the completeness of governance oversight (quarterly survey)"
+      ]
+    },
+    {
+      "title": "Improve policy compliance",
+      "description": "Track adherence to internal policies — not just external regulations — so the organization can identify which policies are being followed, which are not, and where documented evidence of compliance exists for the policies that matter most.",
+      "successIndicators": [
+        "Percentage of active internal policies with at least one linked compliance check or control in the system",
+        "Number of policy violations recorded and linked to a corrective action within the review cycle",
+        "Reduction in internal audit findings citing policy non-compliance that were not previously tracked",
+        "Average time from a policy review date to updated compliance status reflected in the system",
+        "Percentage of staff-facing policy compliance checks with documented, current evidence"
+      ]
+    },
+    {
+      "title": "Improve issue resolution speed",
+      "description": "Shorten the time from when a risk, compliance gap, or incident is identified to when it is resolved and closed — with a documented record of what happened — by eliminating the informal hand-offs and status ambiguity that slow things down.",
+      "successIndicators": [
+        "Average calendar days from issue creation to verified closure across all issue types in the system",
+        "Percentage of issues resolved within their original target date without requiring a deadline extension",
+        "Reduction in issues that have had no activity (no status update, no note, no owner action) for more than 14 days",
+        "Number of issues escalated to a higher authority due to stalling — measured against the baseline period",
+        "Staff-reported reduction in time spent chasing issue status from other teams or individuals"
+      ]
+    },
+    {
+      "title": "Improve management oversight",
+      "description": "Equip managers and owners with the dashboards and alerts they need to stay on top of what their teams owe — open risks, overdue actions, upcoming compliance deadlines — without having to dig through email threads or ask staff for manual updates.",
+      "successIndicators": [
+        "Percentage of managers using the system at least weekly to review their team's open items rather than requesting manual status reports",
+        "Reduction in items that reach their due date without any management awareness or intervention",
+        "Number of escalations or surprises at leadership reviews that could have been caught via system dashboards",
+        "Average lag between an item becoming overdue and a manager taking a documented action on it",
+        "Manager-reported satisfaction with the completeness and timeliness of oversight information available"
+      ]
+    },
+    {
+      "title": "Improve operational transparency",
+      "description": "Make the state of risk, compliance, and corrective actions visible across the organization — so that no department is operating in a silo, ownership is shared, and anyone with a need to know can see status without having to request a briefing.",
+      "successIndicators": [
+        "Number of departments or functional areas with active records in the shared risk and compliance registers",
+        "Reduction in cross-department surprises where one team's compliance gap or incident affected another team without advance warning",
+        "Percentage of management reviews where all attendees are working from the same live system data",
+        "Staff-reported awareness of the organization's current risk and compliance posture (quarterly survey)",
+        "Number of informal status meetings or email threads replaced by live system views"
+      ]
+    },
+    {
+      "title": "Improve reporting quality",
+      "description": "Replace manually assembled, error-prone status reports with accurate, current reports drawn directly from the risk, compliance, and corrective-action records — so leadership is never making decisions on stale or incomplete data.",
+      "successIndicators": [
+        "Reduction in errors or material corrections to risk and compliance reports after distribution",
+        "Average time to prepare the monthly or quarterly risk and compliance summary report",
+        "Percentage of management and board reports sourced directly from live system data rather than manually aggregated spreadsheets",
+        "Number of times a report had to be recalled or corrected after a leadership review due to data quality issues",
+        "Recipient-rated usefulness and accuracy of risk and compliance reports (quarterly survey)"
+      ]
+    },
+    {
+      "title": "Improve risk mitigation tracking",
+      "description": "Ensure every identified risk has a documented mitigation plan with an owner, milestones, and a current status — so the organization can see which risks are actively being reduced and which are sitting idle without action.",
+      "successIndicators": [
+        "Percentage of risks rated 'medium' or above with a documented, active mitigation plan in the system",
+        "Average days between a risk being rated 'high' and a mitigation plan being created and assigned",
+        "Reduction in risks whose mitigation status has not been updated within the required review cycle",
+        "Number of risks where mitigation has progressed to a lower residual rating in the current quarter",
+        "Percentage of mitigation milestones completed on time vs. extended or abandoned"
+      ]
+    },
+    {
+      "title": "Improve business continuity readiness",
+      "description": "Document and actively track the risks, controls, and corrective actions that underpin business continuity — staffing redundancy, process documentation, vendor dependencies, and recovery plans — so the organization is genuinely prepared, not just theoretically compliant.",
+      "successIndicators": [
+        "Percentage of business continuity risks identified in the risk register with a documented control or mitigation plan",
+        "Number of business continuity controls with evidence that they have been tested within the last 12 months",
+        "Reduction in corrective actions related to business continuity that are overdue at the time of any continuity review",
+        "Average time to locate and distribute current business continuity documentation when needed",
+        "Number of business continuity gaps identified through the risk register that were unknown prior to adoption"
+      ]
+    },
+    {
+      "title": "Improve compliance reporting",
+      "description": "Produce accurate, on-demand compliance status reports for regulators, customers, insurers, and internal leadership — with the evidence trail already assembled — so the organization always has a defensible, current record it can share on short notice.",
+      "successIndicators": [
+        "Average time to produce a compliance status report for a specific framework or regulator upon request",
+        "Reduction in compliance reports returned with requests for additional evidence or clarification",
+        "Percentage of active compliance frameworks with a current, complete report available in the system at any time",
+        "Number of compliance reports produced from live system data vs. manually assembled outside the system",
+        "Reduction in staff hours per compliance report as documentation and evidence are maintained continuously"
+      ]
+    },
+    {
+      "title": "Reduce regulatory exposure",
+      "description": "Actively manage the regulatory obligations and associated controls that create the greatest financial, legal, or reputational exposure — so the organization can demonstrate compliance and correct gaps before a regulator, insurer, or customer asks.",
+      "successIndicators": [
+        "Number of high-exposure regulatory obligations with no documented control or evidence — tracked and driven to zero",
+        "Reduction in the number of regulatory findings or notices received that were attributable to a documented but unmitigated gap",
+        "Percentage of regulatory deadlines met with documented evidence on file before the deadline, not after",
+        "Reduction in premium, penalty, or remediation costs attributable to regulatory non-compliance events year over year",
+        "Time from a regulatory change notification to documented update of affected obligations and controls in the system"
+      ]
+    },
+    {
+      "title": "Improve action closure rates",
+      "description": "Drive the organization's corrective actions, risk mitigations, and compliance tasks to verified closure — not just paperwork closure — so open items are genuinely resolved and the same findings do not recur at the next review or audit.",
+      "successIndicators": [
+        "Percentage of corrective actions and risk mitigations closed on or before their original due date in any rolling quarter",
+        "Reduction in items marked 'closed' that were subsequently reopened due to ineffective resolution",
+        "Average age of the oldest open corrective action or risk mitigation in the system (target: continuous reduction)",
+        "Ratio of items opened to items closed in any given month (target: closure rate consistently exceeds open rate)",
+        "Number of repeat findings at successive audits or reviews that trace to a previously 'closed' action"
+      ]
+    },
+    {
+      "title": "Improve enterprise visibility",
+      "description": "Give the ownership and leadership team a unified view across all business areas — not a department-by-department patchwork — so they can see the overall state of risk, compliance, and governance posture without having to compile it themselves.",
+      "successIndicators": [
+        "Number of business functions with active, current records in the centralized risk and compliance system",
+        "Reduction in time leadership spends assembling a cross-functional risk and compliance picture before quarterly reviews",
+        "Percentage of significant risks or compliance gaps that were known at the leadership level before they escalated to an incident",
+        "Number of cross-functional risks or shared compliance obligations that were previously tracked in separate, siloed records",
+        "Leadership-reported improvement in organization-wide risk and compliance situational awareness (quarterly survey)"
+      ]
+    },
+    {
+      "title": "Strengthen organizational governance",
+      "description": "Embed governance into the day-to-day operation of the business — clear ownership, documented controls, active oversight, and a defensible record — so governance is not a once-a-year exercise but a continuous, verifiable practice.",
+      "successIndicators": [
+        "Percentage of governance domains with documented, assigned, and actively reviewed controls in the system",
+        "Reduction in governance-related findings at external audits or regulatory reviews year over year",
+        "Number of governance reviews conducted using live system data vs. ad hoc manual compilation",
+        "Staff-reported clarity on governance roles, responsibilities, and expectations (annual survey score)",
+        "Number of governance commitments (controls, policies, obligations) with a current, verified evidence record at any point in time"
+      ]
+    }
+  ],
+  "committee": [
+    {
+      "name": "Owner / Managing Director",
+      "role": "Owner / Managing Director",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "decision_maker",
+      "sortOrder": 0,
+      "interests": [
+        "Knowing the organization's biggest risks without having to ask staff to compile a manual summary",
+        "Being able to show any auditor, insurer, or regulator a current, defensible record on short notice",
+        "Closing out corrective actions and audit findings so they do not pile up from one review to the next",
+        "Understanding whether the organization's compliance obligations are actually being met, not just assumed to be",
+        "Reducing the personal liability exposure that comes from undocumented or unenforced governance",
+        "Getting a clear picture of business continuity readiness without commissioning a formal review",
+        "Knowing which parts of the business are generating the most risk or compliance activity at any given time",
+        "Replacing the quarterly scramble to prepare board and insurer reports with something that runs continuously",
+        "Making ownership of risks and obligations explicit — so 'we thought someone else had it' stops happening",
+        "Seeing whether prior audit and review findings have been genuinely resolved, not just administratively closed",
+        "Understanding the total cost and time her team is spending on compliance and audit preparation",
+        "Having a single place to look when something goes wrong and she needs to know who owned what"
+      ],
+      "decisionCriteria": [
+        "Will this eliminate the manual spreadsheet and email chain that currently holds our risk and compliance records together?",
+        "Can I generate a current risk and compliance summary for a board meeting without asking staff to prepare a slide deck?",
+        "Is the implementation realistic for a team our size — or does it require a consultant to stand up?",
+        "Will my compliance manager actually use it day to day, or is this another tool that gets abandoned after onboarding?",
+        "Does the cost justify the reduction in audit-prep time and regulatory risk, given what we currently spend on both?",
+        "Will it give me personal visibility into overdue corrective actions and stale risk records without me having to chase it?",
+        "Can I prove to an auditor or insurer that we have a functioning governance process — not just a software subscription?",
+        "Does it support the specific regulatory frameworks we are accountable to, or does it require heavy customization?",
+        "Is the data ours — can we export it fully if we ever need to switch or provide records to a third party?",
+        "Does adoption require my whole team to change how they work, or does it fit into what they already do?",
+        "Can the system tell me which risks have no active mitigation and which corrective actions are overdue — today, right now?",
+        "Will it reduce the number of times I am surprised by a compliance issue that staff already knew about?"
+      ],
+      "goals": [
+        "Run a governance and compliance program that is verifiable and defensible to any outside party at any time",
+        "Eliminate the risk that a significant organizational exposure is sitting undocumented in someone's inbox",
+        "Reduce the personal time I spend on audit and regulatory preparation by building it into ongoing operations",
+        "Have a clear, current answer for 'what are our top risks right now?' without commissioning a report",
+        "Ensure every finding from every audit or review generates a corrective action that is actually closed",
+        "Build a compliance and risk record that functions as institutional knowledge, not individual tribal knowledge",
+        "Reduce renewal friction with insurers by having a current, organized record of controls and compliance activities",
+        "Make it impossible for a significant risk or compliance obligation to have no owner",
+        "Demonstrate to customers, partners, and regulators that governance is a real operational practice here",
+        "Free my compliance manager from manual tracking so she can focus on assessment and improvement work",
+        "Reduce the organization's exposure to regulatory penalties by catching and correcting gaps early",
+        "Be able to hand a full governance and risk record to a successor, acquirer, or auditor without weeks of preparation"
+      ],
+      "objections": [
+        "We already have spreadsheets and a shared drive that work well enough — what will this give us that we cannot do now?",
+        "The annual cost is hard to justify when I cannot point to a specific dollar figure we are losing today",
+        "My team is stretched thin; I cannot take on a big implementation project right now",
+        "If the compliance manager is the only one who uses it, we will have the same single-point-of-failure problem we have now",
+        "I have bought software before that looked good in a demo and went unused after 90 days",
+        "How do I know the system will still be running and supported in three years, given how many GRC tools come and go?",
+        "I am worried about putting sensitive compliance and incident records into a cloud system — who else can see our data?",
+        "We do not have a dedicated IT person to manage integrations or troubleshoot when something breaks",
+        "Every audit we have been through, we have passed — so the case for change is not obvious to me",
+        "My team will push back on learning another system on top of everything else they are already managing",
+        "I need to see that this works for an organization our size, not just for a company with a full compliance department",
+        "If the price goes up significantly at renewal, I need to know we can export everything and not be locked in"
+      ],
+      "openQuestions": [
+        "Can you show me what a risk register looks like after it has been populated — how would I see our top five risks right now?",
+        "If a corrective action is overdue, how does the system alert me versus just the person who owns it?",
+        "How long does it realistically take to go from empty system to having our existing risks and obligations loaded in?",
+        "Can we import what we already have in spreadsheets, or does everything have to be entered manually?",
+        "What does a report that I could hand to an auditor or insurer actually look like when it comes out of the system?",
+        "How does the system handle a situation where a risk owner leaves the organization — can I reassign their items easily?",
+        "If we have a regulatory obligation that changes, how do we update it without losing the history of what we tracked before?",
+        "Can I see, on one screen, every item across all registers that is overdue or has had no activity in the last 30 days?",
+        "What kind of ongoing support is available after we go live — is there a person we can call, or is it a help-desk ticket?",
+        "How do you charge — per user, per record, per module — and what does the pricing look like as we grow?",
+        "Does the system support any of the specific frameworks we are accountable to, or do we have to build those from scratch?",
+        "How does the system handle confidential incident records that should not be visible to all staff?",
+        "What happens to our data if we decide to stop using the product — can we export everything in a usable format?",
+        "Can you show me a case where a customer of similar size used this to prepare for an audit they had limited notice of?",
+        "Is there a way for me to see a summary of the whole governance picture on a phone or tablet without logging into a desktop?"
+      ]
+    },
+    {
+      "name": "CEO",
+      "role": "CEO",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "approver",
+      "sortOrder": 1,
+      "interests": [
+        "Ensuring the business can pass any audit, insurer review, or regulatory check without a major scramble",
+        "Knowing that significant organizational risks are documented and being actively managed, not just assumed under control",
+        "Reducing the time leadership spends in reactive mode after a compliance incident or audit finding surfaces",
+        "Having clear accountability for compliance and risk tasks so he is not the one who has to chase owners personally",
+        "Building the kind of documented governance record that supports growth, partnership, and customer trust",
+        "Reducing personal exposure and the organization's liability from undocumented or unenforced policies",
+        "Understanding the business continuity risks that could disrupt operations and seeing that they are being mitigated",
+        "Knowing that corrective actions from past reviews are being closed, not quietly forgotten",
+        "Being able to speak credibly about the organization's governance posture to customers, auditors, and insurers",
+        "Cutting the overhead cost of manual compliance tracking and the staff time it consumes each quarter",
+        "Ensuring that critical compliance obligations do not miss their deadlines due to lack of visibility",
+        "Seeing risk and compliance performance trend over time, not just a point-in-time snapshot"
+      ],
+      "decisionCriteria": [
+        "Does this reduce the risk of a significant compliance failure or audit finding that could cost more than the software?",
+        "Can the compliance manager operate this independently without ongoing IT or consulting support?",
+        "Will it give me a clear, current risk summary I can reference in leadership discussions without asking staff to prepare it?",
+        "Is the implementation path realistic — can we be operational without a months-long rollout project?",
+        "Does it create a documented governance record that would satisfy a regulator, insurer, or acquirer?",
+        "Can it support the specific regulatory requirements we are subject to without major customization?",
+        "Will staff actually adopt it, or will it become a system only the compliance manager uses?",
+        "Does the price scale reasonably as the organization grows, or does it become expensive quickly?",
+        "Is there a clear way to demonstrate value in the first 90 days so I can confirm the investment was justified?",
+        "Can the system handle sensitive incident records with appropriate access controls for a small team?",
+        "Does it eliminate the risk of critical deadlines being missed because no one had visibility of them?",
+        "Will I be able to see at a glance which areas of the business are generating the most risk activity?"
+      ],
+      "goals": [
+        "Build a governance and risk management practice that is embedded in how the business operates, not bolted on",
+        "Reduce the organization's regulatory exposure by ensuring all obligations are documented and actively tracked",
+        "Eliminate the 'we thought someone else had it' failure mode for compliance and risk ownership",
+        "Have a defensible, current record of governance activities that can be produced on demand for any stakeholder",
+        "Free the compliance manager to do assessment and improvement work rather than manual tracking and report assembly",
+        "Reduce the time and cost of preparing for audits and regulatory reviews by maintaining continuous readiness",
+        "Close corrective actions from audit and review findings faster and with verified effectiveness",
+        "Build staff accountability for risk and compliance ownership without it requiring constant management intervention",
+        "Support business development by being able to answer compliance and governance questions from customers quickly",
+        "Reduce operational risk by surfacing and managing issues before they become incidents",
+        "Make the governance and compliance record a business asset — something that travels with the organization",
+        "Demonstrate to the board, if applicable, that risk and compliance are being managed with rigor and visibility"
+      ],
+      "objections": [
+        "We have managed compliance with spreadsheets and a shared folder for years without a major incident — why now?",
+        "The annual subscription is a real line item for a business our size — I need a clear return to justify it to the board",
+        "I am concerned about the time it takes to train staff and get the system populated before we see any benefit",
+        "If the compliance manager is the primary user, I still have a concentration risk — this does not fix the dependency",
+        "GRC software has a reputation for being complex; I need to know this is genuinely operable for a lean team",
+        "What is the real cost when you include implementation time, training, and any customization we need?",
+        "I have seen cloud software vendors change their pricing model significantly at renewal — what protects us from that?",
+        "I am not convinced staff will enter incidents and issues in good faith if they think the record will be used against them",
+        "If we are mid-cycle on an existing audit or compliance calendar, how do we get started without creating confusion?",
+        "How do we know the data we put in is accurate — can the system help us validate what we have, or is it garbage in, garbage out?",
+        "I need to know who can see our incident and corrective-action records — privacy and sensitivity matter here",
+        "What happens to historical records and evidence if we export the data and move to a different system later?"
+      ],
+      "openQuestions": [
+        "Can you show me what a CEO-level view looks like — what do I see when I log in that is relevant to me specifically?",
+        "How does the system alert me, as opposed to the compliance manager, when something significant needs my attention?",
+        "What does the onboarding path look like for an organization that is coming from spreadsheets with no prior GRC tool?",
+        "How long before we would have a risk and compliance record that we could defend to an auditor?",
+        "Can you show me a report that would satisfy an insurer asking for evidence of our risk management practices?",
+        "What safeguards prevent a risk or compliance obligation from going unowned when the responsible person leaves?",
+        "How does the system handle regulatory changes — if a rule we track gets updated, how do we update our records?",
+        "Can staff see each other's corrective actions and findings, or can we control visibility by role or department?",
+        "How does the product handle a situation where we have an incident we need to document but are not ready to assign blame?",
+        "If we run a tabletop exercise or continuity drill, can we record the outcomes and any corrective actions in the system?",
+        "What does adoption look like for non-compliance staff — how much time does the system ask of an operations manager per week?",
+        "How does the product stay current with changing regulations — does the vendor update frameworks, or do we maintain them?",
+        "Can you show me how a customer of similar size got from initial setup to audit-ready and how long that took?",
+        "What does the export look like if we ever need to share our risk register or compliance evidence with a third party?",
+        "Is there a mobile-friendly way to view or update risk and compliance status in the field or between meetings?"
+      ]
+    },
+    {
+      "name": "COO",
+      "role": "COO",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "approver",
+      "sortOrder": 2,
+      "interests": [
+        "Knowing which operational risks are open, who owns them, and whether mitigations are actually in progress",
+        "Replacing the end-of-quarter scramble to collect compliance and risk status from department heads",
+        "Having a system that makes corrective action ownership visible so she does not have to manually track follow-up",
+        "Seeing incident records in a structured format rather than in email threads that are impossible to audit later",
+        "Understanding where operational controls are weak or untested and prioritizing which gaps to address first",
+        "Making business continuity readiness something the business can demonstrate, not just assert",
+        "Reducing the time her team spends preparing risk and compliance materials for leadership and board reviews",
+        "Ensuring that corrective actions from operational incidents actually change the underlying process or control",
+        "Getting ahead of regulatory deadlines instead of reacting when a deadline is already close",
+        "Knowing which departments are generating the most open risks and corrective actions at any given time",
+        "Having a single place to go when she needs to brief the owner or CEO on operational risk status",
+        "Reducing the administrative burden on operations staff so they spend less time on tracking and more on work"
+      ],
+      "decisionCriteria": [
+        "Will this reduce the time my team spends on manual risk and compliance tracking and report assembly?",
+        "Can department heads and operations managers update their own items without extensive training?",
+        "Does the system give me a cross-departmental view of open corrective actions and risk mitigations in one place?",
+        "Will it make it clear when a corrective action is overdue and who is responsible, without me having to check individually?",
+        "Does it support operational incident tracking in enough detail to identify root causes and repeat patterns?",
+        "Can we configure it to match how we actually categorize and manage our specific operational risks?",
+        "Is it realistic to go live on our compliance calendar without disrupting active assessments or in-progress reviews?",
+        "Does it give me visibility into which risks have no mitigation plan versus which are being actively worked?",
+        "Will it reduce the number of times I am blindsided at a leadership review by a compliance gap I did not know about?",
+        "Can I see, across all operational registers, what is due in the next 30 and 90 days without building a custom report?",
+        "Does it handle the sensitivity of incident records appropriately for an operations environment?",
+        "Will the system work for staff who are not compliance professionals — is the interface usable without specialized training?"
+      ],
+      "goals": [
+        "Run a compliance and risk program that is continuous and visible, not a quarterly or annual scramble",
+        "Make operational risk ownership part of how department heads and managers think about their work",
+        "Reduce the time I spend as the manual coordinator between compliance, operations, and leadership on risk status",
+        "Close corrective actions from operational incidents faster and verify that the underlying issue has been fixed",
+        "Build a documented operational control library that serves as institutional knowledge, not one person's memory",
+        "Have a current, exportable view of the organization's operational risk posture I can present at any time",
+        "Reduce repeat operational incidents by ensuring root-cause corrective actions are tracked to closure",
+        "Improve business continuity readiness by documenting and testing continuity controls in the same system",
+        "Support regulatory compliance by making sure operational obligations are tracked and met before deadlines",
+        "Reduce the personal time I invest in chasing overdue compliance tasks and corrective action updates",
+        "Demonstrate operational governance maturity to customers, insurers, and regulators who ask for evidence",
+        "Free operations staff from manual tracking so they can focus on the work itself rather than documenting it"
+      ],
+      "objections": [
+        "My operations team already resists adding more administrative tasks — if this creates overhead, they will ignore it",
+        "We have tried to standardize how we track operational risks before and it did not stick — what makes this different?",
+        "The compliance manager will set this up, but if she is out, no one else will know how to use it",
+        "I need to know this works for mixed teams — some staff are comfortable with software, others are not",
+        "Implementation always takes longer than the vendor says; I cannot afford to have my team distracted for months",
+        "If the system requires manual data entry for every incident and corrective action, staff will game it or avoid it",
+        "We have audit-cycle dependencies — I cannot migrate in the middle of an active assessment without risk",
+        "How do we handle incidents that start informally and only become formal later — does the system support that workflow?",
+        "I am concerned that if ownership data is visible to everyone, staff will be reluctant to log real incidents",
+        "What is the actual per-user cost and how does that scale if we add department-level access for all managers?",
+        "If a regulatory framework we track gets retired or replaced, how much rework does that create in the system?",
+        "I need to be confident the vendor has genuine experience with organizations our size, not just enterprise customers"
+      ],
+      "openQuestions": [
+        "Can you show me what an operations manager sees when they log in — what is relevant to them specifically versus the compliance manager?",
+        "How does the system handle an incident that starts as an informal email and needs to be formalized after the fact?",
+        "If I want to see all overdue corrective actions across the whole organization in one view, how do I do that?",
+        "Can the system generate a list of everything due in the next 30 days across all registers for a weekly operations review?",
+        "How do we track that a corrective action was actually effective — not just that someone clicked 'closed'?",
+        "Can department heads update their own risk and corrective action records without requiring compliance manager involvement?",
+        "How does the system handle an operational risk that spans two departments — can it have co-owners?",
+        "If we have an incident involving a third-party vendor, how do we record and track that?",
+        "Can we attach photos, inspection reports, or external documents to a risk or incident record?",
+        "How does the system handle records that need to be restricted — incidents involving personnel, for example?",
+        "If we want to do a quarterly operational risk review, can the system generate a summary report automatically?",
+        "What does the notification system look like — can I set up alerts for items approaching their due date by department?",
+        "How do we handle a risk that has been open for a long time because mitigation is genuinely complex — does the system flag those separately?",
+        "Can you show me how a business continuity control would be documented, tested, and updated in the system?",
+        "What does migration from our current spreadsheet tracking actually look like — is there an import tool or is it manual entry?"
+      ]
+    },
+    {
+      "name": "Comptroller",
+      "role": "Comptroller",
+      "influence": "medium",
+      "riskLevel": "medium",
+      "decisionAuthority": "approver",
+      "sortOrder": 3,
+      "interests": [
+        "Understanding the total cost of the subscription including any per-user or per-module pricing as usage grows",
+        "Ensuring that financial and fiscal compliance obligations are tracked in the same system as operational obligations",
+        "Having an audit trail for corrective actions and compliance tasks that covers who did what and when",
+        "Knowing that the cost of the tool is justified by a demonstrable reduction in audit-prep hours or regulatory-penalty risk",
+        "Ensuring that access controls prevent unauthorized users from viewing or modifying sensitive financial compliance records",
+        "Understanding how the system handles multi-year data retention for compliance records that have legal hold requirements",
+        "Seeing that the vendor has a credible privacy and data-security posture for sensitive organizational records",
+        "Knowing whether the system can support financial compliance frameworks such as internal controls documentation",
+        "Understanding what happens to historical records if the organization terminates the subscription",
+        "Tracking the real staff cost — in hours — of the compliance program before and after adoption",
+        "Being confident the system does not create hidden costs through mandatory professional services or integrations",
+        "Understanding the contract terms, including renewal pricing commitments and data-portability guarantees"
+      ],
+      "decisionCriteria": [
+        "Is the total cost of ownership — subscription plus setup time plus any required services — proportionate to the risk reduction?",
+        "Can I get a commitment on renewal pricing so we are not exposed to a significant increase in year two or three?",
+        "Does the system produce an audit trail for compliance records that would satisfy an external auditor or regulator?",
+        "Can we control which users can see financial compliance and incident records versus general organizational risk records?",
+        "Does the vendor have a clear data-retention and export policy so we are not locked in with no viable exit?",
+        "Is there a way to demonstrate return on investment through reduced audit-prep hours or closed findings within the first year?",
+        "Can the system support internal controls documentation if we decide to formalize that as part of the compliance program?",
+        "Are there any mandatory add-ons or integrations that would increase the real cost beyond the base subscription?",
+        "Does the pricing model scale in a way that is predictable — by user, by record count, by module — and is that disclosed upfront?",
+        "Can the system generate a cost-versus-risk summary report that helps me make the budget case to the owner?",
+        "Is the vendor's financial stability and support track record strong enough to trust with multi-year compliance records?",
+        "Does the contract include any data-portability clause that lets us export records in a usable format on termination?"
+      ],
+      "goals": [
+        "Ensure that every dollar spent on the compliance and risk program is traceable to a specific reduction in exposure or overhead",
+        "Document and track financial compliance obligations alongside operational ones so nothing is managed separately",
+        "Build a compliance and risk record with a defensible audit trail that protects the organization financially",
+        "Reduce the annual cost of audit preparation by eliminating manual assembly of compliance and risk evidence",
+        "Control access to sensitive financial and compliance records within the system at a granular level",
+        "Ensure the organization is not financially exposed by a surprise regulatory finding that was in the system but never escalated",
+        "Justify the ongoing subscription cost through measurable improvements in compliance readiness and audit outcomes",
+        "Negotiate and protect data-portability terms so the organization retains ownership of its compliance records",
+        "Track the staff time cost of compliance activities before and after adoption to build a genuine ROI case",
+        "Ensure that record retention in the system meets the legal and regulatory requirements for our specific obligations",
+        "Reduce renewal pricing uncertainty by getting multi-year terms or price caps in the initial contract",
+        "Support the owner's governance goals without creating financial risk through unpredictable software costs"
+      ],
+      "objections": [
+        "The annual subscription cost is real money for an organization our size and I need a concrete return, not a qualitative story",
+        "We have managed our compliance obligations through a combination of spreadsheets and document storage without material findings — I need to understand what specifically is broken",
+        "Per-user pricing models can become expensive quickly as we add access for department managers — I need total cost transparency",
+        "I am skeptical of compliance software vendors who price aggressively in year one and increase substantially at renewal",
+        "If the implementation requires the compliance manager to spend significant hours setting up the system, that is a real cost I have to account for",
+        "I need assurance that sensitive financial compliance records are access-controlled and not visible to all staff",
+        "Data retention requirements for some of our compliance records run to seven years or more — how does the vendor handle that?",
+        "If we terminate the subscription, I need to know we can export complete records in a format that remains usable",
+        "What happens to records we have entered if the vendor is acquired or shuts down — is there a data escrow or portability guarantee?",
+        "I am not confident the time savings will show up quickly enough to justify the cost in the first budget cycle",
+        "There are no mandatory professional services or implementation fees hidden below the subscription cost, right?",
+        "I need to understand whether the system creates any additional compliance obligations of its own, such as data-privacy requirements for the information we enter"
+      ],
+      "openQuestions": [
+        "Can you walk me through exactly how the subscription is priced — what counts as a user and what triggers an additional charge?",
+        "If we add five department managers as read-only viewers, does that change the cost and by how much?",
+        "What does the renewal pricing look like — is there a price cap, an inflation clause, or is it negotiated annually?",
+        "Can you show me the audit trail for a compliance record — specifically what is logged and whether it would satisfy an external auditor?",
+        "How does the system handle data retention for records that have a seven-year legal hold requirement?",
+        "If we terminate the subscription, what exactly does the data export include and in what format?",
+        "Are there any modules, integrations, or features that are outside the base subscription and that we might need?",
+        "Can access to financial compliance records be restricted to the comptroller and compliance manager only?",
+        "Is there a way to run a cost-benefit report that shows compliance program cost and outputs before and after adoption?",
+        "What is the vendor's track record on pricing stability — can you share what renewal pricing has looked like for similar customers?",
+        "Does the platform have SOC 2 or equivalent certification covering the security of the compliance data we store?",
+        "What happens to our data if the vendor is acquired — does the contract include any data-portability or escrow provision?",
+        "Can you give me a realistic estimate of the setup hours required from the compliance manager in the first 90 days?",
+        "How do we handle a compliance record that was created in error — can it be corrected with an audit trail intact?",
+        "Does the system produce a report I could use to brief the owner on the compliance program cost and outcomes at year end?"
+      ]
+    },
+    {
+      "name": "Compliance Manager",
+      "role": "Compliance Manager",
+      "influence": "high",
+      "riskLevel": "high",
+      "decisionAuthority": "champion",
+      "sortOrder": 4,
+      "interests": [
+        "Having a single, structured system to manage all compliance obligations, risks, incidents, and corrective actions instead of spreadsheets and shared folders",
+        "Being able to show leadership a current, accurate risk and compliance status at any time without assembling it manually",
+        "Tracking all corrective actions from audits, incidents, and self-assessments in one place with due dates and owner visibility",
+        "Eliminating the risk that a compliance deadline is missed because it was tracked only in her personal calendar or a spreadsheet",
+        "Building an evidence library — documented controls and attached records — that is always current and audit-ready",
+        "Being able to run an internal assessment quickly using the system's controls and obligation records rather than starting from scratch",
+        "Having a dashboard that shows which items are overdue, which are approaching their due date, and which have no owner",
+        "Being able to produce a compliance report for an insurer, regulator, or management review without a multi-day preparation effort",
+        "Managing incident records in a way that is structured, confidential where required, and linked to corrective actions",
+        "Having a risk register that she can update continuously rather than revising once a year for an annual review",
+        "Getting automated reminders out to risk and action owners so she is not the one chasing every overdue item",
+        "Being able to demonstrate the maturity and progress of the compliance program over time to the owner and CEO"
+      ],
+      "decisionCriteria": [
+        "Does the system support the specific compliance frameworks we are accountable to — can I map our obligations to controls without rebuilding everything from scratch?",
+        "Can I import what we already have in spreadsheets, or will I have to re-enter hundreds of existing records manually?",
+        "Is the corrective action workflow complete — can I assign an action, set a due date, require evidence of closure, and verify effectiveness?",
+        "Does the incident record capture the fields I need: category, date, severity, root cause, linked corrective action, and resolution status?",
+        "Can I attach documents, photos, and evidence files directly to risk, obligation, incident, and corrective action records?",
+        "Does the system send automated reminders and escalations to item owners without me having to chase each one manually?",
+        "Can I generate a ready-to-use compliance report for management, insurers, or regulators in under 30 minutes?",
+        "Is the risk register flexible enough to capture risks across different categories — operational, financial, HR, environmental — in a single register?",
+        "Can I control who sees what — ensuring sensitive incident records are not visible to all staff?",
+        "Does the system have a way to track that a corrective action was actually effective, not just marked closed?",
+        "Can I configure the risk scoring methodology to match our existing risk matrix rather than using a fixed system?",
+        "Is the interface usable for department managers and non-compliance staff who need to update their own items without training from me?"
+      ],
+      "goals": [
+        "Manage every compliance obligation, risk, incident, and corrective action in a single system with full audit trail",
+        "Reduce the time I spend on manual tracking, report assembly, and chasing overdue items so I can focus on assessment work",
+        "Build a continuously current evidence library so I am never scrambling to locate records when an audit opens",
+        "Demonstrate to the owner and CEO that the compliance program is active, measurable, and improving over time",
+        "Eliminate the risk of a missed compliance deadline or overlooked audit finding due to spreadsheet gaps",
+        "Make corrective action closure a real organizational process, not just an item I mark done when I think it is resolved",
+        "Increase the quality and defensibility of our incident records so that any future review can rely on what we documented",
+        "Build a risk register that is reviewed and updated regularly, not just revisited once a year during the annual assessment",
+        "Reduce the preparation time for compliance reporting by maintaining records continuously rather than assembling them at deadline",
+        "Create a governance and compliance record that survives staff changes — mine included — and does not live only in my head",
+        "Improve management accountability for risk and compliance ownership so that the program does not run on my effort alone",
+        "Be able to answer any question from an auditor, regulator, or insurer within one business day using the system's records"
+      ],
+      "objections": [
+        "If the system does not support the specific regulatory frameworks we track, I will spend more time customizing it than using it",
+        "I am the one who will set this up, populate it, and maintain it — if the import tools are poor, I am looking at weeks of data entry",
+        "I have used compliance tools before that were designed for enterprise teams with dedicated IT support — they do not work for a lean team like mine",
+        "If the corrective action workflow does not support evidence-of-closure and effectiveness verification, it is not enough for our audit requirements",
+        "The system needs to send automated reminders to action owners — I cannot be the manual reminder service for every overdue item",
+        "If the reporting is not flexible enough to produce the specific outputs my insurers and regulators ask for, I will still end up reformatting in a spreadsheet",
+        "Sensitive incident records — especially those involving personnel — cannot be visible to general staff; if the access controls are not granular, this is a showstopper",
+        "I need to know the system can handle the volume of records we already have without slowing down or becoming hard to navigate",
+        "If department managers find the interface confusing, they will ask me to enter their items for them and I will have more work, not less",
+        "I am worried about becoming dependent on a system and then having the vendor change pricing or discontinue a feature we rely on",
+        "If the risk register uses a fixed scoring methodology I cannot adjust, it will not match the risk matrix we already use",
+        "I need to be able to run the system myself without needing the vendor's professional services team every time I want to add a framework or change a workflow"
+      ],
+      "openQuestions": [
+        "Can you show me how I would set up a compliance framework — say, a specific regulatory standard — and map our existing obligations and controls to it?",
+        "What does a corrective action record look like from creation to closure — specifically, how do I require evidence before I can mark something as closed and verified effective?",
+        "If I have 200 existing risk records in a spreadsheet, what does the import process look like and what format does the data need to be in?",
+        "How does the incident record handle a situation where I know something happened but the full details are still being gathered — can I open a draft or preliminary record?",
+        "Can I attach a scanned audit report, a photo, or an external document directly to a risk or corrective action record as evidence?",
+        "How do automated reminders work — can I configure separate reminder schedules for different types of items and different owner roles?",
+        "If a corrective action owner claims something is done but I need to verify before closing, what does that verification workflow look like in the system?",
+        "Can I create a report that shows all open corrective actions from a specific audit or review, with current status, for a management briefing?",
+        "How does the system handle a risk that has multiple contributing controls — can I link one risk to several controls and track each separately?",
+        "If I need to restrict a specific incident record to only two people, how do I configure that without restricting access to the rest of the module?",
+        "Can I configure a risk-scoring matrix that matches our existing 5x5 likelihood-by-impact scale, or is the scoring fixed?",
+        "How does the system handle a compliance obligation that is due annually — does it auto-renew the due date after I close the current cycle?",
+        "If a department manager needs to update their own corrective actions, what does their view look like and how much do they see of the broader compliance picture?",
+        "Can you show me the dashboard I would use every Monday morning to see what is overdue, what is due this week, and what has had no activity in 14 days?",
+        "How do I record and track the outcome of an internal assessment or tabletop exercise — can the findings flow directly into the corrective action register?",
+        "If the owner or COO asks me for a compliance status report on 48 hours' notice, what does that report look like and how long does it take me to produce it?"
+      ]
+    }
+  ]
+}
