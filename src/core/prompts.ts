@@ -45,7 +45,12 @@ export const PROMPTS: PromptDef[] = [
       'feature is performed or explained; only choose a sub-view / result list (e.g. a "bypassed", "history", or ' +
       '"completed" list) when the stakeholder EXPLICITLY asks for that sub-view. A GENERAL "how does X work?" ' +
       'question (e.g. "how does delegation work?") maps to the PRIMARY screen, NOT a "bypassed"/"delegated"/"history" ' +
-      'sub-view — route to a sub-view only when its name is explicitly requested. Return "" if none fit.',
+      'sub-view — route to a sub-view only when its name is explicitly requested. ' +
+      'Treat CONFIGURATION / SETTINGS screens (e.g. a "settings" or "workflow settings" page) the same way: choose ' +
+      'them ONLY when the request is explicitly about CONFIGURING or setting up the feature. For a request about ' +
+      'USING a feature, its business OUTCOME, or reducing / streamlining / automating a process (e.g. "reduce ' +
+      'approval delays", "approval workflow automation"), prefer the screen where that work actually HAPPENS — the ' +
+      'queue, list, or detail — NOT the settings screen. Return "" if none fit.',
   },
   {
     key: 'explainWhy', fn: 'explainWhy', group: 'Answering & explaining', title: 'Explain "why did you show that?"',
