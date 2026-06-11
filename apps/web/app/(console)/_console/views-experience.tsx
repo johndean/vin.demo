@@ -374,6 +374,10 @@ export function Journeys({ go }: { go?: Go }) {
         <button className="btn btn-primary btn-sm" disabled={allMode} title={allMode ? 'Pick a product first' : ''} onClick={() => product && setForm({ mode: 'add', prod: product })}><Icon name="plus" size={12} /> New journey</button>
       </div>} />
 
+    {/* Add / Edit / Assemble open FULL-WIDTH (Knowledge idiom), replacing the list+inspector. */}
+    {form ? <JourneyForm product={form.prod} mode={form.mode} row={form.row} onClose={() => setForm(null)} />
+      : assemble && product ? <AssembleForm product={product} onClose={() => setAssemble(false)} />
+      : <>
     {/* ── Filter row (Knowledge idiom): product · status pills · search · count ── */}
     <div className="flex between items-center" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
       <div className="flex gap-2" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
@@ -415,8 +419,7 @@ export function Journeys({ go }: { go?: Go }) {
     </div>
 
     {!allMode && product && <GapPanel product={product} go={go} />}
-    {form && <JourneyForm product={form.prod} mode={form.mode} row={form.row} onClose={() => setForm(null)} />}
-    {assemble && product && <AssembleForm product={product} onClose={() => setAssemble(false)} />}
+      </>}
   </div>);
 }
 
