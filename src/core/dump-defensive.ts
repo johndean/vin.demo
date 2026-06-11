@@ -1,0 +1,15 @@
+import { db } from './db.js';
+import { writeFileSync } from 'node:fs';
+const pool=db();
+const p=(await pool.query<any>(`SELECT id,workspace_id FROM products WHERE name='defensive.software' AND archived_at IS NULL`)).rows[0];
+const g=(await pool.query<any>(`SELECT id FROM demo_graphs WHERE product_id=$1 AND status='active' AND archived_at IS NULL ORDER BY graph_version DESC LIMIT 1`,[p.id])).rows[0];
+const nodes=(await pool.query<any>(`SELECT intent_label, screen_route, screen_type, business_purpose FROM demo_graph_nodes WHERE demo_graph_id=$1 AND archived_at IS NULL ORDER BY intent_label`,[g.id])).rows;
+const wfs=(await pool.query<any>(`SELECT workflow_name, node_sequence, business_purpose FROM demo_graph_workflows WHERE demo_graph_id=$1 AND archived_at IS NULL ORDER BY workflow_name`,[g.id])).rows;
+const outs=(await pool.query<any>(`SELECT id,title FROM business_outcomes WHERE product_id=$1 AND archived_at IS NULL ORDER BY title`,[p.id])).rows;
+const ks=(await pool.query<any>(`SELECT content FROM knowledge_chunks kc JOIN knowledge_bases kb ON kb.id=kc.knowledge_base_id WHERE kb.product_id=$1 AND kc.archived_at IS NULL AND (kc.lifecycle_state='validated' OR kc.validation_status='validated')`,[p.id])).rows.map((r:any)=>r.content);
+const compl = ks.filter((c:string)=>/complian|regulat|framework|audit|policy|standard|control|govern|retention|evidence|SOC|ISO|GDPR|DMCA|legal/i.test(c));
+writeFileSync('/tmp/gapwork/defensive_detail.json', JSON.stringify({productId:p.id, graphId:g.id, nodes, workflows:wfs, outcomes:outs, complianceKnowledge:compl, knowledgeCount:ks.length}, null, 2));
+console.log(`nodes=${nodes.length} workflows=${wfs.length} outcomes=${outs.length} validKnowledge=${ks.length} compliance-related=${compl.length}`);
+console.log('\nNODE LABELS:'); console.log(nodes.map((n:any)=>n.intent_label).join(' | '));
+console.log('\nCOMPLIANCE/REGULATORY KNOWLEDGE ('+compl.length+'):');
+for(const c of compl) console.log('  • '+c.replace(/\s+/g,' ').slice(0,200));

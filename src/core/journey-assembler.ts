@@ -61,7 +61,12 @@ export async function assembleJourney(input: AssembleInput, actor = 'journey-ass
   const knowledge = (await db().query<any>(
     `SELECT kc.id, kc.content, kc.category, kc.confidence FROM knowledge_chunks kc JOIN knowledge_bases kb ON kb.id = kc.knowledge_base_id
       WHERE kb.product_id = $1 AND kc.archived_at IS NULL AND (kc.lifecycle_state = 'validated' OR kc.validation_status = 'validated')`, [productId])).rows;
-  const personas = (await db().query<any>(`SELECT id, name, expertise FROM personas WHERE workspace_id = $1 AND archived_at IS NULL`, [prod.workspace_id]).catch(() => ({ rows: [] as any[] }))).rows;
+  // Personas store their expertise inside the `definition` jsonb (role/scope/traits) — there is no `expertise`
+  // column. Read definition and derive an expertise string so relevance scoring + the specialist match actually
+  // see the configured specialists (previously this query referenced a non-existent column → always [] → the
+  // persona gap fired on every outcome and no specialist ever attached).
+  const personas = (await db().query<any>(`SELECT id, name, definition FROM personas WHERE workspace_id = $1 AND archived_at IS NULL`, [prod.workspace_id]).catch(() => ({ rows: [] as any[] }))).rows
+    .map((p: any) => { const d = p.definition || {}; return { ...p, expertise: [d.role, d.scope, Array.isArray(d.traits) ? d.traits.join(' ') : ''].filter(Boolean).join(' ') }; });
   const environments = (await db().query<any>(`SELECT id, name, readiness_state, certification_status FROM environments WHERE product_id = $1 AND archived_at IS NULL`, [productId]).catch(() => ({ rows: [] as any[] }))).rows;
 
   const outcomeText = `${outcome.title} ${outcome.description ?? ''} ${outcome.metric ?? ''}`;
