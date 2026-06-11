@@ -135,6 +135,9 @@ export function AiControl({ go }: { go?: Go }) {
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState<string>(''); // key currently saving ('model' for the model card)
   const [q, setQ] = useState('');
+  const [statusF, setStatusF] = useState('all'); // all | overridden | default
+  const [grp, setGrp] = useState('all');         // prompt group filter
+  const [sel, setSel] = useState('');            // selected prompt key (master/detail)
   const [shownDefault, setShownDefault] = useState<Record<string, boolean>>({});
 
   // Merge per-key so a mutation NEVER clobbers other cards' unsaved drafts. seedAll = initial load (set every
@@ -174,15 +177,17 @@ export function AiControl({ go }: { go?: Go }) {
   const isDirty = (p: AiPromptRow) => (drafts[p.key] ?? p.effective).trim() !== p.effective.trim();
   const dirtyCount = prompts.filter(isDirty).length;
   const needle = q.trim().toLowerCase();
-  // A dirty card stays visible even under a search that wouldn't otherwise match — so an in-progress edit is
+  const groupNames = useMemo(() => [...new Set(prompts.map((p) => p.group))], [prompts]);
+  // A dirty prompt stays visible even under a search that wouldn't otherwise match — so an in-progress edit is
   // never stranded out of view. The live draft is also part of the search text.
-  const filtered = needle ? prompts.filter((p) => isDirty(p) || `${p.title} ${p.help} ${p.group} ${p.fn} ${p.effective} ${drafts[p.key] ?? ''}`.toLowerCase().includes(needle)) : prompts;
-  // Preserve registry order; group by display group.
-  const groups = useMemo(() => {
-    const order: string[] = []; const map = new Map<string, AiPromptRow[]>();
-    for (const p of filtered) { if (!map.has(p.group)) { map.set(p.group, []); order.push(p.group); } map.get(p.group)!.push(p); }
-    return order.map((g) => ({ group: g, rows: map.get(g)! }));
-  }, [filtered]);
+  const matchQ = (p: AiPromptRow) => !needle || isDirty(p) || `${p.title} ${p.help} ${p.group} ${p.fn} ${p.effective} ${drafts[p.key] ?? ''}`.toLowerCase().includes(needle);
+  const matchStatus = (p: AiPromptRow) => statusF === 'all' || (statusF === 'overridden' ? p.overridden : !p.overridden);
+  const matchGrp = (p: AiPromptRow) => grp === 'all' || p.group === grp;
+  // A prompt with unsaved edits is ALWAYS visible — no status pill, group select, or search can strand an
+  // in-progress edit out of view (a freshly-edited prompt is not yet `overridden`, so the status pill would
+  // otherwise drop it).
+  const filtered = prompts.filter((p) => isDirty(p) || (matchQ(p) && matchStatus(p) && matchGrp(p)));
+  const selected = filtered.find((p) => p.key === sel) ?? filtered[0];
 
   return (
     <div className="page scroll">
@@ -192,12 +197,12 @@ export function AiControl({ go }: { go?: Go }) {
       {err && <div className="card card-pad" style={{ marginBottom: 12, color: 'var(--danger,#a8332f)', fontSize: 13 }}>{err}</div>}
       {loading ? <div className="card card-pad muted">Loading AI configuration from the engine…</div> : (
         <>
-          {/* ── Model ── */}
+          {/* ── Model (the control banner — which brain every demo runs on) ── */}
           <div className="card" style={{ marginBottom: 16 }}>
             <div className="card-hd flex between items-center">
               <span className="cell-strong">Demo model</span>
               <span className="flex items-center gap-2">
-                <span className="muted" style={{ fontSize: 12 }}>The Claude model every demo runs on{model?.source === 'override' ? ' · switched from default' : ' · using default'}</span>
+                <span className="muted" style={{ fontSize: 12 }}>The model every demo runs on{model?.source === 'override' ? ' · switched from default' : ' · using default'}</span>
                 {model?.source === 'override' && <button className="btn btn-secondary btn-sm" disabled={busy === 'model'} onClick={() => void resetModel()}>Use default</button>}
               </span>
             </div>
@@ -222,53 +227,73 @@ export function AiControl({ go }: { go?: Go }) {
             </div>
           </div>
 
-          {/* ── Prompts ── */}
-          <div className="card" style={{ marginBottom: 12 }}>
-            <div className="card-pad flex gap-2 items-center" style={{ flexWrap: 'wrap' }}>
-              <span className="cell-strong">Default prompts</span>
-              <span className="muted" style={{ fontSize: 12 }}>{prompts.filter((p) => p.overridden).length} overridden · {prompts.length} total{dirtyCount ? ` · ${dirtyCount} unsaved` : ''}</span>
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search prompts…" style={{ marginLeft: 'auto', padding: '6px 9px', border: '1px solid var(--border-subtle,#d8dde6)', borderRadius: 8, fontSize: 13, flex: '0 1 240px' }} />
+          {/* ── Filter row (Knowledge idiom): group select · status pills · search · count ── */}
+          <div className="flex between items-center" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
+            <div className="flex gap-2" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+              <select value={grp} onChange={(e) => setGrp(e.target.value)} aria-label="Filter by group"
+                style={{ fontSize: 12, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--line, #d4dae3)', fontWeight: 600, background: 'var(--surface, #fff)', color: 'var(--text-primary, #1a2b45)' }}>
+                <option value="all">All groups</option>
+                {groupNames.map((gname) => <option key={gname} value={gname}>{gname}</option>)}
+              </select>
+              {([['all', 'All', prompts.length], ['overridden', 'Overridden', prompts.filter((p) => p.overridden).length], ['default', 'Unmodified', prompts.filter((p) => !p.overridden).length]] as [string, string, number][]).map(([id, lbl, n]) => (
+                <button key={id} className={`btn btn-sm ${statusF === id ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setStatusF(id)}>{lbl} <span style={{ opacity: .7 }}>{n}</span></button>
+              ))}
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search prompts…"
+                style={{ padding: '6px 10px', border: '1px solid var(--line, #d4dae3)', borderRadius: 6, fontSize: 12.5, flex: '0 1 220px' }} />
             </div>
+            <span className="muted" style={{ fontSize: 12 }}>{filtered.length} of {prompts.length} prompts · {prompts.filter((p) => p.overridden).length} overridden{dirtyCount ? ` · ${dirtyCount} unsaved` : ''}</span>
           </div>
 
-          {groups.map(({ group, rows }) => (
-            <div key={group} style={{ marginBottom: 14 }}>
-              <div className="overline" style={{ margin: '0 2px 8px' }}>{group}</div>
-              <div style={{ display: 'grid', gap: 10 }}>
-                {rows.map((p) => {
-                  const draft = drafts[p.key] ?? p.effective;
-                  const dirty = draft.trim() !== p.effective.trim(); // match the engine, which trims + ignores whitespace-only deltas
-                  const saving = busy === p.key;
-                  return (
-                    <div key={p.key} className="card">
-                      <div className="card-hd flex between items-center">
-                        <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
-                          <span className="cell-strong">{p.title}</span>
-                          {p.overridden && <Pill kind="warn">Overridden</Pill>}
-                          <code style={{ fontSize: 11, color: 'var(--muted,#8499b3)' }}>{p.key}</code>
-                        </div>
-                        <span className="muted" style={{ fontSize: 11.5 }}>{p.fn}</span>
-                      </div>
-                      <div className="card-pad" style={{ display: 'grid', gap: 8 }}>
-                        <div className="muted" style={{ fontSize: 12 }}>{p.help}</div>
-                        <textarea value={draft} onChange={(e) => setDrafts((d) => ({ ...d, [p.key]: e.target.value }))}
-                          rows={Math.min(14, Math.max(3, Math.ceil(draft.length / 90)))}
-                          style={{ width: '100%', fontFamily: 'var(--mono,ui-monospace,monospace)', fontSize: 12, lineHeight: 1.5, padding: '10px 12px', borderRadius: 8, border: `1px solid ${dirty ? 'var(--accent,#0861ce)' : 'var(--border-subtle,#e2e7ee)'}`, resize: 'vertical', background: 'var(--app-subtle,#f9fafc)' }} />
-                        <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
-                          <button className="btn btn-primary btn-sm" disabled={!dirty || saving || !draft.trim()} onClick={() => savePrompt(p.key)}>{saving ? 'Saving…' : 'Save override'}</button>
-                          {p.overridden && <button className="btn btn-secondary btn-sm" disabled={saving} onClick={() => resetPrompt(p.key)}>Reset to default</button>}
-                          {dirty && <button className="btn btn-ghost btn-sm" disabled={saving} onClick={() => setDrafts((d) => ({ ...d, [p.key]: p.effective }))}>Discard changes</button>}
-                          {p.overridden && <button className="btn btn-ghost btn-sm" onClick={() => setShownDefault((s) => ({ ...s, [p.key]: !s[p.key] }))}>{shownDefault[p.key] ? 'Hide default' : 'View shipped default'}</button>}
-                        </div>
-                        {p.overridden && shownDefault[p.key] && <PromptBlock label="Shipped default (Reset restores this)" text={p.default} />}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
+          {/* ── Two-pane: prompt list (left) · editor inspector (right) ── */}
+          <div className="grid" style={{ gridTemplateColumns: '1.6fr 1fr', alignItems: 'start' }}>
+            <div className="card" style={{ overflow: 'hidden' }}>
+              <table className="tbl">
+                <thead><tr><th>Prompt</th><th>Group</th><th>Function</th><th>Status</th></tr></thead>
+                <tbody>
+                  {filtered.map((p) => {
+                    const dirty = isDirty(p);
+                    return (
+                      <tr key={p.key} onClick={() => setSel(p.key)} style={selected?.key === p.key ? { background: 'var(--app-active)' } : {}}>
+                        <td><div className="cell-strong">{p.title}</div><div className="cell-sub mono">{p.key}</div></td>
+                        <td><Pill kind="neutral">{p.group}</Pill></td>
+                        <td className="muted" style={{ fontSize: 12 }}>{p.fn}</td>
+                        <td>{p.overridden ? <Pill kind="warn">Overridden</Pill> : <Pill kind="neutral" dot>Default</Pill>}{dirty ? <Pill kind="info">unsaved</Pill> : null}</td>
+                      </tr>
+                    );
+                  })}
+                  {filtered.length === 0 && <tr><td colSpan={4} className="muted" style={{ padding: 20, textAlign: 'center' }}>No prompts in this view.</td></tr>}
+                </tbody>
+              </table>
             </div>
-          ))}
-          {groups.length === 0 && <div className="card card-pad muted">No prompts match “{q}”.</div>}
+            {selected && (() => {
+              const p = selected;
+              const draft = drafts[p.key] ?? p.effective;
+              const dirty = draft.trim() !== p.effective.trim();
+              const saving = busy === p.key;
+              return (
+                <div className="card" style={{ position: 'sticky', top: 0 }}>
+                  <div className="card-hd"><div>
+                    <div className="overline">Prompt · {p.fn}</div>
+                    <h3 style={{ marginTop: 4, fontSize: 14, lineHeight: 1.3 }}>{p.title} {p.overridden && <Pill kind="warn">Overridden</Pill>}</h3>
+                    <code style={{ fontSize: 11, color: 'var(--muted,#8499b3)' }}>{p.key}</code>
+                  </div></div>
+                  <div className="card-pad" style={{ display: 'grid', gap: 8 }}>
+                    <div className="muted" style={{ fontSize: 12 }}>{p.help}</div>
+                    <textarea value={draft} onChange={(e) => setDrafts((d) => ({ ...d, [p.key]: e.target.value }))}
+                      rows={Math.min(20, Math.max(5, Math.ceil(draft.length / 64)))}
+                      style={{ width: '100%', fontFamily: 'var(--mono,ui-monospace,monospace)', fontSize: 12, lineHeight: 1.5, padding: '10px 12px', borderRadius: 8, border: `1px solid ${dirty ? 'var(--accent,#0861ce)' : 'var(--border-subtle,#e2e7ee)'}`, resize: 'vertical', background: 'var(--app-subtle,#f9fafc)' }} />
+                    <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
+                      <button className="btn btn-primary btn-sm" disabled={!dirty || saving || !draft.trim()} onClick={() => savePrompt(p.key)}>{saving ? 'Saving…' : 'Save override'}</button>
+                      {p.overridden && <button className="btn btn-secondary btn-sm" disabled={saving} onClick={() => resetPrompt(p.key)}>Reset to default</button>}
+                      {dirty && <button className="btn btn-ghost btn-sm" disabled={saving} onClick={() => setDrafts((d) => ({ ...d, [p.key]: p.effective }))}>Discard changes</button>}
+                      {p.overridden && <button className="btn btn-ghost btn-sm" onClick={() => setShownDefault((s) => ({ ...s, [p.key]: !s[p.key] }))}>{shownDefault[p.key] ? 'Hide default' : 'View shipped default'}</button>}
+                    </div>
+                    {p.overridden && shownDefault[p.key] && <PromptBlock label="Shipped default (Reset restores this)" text={p.default} />}
+                  </div>
+                </div>
+              );
+            })()}
+          </div>
         </>
       )}
     </div>

@@ -23,19 +23,17 @@ export function Experience({ go }: { go?: Go }) {
   const data = useData();
   const products = (data.products ?? []).filter((p) => !p.archived);
   const [pid, setPid] = useState(products[0]?.id ?? '');
-  const product = products.find((p) => p.id === pid) ?? products[0];
+  const [tab, setTab] = useState<'outcomes' | 'committee'>('outcomes');
+  const [subF, setSubF] = useState('all');   // outcomes: status · committee: influence
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState('');
+  const [outcomeForm, setOutcomeForm] = useState<{ mode: 'add' | 'edit'; row?: OutcomeRow; prod: ProductRow } | null>(null);
+  const [stakeForm, setStakeForm] = useState<{ mode: 'add' | 'edit'; row?: CommitteeMemberRow; prod: ProductRow } | null>(null);
+  const [relForm, setRelForm] = useState<{ prod: ProductRow } | null>(null);
+  const closeForms = () => { setOutcomeForm(null); setStakeForm(null); setRelForm(null); };
+  const switchTab = (t: 'outcomes' | 'committee') => { setTab(t); setSubF('all'); setSel(''); };
 
-  const [outcomeForm, setOutcomeForm] = useState<{ mode: 'add' | 'edit'; row?: OutcomeRow } | null>(null);
-  const [stakeForm, setStakeForm] = useState<{ mode: 'add' | 'edit'; row?: CommitteeMemberRow } | null>(null);
-  const [relForm, setRelForm] = useState(false);
-  // Single-inspector discipline: opening one editor closes the others, so the right column shows exactly one
-  // form at a time (and the matching list row highlights). Add/Edit/Manage are INLINE here — never stacked at the bottom.
-  const openOutcome = (v: { mode: 'add' | 'edit'; row?: OutcomeRow }) => { setStakeForm(null); setRelForm(false); setOutcomeForm(v); };
-  const openStake = (v: { mode: 'add' | 'edit'; row?: CommitteeMemberRow }) => { setOutcomeForm(null); setRelForm(false); setStakeForm(v); };
-  const openRel = () => { setOutcomeForm(null); setStakeForm(null); setRelForm(true); };
-  const closeForms = () => { setOutcomeForm(null); setStakeForm(null); setRelForm(false); };
-
-  if (!product) {
+  if (!products.length) {
     return (
       <div className="page scroll">
         <PageHead overline="Experience" title="Outcomes & Buying Committee" desc="The business outcomes a demo must advance, and the people in the room who decide." go={go} />
@@ -43,116 +41,178 @@ export function Experience({ go }: { go?: Go }) {
       </div>
     );
   }
+  const allMode = pid === 'all';
+  const product = products.find((p) => p.id === pid); // undefined in all-products view
+  const needle = q.trim().toLowerCase();
 
-  const outcomes = product.outcomes ?? [];
-  const committee = product.committee ?? [];
-  const rels = product.stakeholderRelationships ?? [];
-  const nameOf = (id: string) => committee.find((m) => m.id === id)?.name ?? '(archived)';
+  // Rows carry their product so Edit / Archive operate correctly even in the cross-product "All" view.
+  const outcomeRows = (allMode ? products.flatMap((p) => (p.outcomes ?? []).map((o) => ({ o, prod: p })))
+    : (product?.outcomes ?? []).map((o) => ({ o, prod: product! })));
+  const committeeRows = (allMode ? products.flatMap((p) => (p.committee ?? []).map((m) => ({ m, prod: p })))
+    : (product?.committee ?? []).map((m) => ({ m, prod: product! })));
+
+  const oFiltered = outcomeRows.filter(({ o }) => (subF === 'all' || o.status === subF)
+    && (!needle || `${o.title} ${o.description} ${o.metric} ${o.stakeholderType}`.toLowerCase().includes(needle)));
+  const cFiltered = committeeRows.filter(({ m }) => (subF === 'all' || m.influence === subF)
+    && (!needle || `${m.name} ${m.role} ${fromList(m.decisionCriteria)} ${fromList(m.objections)} ${fromList(m.goals)}`.toLowerCase().includes(needle)));
+
+  const oSel = oFiltered.find((r) => r.o.id === sel) ?? (tab === 'outcomes' ? oFiltered[0] : undefined);
+  const cSel = cFiltered.find((r) => r.m.id === sel) ?? (tab === 'committee' ? cFiltered[0] : undefined);
+  const formOpen = outcomeForm || stakeForm || relForm;
+
+  const addCtx = () => { if (!product) return; tab === 'outcomes' ? setOutcomeForm({ mode: 'add', prod: product }) : setStakeForm({ mode: 'add', prod: product }); };
 
   return (
     <div className="page scroll">
       <PageHead overline="Experience" title="Outcomes & Buying Committee"
         desc="The business outcomes a demo must advance, and the people in the room who decide — the top of the Stakeholder → Outcome → Journey chain."
         go={go}
-        actions={
-          <select value={pid} onChange={(e) => setPid(e.target.value)}>
-            {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        } />
+        actions={<button className="btn btn-primary btn-sm" disabled={allMode} title={allMode ? 'Pick a product first' : ''} onClick={addCtx}><Icon name="plus" size={13} /> Add {tab === 'outcomes' ? 'outcome' : 'person'}</button>} />
 
-      <div className="grid cols-3">
-        {/* ── COL 1 · Business Outcome Registry ── */}
-        <div className="card">
-          <div className="card-hd flex between items-center">
-            <div><span className="overline">Business outcomes</span> <span className="muted">· {outcomes.length}</span></div>
-            <button className="btn btn-primary btn-sm" onClick={() => openOutcome({ mode: 'add' })}><Icon name="plus" size={12} /> Add</button>
+      {/* Add / Edit / relationship forms open FULL-WIDTH (Knowledge idiom), replacing the list+inspector. */}
+      {outcomeForm ? <OutcomeForm product={outcomeForm.prod} mode={outcomeForm.mode} row={outcomeForm.row} onClose={closeForms} />
+        : stakeForm ? <StakeholderForm product={stakeForm.prod} mode={stakeForm.mode} row={stakeForm.row} onClose={closeForms} />
+        : relForm ? <RelationshipForm product={relForm.prod} committee={relForm.prod.committee ?? []} onClose={closeForms} />
+        : null}
+
+      {!formOpen && (
+        <>
+          {/* ── Filter row (Knowledge idiom): product · entity toggle · sub-filter pills · search · count ── */}
+          <div className="flex between items-center" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
+            <div className="flex gap-2" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+              <select value={pid} onChange={(e) => { setPid(e.target.value); setSel(''); }} aria-label="Filter by product"
+                style={{ fontSize: 12, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--line, #d4dae3)', fontWeight: 600, background: 'var(--surface, #fff)', color: 'var(--text-primary, #1a2b45)' }}>
+                <option value="all">All products</option>
+                {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <span style={{ width: 1, alignSelf: 'stretch', background: 'var(--line,#e2e7ee)', margin: '0 2px' }} />
+              {([['outcomes', 'Outcomes', outcomeRows.length], ['committee', 'Committee', committeeRows.length]] as [('outcomes' | 'committee'), string, number][]).map(([id, lbl, n]) => (
+                <button key={id} className={`btn btn-sm ${tab === id ? 'btn-primary' : 'btn-secondary'}`} onClick={() => switchTab(id)}>{lbl} <span style={{ opacity: .7 }}>{n}</span></button>
+              ))}
+              <span style={{ width: 1, alignSelf: 'stretch', background: 'var(--line,#e2e7ee)', margin: '0 2px' }} />
+              {(tab === 'outcomes'
+                ? [['all', 'All'], ['active', 'Active'], ['draft', 'Draft'], ['deprecated', 'Deprecated']]
+                : [['all', 'All'], ['high', 'High'], ['medium', 'Medium'], ['low', 'Low']]
+              ).map(([id, lbl]) => {
+                const n = id === 'all' ? (tab === 'outcomes' ? outcomeRows.length : committeeRows.length)
+                  : (tab === 'outcomes' ? outcomeRows.filter((r) => r.o.status === id).length : committeeRows.filter((r) => r.m.influence === id).length);
+                return <button key={id} className={`btn btn-sm ${subF === id ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setSubF(id); setSel(''); }}>{lbl} <span style={{ opacity: .7 }}>{n}</span></button>;
+              })}
+              <input value={q} onChange={(e) => { setQ(e.target.value); setSel(''); }} placeholder={tab === 'outcomes' ? 'Search outcomes…' : 'Search committee…'}
+                style={{ padding: '6px 10px', border: '1px solid var(--line, #d4dae3)', borderRadius: 6, fontSize: 12.5, flex: '0 1 220px' }} />
+            </div>
+            <span className="muted" style={{ fontSize: 12 }}>{tab === 'outcomes' ? `${oFiltered.length} of ${outcomeRows.length} outcomes` : `${cFiltered.length} of ${committeeRows.length} committee`}{allMode ? ' · all products' : product ? ` · ${product.name}` : ''}</span>
           </div>
-          <div className="card-pad" style={{ padding: '6px 12px' }}>
-            {outcomes.length === 0
-              ? <div className="muted" style={{ padding: '14px 4px' }}>No outcomes defined yet. A business outcome (e.g. “Reduce approval delays”) is what a demo must demonstrably advance — define one to start linking journeys and evidence to it.</div>
-              : outcomes.map((o) => (
-                  <div key={o.id} className="exp-row" data-active={outcomeForm?.row?.id === o.id ? 'true' : 'false'}>
-                    <div className="exp-row__main">
-                      <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
-                        <span className="cell-strong">{o.title}</span>
-                        <Pill kind={STATUS_KIND[o.status] ?? 'neutral'}>{o.status}</Pill>
-                        <span className="muted tnum" style={{ fontSize: 11 }}>v{o.version}</span>
-                      </div>
-                      {o.description ? <div className="cell-sub">{o.description}</div> : null}
-                      {(o.metric || o.target || o.stakeholderType)
-                        ? <div className="cell-sub">{[o.metric, (o.baseline ? `${o.baseline} → ` : '') + (o.target || ''), o.stakeholderType ? `for ${o.stakeholderType}` : ''].filter(Boolean).join(' · ')}</div>
-                        : null}
-                    </div>
-                    <div className="exp-row__side">
-                      <button className="btn btn-secondary btn-sm" onClick={() => openOutcome({ mode: 'edit', row: o })}>Edit</button>
-                      <ArchiveBtn label="Archive outcome" onConfirm={() => experienceMutate('outcome.archive', { outcomeId: o.id })} />
-                    </div>
-                  </div>
-                ))}
+
+          {/* ── Two-pane: registry list (left) · inspector (right) ── */}
+          <div className="grid" style={{ gridTemplateColumns: '1.6fr 1fr', alignItems: 'start' }}>
+            <div className="card" style={{ overflow: 'hidden' }}>
+              {tab === 'outcomes' ? (
+                <table className="tbl">
+                  <thead><tr><th>Outcome</th>{allMode && <th>Product</th>}<th>Status</th><th>Metric → Target</th><th>For role</th></tr></thead>
+                  <tbody>
+                    {oFiltered.map(({ o, prod }) => (
+                      <tr key={o.id} onClick={() => setSel(o.id)} style={oSel?.o.id === o.id ? { background: 'var(--app-active)' } : {}}>
+                        <td><div className="cell-strong">{o.title}</div>{o.description ? <div className="cell-sub">{o.description}</div> : null}</td>
+                        {allMode && <td><Pill kind="neutral">{prod.name}</Pill></td>}
+                        <td><Pill kind={STATUS_KIND[o.status] ?? 'neutral'}>{o.status}</Pill></td>
+                        <td className="cell-sub">{[o.metric, (o.baseline ? `${o.baseline} → ` : '') + (o.target || '')].filter((s) => s && s.trim()).join(' · ') || '—'}</td>
+                        <td className="cell-sub">{o.stakeholderType || '—'}</td>
+                      </tr>
+                    ))}
+                    {oFiltered.length === 0 && <tr><td colSpan={allMode ? 5 : 4} className="muted" style={{ padding: 20, textAlign: 'center' }}>No outcomes in this view.</td></tr>}
+                  </tbody>
+                </table>
+              ) : (
+                <table className="tbl">
+                  <thead><tr><th>Person</th>{allMode && <th>Product</th>}<th>Role</th><th>Influence</th><th>Authority</th></tr></thead>
+                  <tbody>
+                    {cFiltered.map(({ m, prod }) => (
+                      <tr key={m.id} onClick={() => setSel(m.id)} style={cSel?.m.id === m.id ? { background: 'var(--app-active)' } : {}}>
+                        <td><div className="cell-strong">{m.name}</div>{fromList(m.decisionCriteria) ? <div className="cell-sub">evaluates: {fromList(m.decisionCriteria)}</div> : null}</td>
+                        {allMode && <td><Pill kind="neutral">{prod.name}</Pill></td>}
+                        <td className="cell-sub">{m.role || '—'}</td>
+                        <td>{m.influence ? <Pill kind={m.influence === 'high' ? 'success' : m.influence === 'medium' ? 'info' : 'neutral'}>{m.influence}</Pill> : <span className="muted">—</span>}</td>
+                        <td className="cell-sub">{m.decisionAuthority ? m.decisionAuthority.replace('_', ' ') : '—'}</td>
+                      </tr>
+                    ))}
+                    {cFiltered.length === 0 && <tr><td colSpan={allMode ? 5 : 4} className="muted" style={{ padding: 20, textAlign: 'center' }}>No committee members in this view.</td></tr>}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            {tab === 'outcomes'
+              ? (oSel && <OutcomeInspector o={oSel.o} prod={oSel.prod} onEdit={() => setOutcomeForm({ mode: 'edit', row: oSel.o, prod: oSel.prod })} />)
+              : (cSel && <CommitteeInspector m={cSel.m} prod={cSel.prod} onEdit={() => setStakeForm({ mode: 'edit', row: cSel.m, prod: cSel.prod })} onAddEdge={() => setRelForm({ prod: cSel.prod })} />)}
           </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Outcome inspector (right pane) — full trust-metadata-style detail + edit/archive. */
+function OutcomeInspector({ o, prod, onEdit }: { o: OutcomeRow; prod: ProductRow; onEdit: () => void }) {
+  return (
+    <div className="card" style={{ position: 'sticky', top: 0 }}>
+      <div className="card-hd"><div><div className="overline">Business outcome</div><h3 style={{ marginTop: 4, fontSize: 14, lineHeight: 1.3 }}>{o.title} <Pill kind={STATUS_KIND[o.status] ?? 'neutral'}>{o.status}</Pill></h3></div></div>
+      <div className="card-pad">
+        {o.description ? <p className="muted" style={{ fontSize: 12.5, lineHeight: 1.6, margin: '0 0 16px' }}>{o.description}</p> : null}
+        <div className="trust">
+          <div className="trust__row"><span className="trust__k">Product</span><span className="trust__v" style={{ fontWeight: 700 }}>{prod.name}</span></div>
+          <div className="trust__row"><span className="trust__k">Metric</span><span className="trust__v">{o.metric || '—'}</span></div>
+          <div className="trust__row"><span className="trust__k">Baseline → Target</span><span className="trust__v">{[o.baseline, o.target].filter(Boolean).join(' → ') || '—'}</span></div>
+          <div className="trust__row"><span className="trust__k">Matters most to</span><span className="trust__v">{o.stakeholderType || '—'}</span></div>
+          <div className="trust__row"><span className="trust__k">Owner</span><span className="trust__v">{o.owner || '—'}</span></div>
+          <div className="trust__row"><span className="trust__k">Version</span><span className="trust__v">v{o.version}</span></div>
         </div>
-
-        {/* ── COL 2 · Buying Committee (Stakeholder Registry) + influence graph ── */}
-        <div className="card">
-          <div className="card-hd flex between items-center">
-            <div><span className="overline">Buying committee</span> <span className="muted">· {committee.length}</span></div>
-            <button className="btn btn-primary btn-sm" onClick={() => openStake({ mode: 'add' })}><Icon name="plus" size={12} /> Add</button>
-          </div>
-          <div className="card-pad" style={{ padding: '6px 12px' }}>
-            {committee.length === 0
-              ? <div className="muted" style={{ padding: '14px 4px' }}>No committee defined yet. These are the humans in the room (Owner, Operations, Finance…) with their influence, decision authority, and what they each evaluate on. (Distinct from AI Specialists — those live under Personas.)</div>
-              : committee.map((m) => (
-                  <div key={m.id} className="exp-row" data-active={stakeForm?.row?.id === m.id ? 'true' : 'false'}>
-                    <div className="exp-row__main">
-                      <div className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
-                        <span className="cell-strong">{m.name}</span>
-                        {m.influence ? <Pill kind={m.influence === 'high' ? 'success' : m.influence === 'medium' ? 'info' : 'neutral'}>{m.influence}</Pill> : null}
-                        {m.decisionAuthority ? <span className="muted" style={{ fontSize: 11 }}>{m.decisionAuthority.replace('_', ' ')}</span> : null}
-                      </div>
-                      {m.role && m.role !== m.name ? <div className="cell-sub">{m.role}</div> : null}
-                      {(fromList(m.decisionCriteria) || fromList(m.objections))
-                        ? <div className="cell-sub">{[fromList(m.decisionCriteria) ? `evaluates: ${fromList(m.decisionCriteria)}` : '', fromList(m.objections) ? `objections: ${fromList(m.objections)}` : ''].filter(Boolean).join(' · ')}</div>
-                        : null}
-                    </div>
-                    <div className="exp-row__side">
-                      <button className="btn btn-secondary btn-sm" onClick={() => openStake({ mode: 'edit', row: m })}>Edit</button>
-                      <ArchiveBtn label="Archive person" onConfirm={() => experienceMutate('stakeholder.archive', { stakeholderId: m.id })} />
-                    </div>
-                  </div>
-                ))}
-
-            {/* Influence graph — edges between committee members */}
-            {committee.length >= 2 && (
-              <>
-                <div className="divider" style={{ margin: '12px 0' }} />
-                <div className="flex between items-center">
-                  <span className="overline">Influence graph <span className="muted">· {rels.length} {rels.length === 1 ? 'edge' : 'edges'}</span></span>
-                  <button className="btn btn-secondary btn-sm" onClick={openRel}><Icon name="plus" size={12} /> Add</button>
-                </div>
-                {rels.length === 0
-                  ? <div className="muted" style={{ marginTop: 8 }}>No relationships modeled yet. Map who reports to / influences / defers to / blocks whom.</div>
-                  : <div className="flex gap-2" style={{ flexWrap: 'wrap', marginTop: 8 }}>
-                      {rels.map((r) => (
-                        <span key={r.id} className="pill pill-neutral" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                          {nameOf(r.from)} <b>{(r.relation || 'influences').replace('_', ' ')}</b> {nameOf(r.to)}{r.weight ? ` · ${r.weight}` : ''}
-                          <button className="btn btn-secondary btn-sm" title="Remove" onClick={() => experienceMutate('relationship.archive', { relationshipId: r.id }).then(() => location.reload())}>×</button>
-                        </span>
-                      ))}
-                    </div>}
-              </>
-            )}
-          </div>
+        <div className="flex gap-2" style={{ marginTop: 14 }}>
+          <button className="btn btn-secondary btn-sm" onClick={onEdit}><Icon name="edit" size={14} /> Edit</button>
+          <ArchiveBtn label="Archive outcome" onConfirm={() => experienceMutate('outcome.archive', { outcomeId: o.id })} />
         </div>
+      </div>
+    </div>
+  );
+}
 
-        {/* ── COL 3 · Inspector (sticky) — Add / Edit / Manage opens INLINE here, never stacked at the bottom ── */}
-        <div className="exp-insp">
-          {outcomeForm ? <OutcomeForm product={product} mode={outcomeForm.mode} row={outcomeForm.row} onClose={closeForms} />
-            : stakeForm ? <StakeholderForm product={product} mode={stakeForm.mode} row={stakeForm.row} onClose={closeForms} />
-            : relForm ? <RelationshipForm product={product} committee={committee} onClose={closeForms} />
-            : <div className="card card-pad muted exp-insp__empty">
-                <div className="overline" style={{ marginBottom: 8 }}>Inspector</div>
-                Pick <b>Add</b> or <b>Edit</b> on any outcome, committee member, or influence edge — it opens here for inline editing, and the selected row highlights while you work.
-              </div>}
+/** Committee-member inspector (right pane) — profile + the influence edges they're part of + edit/archive/add-edge. */
+function CommitteeInspector({ m, prod, onEdit, onAddEdge }: { m: CommitteeMemberRow; prod: ProductRow; onEdit: () => void; onAddEdge: () => void }) {
+  const committee = prod.committee ?? [];
+  const rels = (prod.stakeholderRelationships ?? []).filter((r) => r.from === m.id || r.to === m.id);
+  const nameOf = (id: string) => committee.find((x) => x.id === id)?.name ?? '(archived)';
+  const list = (label: string, v: string) => v ? <div className="trust__row"><span className="trust__k">{label}</span><span className="trust__v">{v}</span></div> : null;
+  return (
+    <div className="card" style={{ position: 'sticky', top: 0 }}>
+      <div className="card-hd"><div><div className="overline">Committee member</div><h3 style={{ marginTop: 4, fontSize: 14, lineHeight: 1.3 }}>{m.name} {m.influence ? <Pill kind={m.influence === 'high' ? 'success' : m.influence === 'medium' ? 'info' : 'neutral'}>{m.influence}</Pill> : null}</h3></div></div>
+      <div className="card-pad">
+        <div className="trust">
+          <div className="trust__row"><span className="trust__k">Product</span><span className="trust__v" style={{ fontWeight: 700 }}>{prod.name}</span></div>
+          {list('Role', m.role)}
+          {list('Decision authority', m.decisionAuthority ? m.decisionAuthority.replace('_', ' ') : '')}
+          {list('Risk level', m.riskLevel)}
+          {list('Interests', fromList(m.interests))}
+          {list('Evaluates on', fromList(m.decisionCriteria))}
+          {list('Goals', fromList(m.goals))}
+          {list('Objections', fromList(m.objections))}
+          {list('Open questions', fromList(m.questions))}
+        </div>
+        <hr className="divider" style={{ margin: '16px 0' }} />
+        <div className="flex between items-center" style={{ marginBottom: 8 }}>
+          <div className="overline">Influence edges <span className="muted">· {rels.length}</span></div>
+          {committee.length >= 2 ? <button className="btn btn-secondary btn-sm" onClick={onAddEdge}><Icon name="plus" size={12} /> Edge</button> : null}
+        </div>
+        {rels.length === 0 ? <div className="muted" style={{ fontSize: 12 }}>No relationships modeled for this person.</div>
+          : <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
+              {rels.map((r) => (
+                <span key={r.id} className="pill pill-neutral" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', fontSize: 11 }}>
+                  {nameOf(r.from)} <b>{(r.relation || 'influences').replace('_', ' ')}</b> {nameOf(r.to)}{r.weight ? ` · ${r.weight}` : ''}
+                  <button className="btn btn-secondary btn-sm" title="Remove" onClick={() => experienceMutate('relationship.archive', { relationshipId: r.id }).then(() => location.reload())}>×</button>
+                </span>
+              ))}
+            </div>}
+        <div className="flex gap-2" style={{ marginTop: 14 }}>
+          <button className="btn btn-secondary btn-sm" onClick={onEdit}><Icon name="edit" size={14} /> Edit</button>
+          <ArchiveBtn label="Archive person" onConfirm={() => experienceMutate('stakeholder.archive', { stakeholderId: m.id })} />
         </div>
       </div>
     </div>
@@ -283,34 +343,80 @@ export function Journeys({ go }: { go?: Go }) {
   const data = useData();
   const products = (data.products ?? []).filter((p) => !p.archived);
   const [pid, setPid] = useState(products[0]?.id ?? '');
-  const product = products.find((p) => p.id === pid) ?? products[0];
-  const [form, setForm] = useState<{ mode: 'add' | 'edit'; row?: JourneyRow } | null>(null);
+  const [statusF, setStatusF] = useState('all');
+  const [q, setQ] = useState('');
+  const [sel, setSel] = useState('');
+  const [form, setForm] = useState<{ mode: 'add' | 'edit'; row?: JourneyRow; prod: ProductRow } | null>(null);
   const [assemble, setAssemble] = useState(false);
 
-  if (!product) {
+  if (!products.length) {
     return (<div className="page scroll">
       <PageHead overline="Experience" title="Journeys" desc="Orchestrate existing workflows, tours, knowledge and specialists into a guided story toward a business outcome." go={go} />
       <div className="banner banner-info">No products yet — onboard a product first.</div>
     </div>);
   }
-  const journeys = product.journeys ?? [];
+  const allMode = pid === 'all';
+  const product = products.find((p) => p.id === pid); // undefined in all-products view
+  // Rows carry their product so Edit / Archive / Gap work correctly even in the cross-product "All" view.
+  const rows = (allMode ? products.flatMap((p) => (p.journeys ?? []).map((j) => ({ j, prod: p })))
+    : (product?.journeys ?? []).map((j) => ({ j, prod: product! })));
+  const needle = q.trim().toLowerCase();
+  const filtered = rows.filter(({ j }) => (statusF === 'all' || j.status === statusF)
+    && (!needle || `${j.name} ${j.businessGoal} ${j.outcomeTitle} ${j.stakeholderNames.join(' ')}`.toLowerCase().includes(needle)));
+  const selected = filtered.find((r) => r.j.id === sel) ?? filtered[0];
+
   return (<div className="page scroll">
     <PageHead overline="Experience" title="Journeys"
       desc="The orchestration layer — string a product's REAL workflows / tours / knowledge into one guided narrative, tied to a business outcome and the committee it's for. References real assets; a missing one is flagged, never hidden."
       go={go}
       actions={<div className="flex gap-2 items-center">
-        <select value={pid} onChange={(e) => setPid(e.target.value)}>{products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</select>
-        <button className="btn btn-secondary btn-sm" onClick={() => setAssemble(true)}>⚙ Assemble from assets</button>
-        <button className="btn btn-primary btn-sm" onClick={() => setForm({ mode: 'add' })}><Icon name="plus" size={12} /> New journey</button>
+        <button className="btn btn-secondary btn-sm" disabled={allMode} title={allMode ? 'Pick a product first' : ''} onClick={() => setAssemble(true)}>⚙ Assemble from assets</button>
+        <button className="btn btn-primary btn-sm" disabled={allMode} title={allMode ? 'Pick a product first' : ''} onClick={() => product && setForm({ mode: 'add', prod: product })}><Icon name="plus" size={12} /> New journey</button>
       </div>} />
-    <div className="card"><div className="card-pad">
-      {journeys.length === 0
-        ? <div className="muted">No journeys yet for {product.name}. A journey strings together this product's verified workflows, recorded tours and knowledge — tied to a business outcome and the committee it's for — into one guided story. (Orchestrates existing assets; it does not replace ASK/TALK/REEL/SCRIPTED.)</div>
-        : journeys.map((j) => <JourneyCard key={j.id} j={j} onEdit={() => setForm({ mode: 'edit', row: j })} />)}
-    </div></div>
-    <GapPanel product={product} go={go} />
-    {form && <JourneyForm product={product} mode={form.mode} row={form.row} onClose={() => setForm(null)} />}
-    {assemble && <AssembleForm product={product} onClose={() => setAssemble(false)} />}
+
+    {/* ── Filter row (Knowledge idiom): product · status pills · search · count ── */}
+    <div className="flex between items-center" style={{ marginBottom: 14, flexWrap: 'wrap', gap: 12 }}>
+      <div className="flex gap-2" style={{ flexWrap: 'wrap', alignItems: 'center' }}>
+        <select value={pid} onChange={(e) => { setPid(e.target.value); setSel(''); }} aria-label="Filter by product"
+          style={{ fontSize: 12, padding: '6px 10px', borderRadius: 6, border: '1px solid var(--line, #d4dae3)', fontWeight: 600, background: 'var(--surface, #fff)', color: 'var(--text-primary, #1a2b45)' }}>
+          <option value="all">All products</option>
+          {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+        </select>
+        {([['all', 'All', rows.length], ['draft', 'Draft', rows.filter((r) => r.j.status === 'draft').length], ['active', 'Active', rows.filter((r) => r.j.status === 'active').length], ['deprecated', 'Deprecated', rows.filter((r) => r.j.status === 'deprecated').length]] as [string, string, number][]).map(([id, lbl, n]) => (
+          <button key={id} className={`btn btn-sm ${statusF === id ? 'btn-primary' : 'btn-secondary'}`} onClick={() => { setStatusF(id); setSel(''); }}>{lbl} <span style={{ opacity: .7 }}>{n}</span></button>
+        ))}
+        <input value={q} onChange={(e) => { setQ(e.target.value); setSel(''); }} placeholder="Search journeys…"
+          style={{ padding: '6px 10px', border: '1px solid var(--line, #d4dae3)', borderRadius: 6, fontSize: 12.5, flex: '0 1 220px' }} />
+      </div>
+      <span className="muted" style={{ fontSize: 12 }}>{filtered.length} of {rows.length} journeys{allMode ? ' · all products' : product ? ` · ${product.name}` : ''}</span>
+    </div>
+
+    {/* ── Two-pane: journey list (left) · journey inspector (right) ── */}
+    <div className="grid" style={{ gridTemplateColumns: '1.6fr 1fr', alignItems: 'start' }}>
+      <div className="card" style={{ overflow: 'hidden' }}>
+        <table className="tbl">
+          <thead><tr><th>Journey</th>{allMode && <th>Product</th>}<th>Status</th><th>Integrity</th><th>Conf.</th><th>Runs</th></tr></thead>
+          <tbody>
+            {filtered.map(({ j, prod }) => (
+              <tr key={j.id} onClick={() => setSel(j.id)} style={selected?.j.id === j.id ? { background: 'var(--app-active)' } : {}}>
+                <td><div className="cell-strong">{j.name}</div>{j.outcomeTitle ? <div className="cell-sub">{j.outcomeTitle}</div> : null}</td>
+                {allMode && <td><Pill kind="neutral">{prod.name}</Pill></td>}
+                <td><Pill kind={STATUS_KIND[j.status] ?? 'neutral'}>{j.status}</Pill></td>
+                <td>{j.missingCount > 0 ? <Pill kind="danger">{j.missingCount} broken</Pill> : (j.storyFlow.length > 0 ? <Pill kind="success" dot>refs ok</Pill> : <span className="muted">—</span>)}</td>
+                <td>{j.confidence != null ? <Pill kind={j.confidence >= 75 ? 'success' : j.confidence >= 45 ? 'warn' : 'danger'}>{j.confidence}%</Pill> : <span className="muted">—</span>}</td>
+                <td className="muted tnum">{j.runs}</td>
+              </tr>
+            ))}
+            {filtered.length === 0 && <tr><td colSpan={allMode ? 6 : 5} className="muted" style={{ padding: 20, textAlign: 'center' }}>No journeys in this view{rows.length === 0 ? ` — Assemble from assets or create one for ${product?.name ?? 'this product'}.` : '.'}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+      {selected && <JourneyCard j={selected.j} onEdit={() => setForm({ mode: 'edit', row: selected.j, prod: selected.prod })} />}
+    </div>
+
+    {!allMode && product && <GapPanel product={product} go={go} />}
+    {form && <JourneyForm product={form.prod} mode={form.mode} row={form.row} onClose={() => setForm(null)} />}
+    {assemble && product && <AssembleForm product={product} onClose={() => setAssemble(false)} />}
   </div>);
 }
 
