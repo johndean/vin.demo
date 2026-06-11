@@ -268,8 +268,14 @@ const PAGE_SNAPSHOT_JS = `(function(){
       item.filled = (t==='checkbox'||t==='radio') ? !!el.checked : !!el.value;
       if(!item.filled && t!=='checkbox' && t!=='radio'){ // custom combobox: the chosen value often renders in a sibling node while the input itself stays empty
         try{ var cb=el.closest('[role="combobox"]')||el.closest('[class*="select"],[class*="Select"],[class*="combobox"],[class*="Combobox"],[class*="autocomplete"],[class*="Autocomplete"]');
-          if(cb){ var sv=cb.querySelector('[class*="singleValue"],[class*="single-value"],[class*="multiValue"],[class*="multi-value"],[aria-selected="true"]');
-            if(sv && (sv.textContent||'').trim()) item.filled=true; } }catch(e){}
+          if(cb){ var sv=cb.querySelector('[class*="singleValue"],[class*="single-value"],[class*="multiValue"],[class*="multi-value"],[class*="-value"],[class*="Value"],[class*="selected"],[class*="Selected"],[class*="chosen"],[aria-selected="true"]');
+            if(sv && (sv.textContent||'').trim()){ item.filled=true; }
+            else { // last resort — the container shows chosen text that is neither the placeholder nor the (empty) input
+              var ph=(el.getAttribute('placeholder')||'').trim(); var ival=(el.value||'').trim();
+              var ctext=(cb.textContent||'').replace(/\\s+/g,' ').trim();
+              if(ctext && ctext.length<80 && ctext!==ph && ctext!==ival && !/^(search|select|choose|type to search|— *none *—)/i.test(ctext)) item.filled=true;
+            }
+          } }catch(e){}
       }
     } else if(tag==='textarea'){ item.filled = !!el.value; }
     out.push(item); ref++; }
@@ -366,10 +372,20 @@ const COMBO_FN = `
     return found.filter(function(o){ var t=(o.textContent||'').trim(); return o!==input && t && t.length<160 && !/^(no .*(result|match|option|account|item)|type to search|start typing|loading|searching)/i.test(t) && (!o.getAttribute||o.getAttribute('aria-disabled')!=='true'); }).slice(0,80);
   }
   async function __vinWaitOpts(input,tries){ var o=[]; for(var i=0;i<(tries||16);i++){ o=__vinCollect(input); if(o.length) return o; await __vinSleep(90); } return o; }
+  function __vinCode(s){ var m=(''+s).toLowerCase().match(/[a-z]{1,6}[-\\s]?\\d{2,6}(?:\\.\\d+)?|\\d{3,6}(?:\\.\\d+)?/); return m?m[0].replace(/\\s/g,''):''; }
   function __vinChoose(opts,want){ if(!opts.length) return null; var w=(want||'').toLowerCase().trim();
-    if(w){ for(var i=0;i<opts.length;i++){ if((opts[i].textContent||'').toLowerCase().trim()===w) return opts[i]; }
-      for(var j=0;j<opts.length;j++){ if((opts[j].textContent||'').toLowerCase().indexOf(w)>=0) return opts[j]; } }
-    return opts[0]; }
+    if(!w) return opts[0];                                                      // no specific want → any option is fine
+    function tx(o){ return (o.textContent||'').toLowerCase().trim(); }
+    for(var i=0;i<opts.length;i++){ if(tx(opts[i])===w) return opts[i]; }       // 1) exact
+    var code=__vinCode(w);                                                      // 2) account/code token (e.g. "FA104") — match it as a whole token, NOT a loose substring
+    if(code){ for(var c=0;c<opts.length;c++){ var t=tx(opts[c]).replace(/\\s/g,''); if(t.indexOf(code)===0) return opts[c]; }
+      for(var c2=0;c2<opts.length;c2++){ if(new RegExp('(^|[^0-9a-z])'+code.replace(/\\./g,'\\\\.')+'($|[^0-9])').test(tx(opts[c2]))) return opts[c2]; } }
+    for(var s=0;s<opts.length;s++){ if(tx(opts[s]).indexOf(w)===0) return opts[s]; }   // 3) startsWith the wanted phrase
+    var words=w.split(/[^a-z0-9.]+/).filter(function(x){return x.length>2;});
+    if(words.length){ for(var k=0;k<opts.length;k++){ var ot=tx(opts[k]); if(words.every(function(x){return ot.indexOf(x)>=0;})) return opts[k]; } } // 4) all significant words present
+    if(words.length===1){ for(var m=0;m<opts.length;m++){ if(tx(opts[m]).indexOf(words[0])>=0) return opts[m]; } }                                   // 5) single distinctive word
+    return null;                                                               // a SPECIFIC want with no real match → don't pick an arbitrary option (that mis-picked the wrong GL account)
+  }
   function __vinNative(el,want){ var opts=[].slice.call(el.options), pick=-1, w=(want||'').toLowerCase().trim();
     for(var i=0;i<opts.length;i++){ var t=(opts[i].text||'').toLowerCase().trim(), v=(opts[i].value||'').toLowerCase().trim(); if(w&&(t===w||v===w)){pick=i;break;} }
     if(pick<0&&w) for(var j=0;j<opts.length;j++){ if((opts[j].text||'').toLowerCase().indexOf(w)>=0){pick=j;break;} }
@@ -385,7 +401,7 @@ const COMBO_FN = `
     __vinFire(input,'mousedown'); __vinFire(input,'mouseup'); try{ input.click(); }catch(e){} __vinFire(el,'click');
     await __vinSleep(150);
     var isText = input.tagName==='INPUT' && /^(text|search|email|tel|url|)$/.test((input.getAttribute('type')||'').toLowerCase());
-    if(isText && want){ __vinSetVal(input,want); __vinFire(input,'input'); __vinFire(input,'keyup'); }   // type to filter the list
+    if(isText && want){ var fq=__vinCode(want)||want; __vinSetVal(input,fq); __vinFire(input,'input'); __vinFire(input,'keyup'); }   // type a CONCISE filter token (e.g. just "FA104", not the whole phrase) so the right rows render
     var opts = await __vinWaitOpts(input,16);
     if(!opts.length && isText && input.value){ __vinSetVal(input,''); __vinFire(input,'input'); opts = await __vinWaitOpts(input,12); } // query matched nothing → clear, take any option
     if(!opts.length){ __vinKey(input,'ArrowDown'); opts = await __vinWaitOpts(input,12); }                                              // some lists only open on ArrowDown
@@ -1441,7 +1457,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
     pushEvent({ type: 'beat', loopIdx: 2, phase: 'Driving the demo', brain: 'Reading the live screen and taking the next step.', sub: goal });
     const history: string[] = [];
     const say = (text: string, uncertain?: boolean) => pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text, uncertain });
-    let lastSig = ''; let finished = false; const filledDates = new Set<string>();
+    let lastSig = ''; let repeats = 0; let finished = false; const filledDates = new Set<string>();
     try {
       for (let i = 0; i < 32; i++) { // a 5-step wizard needs many actions; stuck-detection + `done` end it early
         const page = await ctl.snapshot().catch(() => null);
@@ -1479,8 +1495,14 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
         // Never freeze: a repeated NON-resolving action is stuck — hand the wheel back gracefully. Temporal,
         // dropdowns, and any `select` are exempt (they always make progress on the real control).
         const sig = `${res.action}:${res.ref}:${res.value ?? ''}`;
-        if (sig === lastSig && !temporal && !dropdown && res.action !== 'select') { say("I've gone as far as I can automatically here — could you set that field, then tell me to continue? I'll pick it right back up.", true); finished = true; break; }
+        repeats = sig === lastSig ? repeats + 1 : 0;
         lastSig = sig;
+        // Never freeze, never loop forever. A non-resolving REPEAT hands the wheel back. Temporal always makes
+        // progress (exempt). Dropdowns/`select` get ONE extra pass (a custom control can need a second try) but
+        // a 3rd identical attempt means it isn't taking — hand off instead of looping ("set it to Asset once more"×N).
+        if (!temporal && repeats >= ((dropdown || res.action === 'select') ? 2 : 1)) {
+          say("I've set what I can on that field — could you confirm it, then tell me to continue? I'll pick it right back up.", true); finished = true; break;
+        }
         if (temporal) await ctl.typeInto(res.ref, res.value ?? '').catch(() => {});                 // click/type/select on a date field → future-date filler
         else if (res.action === 'select') await ctl.comboPick(res.ref, res.value ?? '').catch(() => {}); // any dropdown → open + filter + pick, in one shot
         else if (dropdown && res.action === 'click') await ctl.comboPick(res.ref, res.value ?? '').catch(() => {}); // model clicked a dropdown → resolve it
