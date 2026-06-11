@@ -714,45 +714,50 @@ function JourneyForm({ product, mode, row, onClose }: { product: ProductRow; mod
     } catch (e: any) { setErr(String(e?.message ?? e)); setBusy(false); }
   };
 
+  const checkboxGrid = { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))', gap: '8px 18px' } as const;
+  const chk = (checked: boolean, onChange: () => void, label: string, key: string) => (
+    <label key={key} className="flex items-start gap-2" style={{ fontSize: 13, lineHeight: 1.35, cursor: 'pointer' }}>
+      <input type="checkbox" checked={checked} onChange={onChange} style={{ marginTop: 2, flexShrink: 0 }} />
+      <span>{label}</span>
+    </label>
+  );
   return (
-    <FormShell title={mode === 'add' ? 'New journey' : `Edit · ${row?.name}`} subtitle="Compose this product's REAL workflows / tours / knowledge into an ordered story toward an outcome. Notes are narration beats." onClose={onClose} grid width={760}
+    <FormShell title={mode === 'add' ? 'New journey' : `Edit · ${row?.name}`} subtitle="Compose this product's REAL workflows / tours / knowledge into an ordered story toward an outcome. Notes are narration beats." onClose={onClose} grid
       footer={<><button className="btn btn-secondary btn-sm" onClick={onClose}>Cancel</button><button className="btn btn-primary btn-sm" disabled={busy} onClick={save}>{busy ? 'Saving…' : 'Save journey'}</button></>}>
       <Field label="Name"><input value={name} onChange={(e) => setName(e.target.value)} placeholder="CFO approval-delegation story" /></Field>
       <Field label="Status"><select value={status} onChange={(e) => setStatus(e.target.value)}>{['draft', 'active', 'deprecated'].map((s) => <option key={s} value={s}>{s}</option>)}</select></Field>
-      <Field full label="Business goal"><input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Show how delegation removes approval bottlenecks" /></Field>
       <Field label="Business outcome"><select value={outcomeId} onChange={(e) => setOutcomeId(e.target.value)}><option value="">— none —</option>{outcomes.map((o) => <option key={o.id} value={o.id}>{o.title}</option>)}</select></Field>
       <Field label="Environment"><select value={envId} onChange={(e) => setEnvId(e.target.value)}><option value="">— none —</option>{product.envId ? <option value={product.envId}>{product.env}</option> : null}</select></Field>
+      <Field full label="Business goal"><input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Show how delegation removes approval bottlenecks" /></Field>
       <Field full label="Story flow">
-        <div className="flex" style={{ flexDirection: 'column', gap: 6 }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {steps.length === 0 ? <div className="muted">No steps yet — add the first beat.</div> : steps.map((s, i) => (
-            <div key={i} className="flex items-center gap-2" style={{ flexWrap: 'wrap' }}>
-              <span className="muted tnum">{i + 1}.</span>
-              <select value={s.kind} onChange={(e) => setStep(i, { kind: e.target.value, refId: '' })}>{['workflow', 'tour', 'knowledge', 'note'].map((k) => <option key={k} value={k}>{k}</option>)}</select>
+            <div key={i} className="flex items-center gap-2" style={{ background: 'var(--app-subtle,#f9fafc)', border: '1px solid var(--border-subtle,#e8edf3)', borderRadius: 8, padding: '8px 10px' }}>
+              <span className="muted tnum" style={{ width: 22, flexShrink: 0, textAlign: 'right' }}>{i + 1}.</span>
+              <select value={s.kind} onChange={(e) => setStep(i, { kind: e.target.value, refId: '' })} style={{ width: 130, flexShrink: 0 }}>{['workflow', 'tour', 'knowledge', 'note'].map((k) => <option key={k} value={k}>{k}</option>)}</select>
               {s.kind !== 'note'
-                ? <select value={s.refId} onChange={(e) => setStep(i, { refId: e.target.value })}><option value="">— pick {s.kind} —</option>{assetOptions(s.kind).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
+                ? <select value={s.refId} onChange={(e) => setStep(i, { refId: e.target.value })} style={{ flex: '1 1 220px', minWidth: 0 }}><option value="">— pick {s.kind} —</option>{assetOptions(s.kind).map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}</select>
                 : null}
-              <input value={s.caption} onChange={(e) => setStep(i, { caption: e.target.value })} placeholder={s.kind === 'note' ? 'narration…' : 'caption (optional)'} style={{ flex: 1, minWidth: 140 }} />
-              <button className="btn btn-secondary btn-sm" onClick={() => move(i, -1)} title="Move up">↑</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => move(i, 1)} title="Move down">↓</button>
-              <button className="btn btn-secondary btn-sm" onClick={() => removeStep(i)} title="Remove">×</button>
+              <input value={s.caption} onChange={(e) => setStep(i, { caption: e.target.value })} placeholder={s.kind === 'note' ? 'narration beat…' : 'caption (optional)'} style={{ flex: '2 1 240px', minWidth: 0 }} />
+              <div className="flex gap-1" style={{ flexShrink: 0 }}>
+                <button className="btn btn-secondary btn-sm" onClick={() => move(i, -1)} disabled={i === 0} title="Move up">↑</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => move(i, 1)} disabled={i === steps.length - 1} title="Move down">↓</button>
+                <button className="btn btn-secondary btn-sm" onClick={() => removeStep(i)} title="Remove">×</button>
+              </div>
             </div>
           ))}
           <div><button className="btn btn-secondary btn-sm" onClick={addStep}><Icon name="plus" size={12} /> Add step</button></div>
         </div>
       </Field>
       <Field full label="Committee (who this journey is for)">
-        <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
-          {committee.length === 0 ? <span className="muted">No committee defined — add people under Outcomes & Committee.</span>
-            : committee.map((m) => <label key={m.id} className="flex items-center gap-2"><input type="checkbox" checked={stake.includes(m.id)} onChange={() => toggle(stake, m.id, setStake)} /> {m.name}{m.role ? ` (${m.role})` : ''}</label>)}
-        </div>
+        {committee.length === 0 ? <span className="muted">No committee defined — add people under Outcomes &amp; Committee.</span>
+          : <div style={checkboxGrid}>{committee.map((m) => chk(stake.includes(m.id), () => toggle(stake, m.id, setStake), m.role && m.role !== m.name ? `${m.name} · ${m.role}` : m.name, m.id))}</div>}
       </Field>
       <Field full label="Participating specialists">
-        <div className="flex gap-2" style={{ flexWrap: 'wrap' }}>
-          {personas.length === 0 ? <span className="muted">No specialists.</span>
-            : personas.map((p) => <label key={p.id} className="flex items-center gap-2"><input type="checkbox" checked={specs.includes(p.id)} onChange={() => toggle(specs, p.id, setSpecs)} /> {p.name}</label>)}
-        </div>
+        {personas.length === 0 ? <span className="muted">No specialists.</span>
+          : <div style={checkboxGrid}>{personas.map((p) => chk(specs.includes(p.id), () => toggle(specs, p.id, setSpecs), p.name, p.id))}</div>}
       </Field>
-      <Field full label="Success criteria"><input value={success} onChange={(e) => setSuccess(e.target.value)} placeholder="CFO agrees delegation solves the bottleneck" /></Field>
+      <Field full label="Success criteria"><textarea rows={3} value={success} onChange={(e) => setSuccess(e.target.value)} placeholder="The measurable result the journey should land — e.g. approval cycle time drops from days to hours" /></Field>
       {err && <div className="banner banner-warn" style={{ gridColumn: '1 / -1' }}>{err}</div>}
     </FormShell>
   );
