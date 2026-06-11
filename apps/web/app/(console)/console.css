@@ -213,6 +213,9 @@ button { font-family: inherit; }
 .fld input, .fld textarea, .fld select { font-family: inherit; font-size: 13px; padding: 8px 10px; border: 1px solid var(--border-subtle); border-radius: var(--radius-md); background: var(--surface-bg); color: var(--text-primary); width: 100%; }
 .fld input:focus, .fld textarea:focus, .fld select:focus { outline: none; border-color: var(--color-blue, #0861CE); box-shadow: 0 0 0 3px rgba(8,97,206,.12); }
 .fld textarea { min-height: 64px; resize: vertical; line-height: 1.5; }
+/* Checkboxes/radios must NOT inherit the full-width text-input sizing above — keep them native-small. */
+.fld input[type="checkbox"], .fld input[type="radio"] { width: 15px; height: 15px; min-width: 15px; flex: 0 0 auto; padding: 0; border-radius: 3px; background: none; accent-color: var(--color-blue, #0861CE); cursor: pointer; }
+.fld input[type="checkbox"]:focus, .fld input[type="radio"]:focus { box-shadow: none; border-color: var(--border-subtle); }
 .card-actions { display: flex; gap: 7px; border-top: 1px solid var(--border-subtle); padding-top: 12px; margin-top: 14px; }
 
 /* Persona site-assignment chips */
