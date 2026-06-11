@@ -388,24 +388,61 @@ export function DemoGraphInner({ p }: { p: any }) {
       {/* F1 — Navigation-control disclosure (honest until every engine resolves through the graph). */}
       <div className="banner section-gap" style={{ borderLeft: '3px solid var(--color-blue)' }}><Icon name="info" size={18} style={{ color: 'var(--color-blue)' }} /><div><strong>Navigation control:</strong> this graph is the authority for conversational <strong>Ask</strong>, <strong>Voice</strong>, and <strong>Reel</strong> (<span style={{ color: '#16a34a', fontWeight: 700 }}>Graph-Controlled</span>). The desktop step-driver currently navigates by live-DOM perception (<span style={{ color: '#d97706', fontWeight: 700 }}>DOM-Controlled</span>) — recording its outcomes against these nodes and bridging it onto the graph is the next phase. No false authority claims.</div></div>
       {studioNode && <NodeStudio node={studioNode} onClose={() => setSelNode(null)} />}
-      {/* Intent Mapping (Phase 3) — the EMPIRICAL intent→node registry, learned from real navigation_attempts. */}
+      {/* Intent mapping — PURPOSE-FIRST: what the product is FOR (outcomes + the capabilities/workflows that
+          demonstrate them) is the primary "what the consultant resolves to". The EMPIRICAL free-roam log
+          (navigation_attempts) is a SECONDARY "observed navigation" layer — usage + reliability, not the map. */}
       {(() => {
+        const wfs: any[] = Array.isArray(p.workflows) ? p.workflows : [];
+        const outs: any[] = Array.isArray(p.outcomes) ? p.outcomes : [];
+        const jrs: any[] = Array.isArray(p.journeys) ? p.journeys : [];
         const im: any[] = Array.isArray(p.intentMap) ? p.intentMap : [];
+        const wfsSorted = [...wfs].sort((a, b) => (a.approved === b.approved ? 0 : a.approved ? -1 : 1));
+        const live = wfs.filter((w) => w.approved).length;
         return (
           <div className="card card-pad section-gap">
-            <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>Intent mapping</div>
-            <div className="muted" style={{ fontSize: 12, margin: '2px 0 8px' }}>What the consultant actually resolves each request to — learned from real navigation, not configured. Confidence = the node&apos;s real success rate (— until outcomes exist).</div>
+            <div style={{ fontWeight: 800, color: 'var(--text-primary)' }}>What the consultant resolves to</div>
+            <div className="muted" style={{ fontSize: 12, margin: '2px 0 8px' }}>The product&apos;s purpose — its business outcomes and the capabilities (workflows) that demonstrate them. The observed-navigation log below is what real sessions have exercised, and how reliably.</div>
+
+            {outs.length > 0 && <>
+              <div className="overline" style={{ margin: '6px 0 4px' }}>Business outcomes ({outs.length})</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+                {outs.slice(0, 10).map((o, i) => <span key={i} style={{ fontSize: 12, padding: '2px 9px', borderRadius: 999, background: 'var(--accent-soft, rgba(8,97,206,.08))', color: 'var(--accent,#0861ce)', whiteSpace: 'nowrap' }}>{o.title}</span>)}
+                {outs.length > 10 && <span className="muted" style={{ fontSize: 12 }}>+{outs.length - 10} more</span>}
+              </div>
+            </>}
+
+            {jrs.length > 0 && <>
+              <div className="overline" style={{ margin: '8px 0 4px' }}>Guided journeys ({jrs.length})</div>
+              <div style={{ display: 'grid', gap: 3, marginBottom: 6 }}>{jrs.slice(0, 6).map((j, i) => (
+                <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5 }}>
+                  <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{j.name}</span>
+                  <span className="muted" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{j.outcomeTitle || j.businessGoal}</span>
+                  <span className="muted" style={{ flexShrink: 0 }}>{Array.isArray(j.storyFlow) ? j.storyFlow.length : 0} steps · {j.status}{j.missingCount > 0 ? ` · ${j.missingCount} gap(s)` : ''}</span>
+                </div>))}</div>
+            </>}
+
+            <div className="overline" style={{ margin: '8px 0 4px' }}>Capabilities — {live} live · {wfs.length - live} draft</div>
+            {wfs.length
+              ? <div style={{ display: 'grid', gap: 4 }}>{wfsSorted.slice(0, 40).map((w, i) => (
+                  <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'baseline', fontSize: 12.5 }}>
+                    <span style={{ width: 14, flexShrink: 0, color: w.approved ? '#16a34a' : 'var(--muted,#8499b3)', fontWeight: 800 }} title={w.approved ? 'live (approved)' : 'draft (pending approval)'}>{w.approved ? '✓' : '·'}</span>
+                    <span style={{ fontWeight: 600, color: 'var(--text-primary)', flexShrink: 0 }}>{w.name}</span>
+                    {w.stakeholderType && w.stakeholderType.toLowerCase() !== 'none' && <span className="muted" style={{ fontSize: 11, flexShrink: 0 }}>({w.stakeholderType})</span>}
+                    <span className="muted" style={{ flex: 1, minWidth: 0, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{(w.sequence || []).join(' → ')}</span>
+                  </div>))}</div>
+              : <div className="empty">No capabilities yet — author workflows in the Workflow Builder, or run Autogen to derive them from knowledge.</div>}
+
+            <div className="overline" style={{ margin: '12px 0 4px' }}>Observed navigation (learned from real sessions)</div>
             {im.length
-              ? <div style={{ display: 'grid', gap: 4 }}>{im.slice(0, 24).map((e, i) => (
+              ? <div style={{ display: 'grid', gap: 4 }}>{im.slice(0, 12).map((e, i) => (
                   <div key={i} style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 12.5 }}>
                     <span style={{ flex: 1, minWidth: 0, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>“{e.intent}”</span>
                     <span className="muted">→</span>
                     <span style={{ fontWeight: 600, color: 'var(--text-primary)', flexShrink: 0 }}>{e.node}</span>
-                    <span className="muted" style={{ width: 78, textAlign: 'right', flexShrink: 0 }}>{e.confidence != null ? `${e.confidence}% conf` : '—'}</span>
-                    <span className="muted" style={{ width: 48, textAlign: 'right', flexShrink: 0 }}>{e.attempts}×</span>
-                    <span className="muted" style={{ width: 150, textAlign: 'right', flexShrink: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.fallback ? `fallback: ${e.fallback}` : ''}</span>
+                    <span className="muted" style={{ width: 96, textAlign: 'right', flexShrink: 0 }}>{e.confidence != null ? `${e.confidence}% success` : '—'}</span>
+                    <span className="muted" style={{ width: 40, textAlign: 'right', flexShrink: 0 }}>{e.attempts}×</span>
                   </div>))}</div>
-              : <div className="empty">No intent resolutions recorded yet — run demos (Ask / Reel / desktop drive) and this registry fills from real sessions.</div>}
+              : <div className="muted" style={{ fontSize: 12 }}>No sessions recorded yet — this fills as demos run (it&apos;s usage telemetry, not the capability map above).</div>}
           </div>
         );
       })()}

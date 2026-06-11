@@ -11,6 +11,15 @@
 import { db } from './db.js';
 import { getLlm } from './llm.js';
 
+// Same windowing autogen uses — a single huge deriveWorkflows pass truncates the workflows JSON (po.vin/rounds
+// returned 0); ≤11k-char windows each produce a few workflows that fit, then union by name.
+function windowize(facts: string[], max = 11000): string[] {
+  const wins: string[] = []; let cur = '';
+  for (const f of facts) { if (cur && cur.length + f.length + 1 > max) { wins.push(cur); cur = ''; } cur = cur ? `${cur}\n${f}` : f; }
+  if (cur) wins.push(cur);
+  return wins.length ? wins : [''];
+}
+
 const pool = db();
 const llm = getLlm();
 const prods = (await pool.query<{ id: string; name: string }>(`SELECT id, name FROM products WHERE archived_at IS NULL ORDER BY name`)).rows;
@@ -29,8 +38,13 @@ for (const p of prods) {
     `SELECT kc.content FROM knowledge_chunks kc JOIN knowledge_bases kb ON kb.id=kc.knowledge_base_id
       WHERE kb.product_id=$1 AND kc.archived_at IS NULL AND kc.lifecycle_state='validated'`, [p.id])).rows.map((r) => r.content);
   if (!facts.length) { console.log(`\n## ${p.name}: ${orphans.length} orphan(s) but NO validated knowledge — cannot validate.`); continue; }
-  const corpus = facts.join('\n');
-  const candidates = await llm.deriveWorkflows({ product: p.name, knowledge: corpus, screens });
+  const windows = windowize(facts);
+  const byName = new Map<string, any>();
+  for (const win of windows) {
+    const dw = await llm.deriveWorkflows({ product: p.name, knowledge: win, screens });
+    for (const w of dw) { const k = w.workflowName.toLowerCase(); if (w.nodeSequence.length && !byName.has(k)) byName.set(k, w); }
+  }
+  const candidates = [...byName.values()];
 
   const candCovered = new Set<string>();
   const orphanWfs: { name: string; seq: string[]; hits: string[]; evidence: string }[] = [];
