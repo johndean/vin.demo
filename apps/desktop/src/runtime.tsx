@@ -1184,67 +1184,94 @@ function readableOn(color: string): string {
 /* Launcher = the home screen: ALL products, each with its list of JOURNEYS. Click a journey → VIN logs into
    the live product and the voice-led WALK begins. (Isolated, like Scripted — no LiveBrowser/TargetPicker.) */
 function StartExperience({ products, target, onApply, onLaunch }: { products: RealProduct[]; target: DemoTarget | null; onApply: (t: DemoTarget) => void; onLaunch: (m: 'ask' | 'talk') => void }) {
-  if (!products.length) return <div style={{ flex: 1, display: 'grid', placeItems: 'center', opacity: .6 }}>Loading products…</div>;
+  // Products that actually HAVE a journey are the launch choices; empty ones list under a muted footer in the rail.
+  const withJourneys = products.filter((p) => (p.journeys ?? []).length);
+  const without = products.filter((p) => !(p.journeys ?? []).length);
+  const [selId, setSelId] = useState('');
+  const [q, setQ] = useState('');
+  const sel = withJourneys.find((p) => p.id === selId) ?? withJourneys[0];
   // Click a journey → pin the product + journey on the target and start the voice-led walk. The engine logs
   // into the live product (adapter.open) and walks the journey's story_flow, narrating each step.
   const launch = (p: RealProduct, j: RealJourney) => {
     onApply({ productId: p.id, host: p.domain, mk: p.mk, color: p.color, role: target?.role ?? 'admin', mode: p.defaultMode ?? target?.mode ?? 'read-only', url: '', scenario: '', journeyId: j.id });
     onLaunch('talk');
   };
-  // Only products that actually HAVE a journey are worth showing as a launch choice; an empty product is
-  // a one-line "author one" hint at the end so the screen isn't padded with dead sections (less scroll).
-  const withJourneys = products.filter((p) => (p.journeys ?? []).length);
-  const without = products.filter((p) => !(p.journeys ?? []).length);
-  return (
-    <div className="cr-stagearea" style={{ flex: 1, overflow: 'auto', padding: '22px 26px' }}>
-      <div style={{ maxWidth: 1040, margin: '0 auto' }}>
-        <div style={{ fontSize: 21, fontWeight: 800, color: 'var(--cr-fg)' }}>Pick a journey to demo</div>
-        <div style={{ color: 'var(--cr-fg2)', fontSize: 13, marginTop: 4 }}>Click a journey — VIN logs into the live product and the voice-led walk begins.</div>
+  if (!products.length) return <div style={{ flex: 1, display: 'grid', placeItems: 'center', opacity: .6 }}>Loading products…</div>;
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 22, marginTop: 22 }}>
-          {withJourneys.map((p) => {
-            const journeys = p.journeys ?? [];
-            return (
-              <section key={p.id}>
-                {/* PRODUCT header — the underlined section title, with its journey count. */}
-                <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, paddingBottom: 7, borderBottom: `2px solid ${p.color || 'var(--cr-accent)'}` }}>
-                  <span style={{ width: 10, height: 10, borderRadius: 3, background: p.color || 'var(--cr-accent)', flexShrink: 0, alignSelf: 'center' }} />
-                  <span style={{ fontWeight: 800, fontSize: 15.5, color: 'var(--cr-fg)' }}>{p.name}</span>
-                  <span style={{ color: 'var(--cr-fg3)', fontSize: 12 }}>{p.domain}</span>
-                  <span style={{ color: 'var(--cr-fg3)', fontSize: 11.5, marginLeft: 'auto', fontWeight: 700 }}>{journeys.length} journey{journeys.length === 1 ? '' : 's'}</span>
+  const needle = q.trim().toLowerCase();
+  const journeys = (sel?.journeys ?? []).filter((j) => !needle || `${j.name} ${j.businessGoal} ${j.outcomeTitle} ${(j.stakeholderNames ?? []).join(' ')}`.toLowerCase().includes(needle));
+
+  return (
+    <div className="cr-stagearea" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div style={{ padding: '15px 22px', borderBottom: '1px solid var(--cr-line)', flexShrink: 0 }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--cr-fg)' }}>Pick a journey to demo</div>
+        <div style={{ color: 'var(--cr-fg2)', fontSize: 12.5, marginTop: 3 }}>Choose a product, then a journey — VIN logs into the live product and the voice-led walk begins.</div>
+      </div>
+
+      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
+        {/* ── Product rail (master) ── */}
+        <div style={{ width: 250, flexShrink: 0, borderRight: '1px solid var(--cr-line)', overflow: 'auto', padding: '10px 10px 16px', background: 'var(--cr-panel)' }}>
+          <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--cr-fg3)', padding: '6px 8px' }}>Products</div>
+          {withJourneys.map((p) => (
+            <button key={p.id} className="cr-prodbtn" aria-selected={sel?.id === p.id} onClick={() => { setSelId(p.id); setQ(''); }}>
+              <span style={{ width: 11, height: 11, borderRadius: 3, background: p.color || 'var(--cr-accent)', flexShrink: 0 }} />
+              <span style={{ minWidth: 0, flex: 1 }}>
+                <span style={{ display: 'block', fontWeight: 700, fontSize: 13, color: 'var(--cr-fg)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
+                <span style={{ display: 'block', fontSize: 11, color: 'var(--cr-fg3)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.domain}</span>
+              </span>
+              <span style={{ flexShrink: 0, fontSize: 11, fontWeight: 700, color: 'var(--cr-fg3)' }}>{(p.journeys ?? []).length}</span>
+            </button>
+          ))}
+          {without.length > 0 && (
+            <>
+              <div style={{ fontSize: 10.5, fontWeight: 800, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--cr-fg3)', padding: '16px 8px 6px' }}>No journeys yet</div>
+              {without.map((p) => (
+                <div key={p.id} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '8px 10px', opacity: .5 }} title="Author a journey in the web console → Pipeline → Journeys">
+                  <span style={{ width: 11, height: 11, borderRadius: 3, background: p.color || 'var(--cr-fg3)', flexShrink: 0 }} />
+                  <span style={{ fontSize: 12.5, color: 'var(--cr-fg2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</span>
                 </div>
-                {/* Journeys for this product — each a readable row (title + goal + committee) with an inline Start. */}
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  {journeys.map((j) => {
-                    const committee = j.stakeholderNames?.length ? j.stakeholderNames.slice(0, 4).join(' · ') : '';
-                    return (
-                      <div key={j.id} className="cr-jrow" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '12px 4px', borderBottom: '1px solid var(--cr-line-2)' }}>
-                        <div style={{ minWidth: 0, flex: 1 }}>
-                          <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--cr-fg)' }}>
-                            {j.name}
-                            {j.missingCount > 0 && <span style={{ color: '#c2761a', fontSize: 11.5, fontWeight: 700 }}> · {j.missingCount} broken ref{j.missingCount === 1 ? '' : 's'}</span>}
-                          </div>
-                          {(j.businessGoal || j.outcomeTitle) && <div style={{ color: 'var(--cr-fg2)', fontSize: 12.5, marginTop: 3 }}>{j.businessGoal || j.outcomeTitle}</div>}
-                          {committee && <div style={{ color: 'var(--cr-fg3)', fontSize: 11.5, marginTop: 3 }}>For {committee}</div>}
-                        </div>
-                        <button onClick={() => launch(p, j)} title={`Log into ${p.name} and walk "${j.name}"`}
-                          style={{ flexShrink: 0, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 18px', borderRadius: 8, background: p.color || '#0861CE', color: readableOn(p.color || '#0861CE'), fontWeight: 700, fontSize: 13, border: 'none', cursor: 'pointer' }}>
-                          ▶ Start
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            );
-          })}
+              ))}
+            </>
+          )}
         </div>
 
-        {without.length > 0 && (
-          <div style={{ marginTop: 22, color: 'var(--cr-fg3)', fontSize: 12 }}>
-            No journeys yet for: {without.map((p) => p.name).join(', ')}. Author one in the web console → Pipeline → Journeys.
-          </div>
-        )}
+        {/* ── Journeys for the selected product (detail) ── */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+          {sel ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px', borderBottom: '1px solid var(--cr-line)', flexShrink: 0 }}>
+                <span style={{ width: 12, height: 12, borderRadius: 3, background: sel.color || 'var(--cr-accent)', flexShrink: 0 }} />
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontWeight: 800, fontSize: 14.5, color: 'var(--cr-fg)' }}>{sel.name}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--cr-fg3)' }}>{sel.domain} · {(sel.journeys ?? []).length} journeys</div>
+                </div>
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search journeys…"
+                  style={{ marginLeft: 'auto', flex: '0 1 280px', padding: '8px 11px', borderRadius: 8, border: '1px solid var(--cr-line)', background: 'var(--cr-panel)', color: 'var(--cr-fg)', fontSize: 13 }} />
+              </div>
+              <div style={{ flex: 1, overflow: 'auto', padding: '16px 18px' }}>
+                {journeys.length === 0 ? <div style={{ opacity: .6, padding: 20 }}>No journeys match “{q}”.</div>
+                  : <div className="cr-launch-grid">
+                      {journeys.map((j) => {
+                        const label = j.name.replace(/^Assembled\s+[—-]\s+/, '');
+                        const sub = j.outcomeTitle && j.outcomeTitle !== label ? j.outcomeTitle : (j.businessGoal && j.businessGoal !== label ? j.businessGoal : '');
+                        return (
+                          <button key={j.id} className="cr-jcard" onClick={() => launch(sel, j)} title={`Log into ${sel.name} and walk "${j.name}"`}>
+                            <div style={{ fontWeight: 700, fontSize: 13.5, color: 'var(--cr-fg)', lineHeight: 1.3 }}>{label}</div>
+                            {sub && <div style={{ color: 'var(--cr-fg2)', fontSize: 12, lineHeight: 1.4 }}>{sub}</div>}
+                            <div style={{ marginTop: 'auto', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, paddingTop: 8 }}>
+                              <span style={{ color: 'var(--cr-accent)', fontWeight: 800, fontSize: 12.5 }}>▶ Start</span>
+                              {j.missingCount > 0
+                                ? <span style={{ color: 'var(--cr-warn)', background: 'var(--cr-warn-bg)', border: '1px solid var(--cr-warn-bd)', borderRadius: 999, padding: '1px 8px', fontSize: 10.5, fontWeight: 700 }}>{j.missingCount} broken</span>
+                                : (j.status && j.status !== 'active' ? <span style={{ color: 'var(--cr-fg3)', fontSize: 10, textTransform: 'uppercase', letterSpacing: '.06em', fontWeight: 800 }}>{j.status}</span> : null)}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>}
+              </div>
+            </>
+          ) : <div style={{ flex: 1, display: 'grid', placeItems: 'center', opacity: .6, padding: 24, textAlign: 'center' }}>No journeys yet — author one in the web console → Pipeline → Journeys.</div>}
+        </div>
       </div>
     </div>
   );
