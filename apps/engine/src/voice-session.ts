@@ -10,7 +10,7 @@
  *   {type:'transcript',text,final} | {type:'audio',mime,data(base64)} | {type:'listening'} | {type:'voice',id,label}
  */
 import type { WebSocket } from 'ws';
-import { bootSession, runTurn, LOOP, type SessionCtx, type SessionTarget } from '../../../src/core/live-session.js';
+import { bootSession, runTurn, runWalkStep as walkOneStep, LOOP, type SessionCtx, type SessionTarget } from '../../../src/core/live-session.js';
 import { googleSTT } from './voice/stt-google.js';
 import { googleTTS } from './voice/tts-google.js';
 import { elevenLabsTTS } from './voice/tts-elevenlabs.js';
@@ -21,7 +21,7 @@ import { profileById, defaultProfile, voiceCatalog } from './voice/profiles.js';
 import type { STTStream, VoiceProfile } from './voice/providers.js';
 import { loadPersona } from '../../../src/core/persona.js';
 import { beginCostSession, recordVoice } from '../../../src/core/cost.js';
-import { journeyWalkPlan, startJourneyRun, completeJourneyRun, walkStepView } from '../../../src/core/journeys.js';
+import { journeyWalkPlan, startJourneyRun, completeJourneyRun } from '../../../src/core/journeys.js';
 
 const SAMPLE_RATE = 16000;
 
@@ -55,6 +55,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
   let profile: VoiceProfile = bootPersona?.voiceProfileId ? profileById(bootPersona.voiceProfileId) : defaultProfile();
   let stt: STTStream | null = null;
   let answering = false;
+  let pendingBargein: { text: string; at: number } | null = null; // #19/L-2: a barge-in transcript that arrived while a turn/walk-step was in flight → REPLAYED when it settles, instead of being dropped by the busy guard
   let interrupted = false;        // barge-in flag: stop emitting TTS for the current answer
   let streamedThisTurn = false;   // RC-03: did we already speak this turn's answer sentence-by-sentence (streamed)?
   let utterance = 0;              // RC-11: monotonic id, bumped on barge-in so stale TTS from a prior turn bails
@@ -176,8 +177,26 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
       await wsReady.catch(() => {}); // #14: if runTurn rejected we skipped the success-path await — reconcile the in-flight WS open NOW so the abort below actually closes it (no leaked socket / post-turn audio)
       try { wsTts?.abort(); } catch { /* */ } wsTts = null; // RC-31: ensure no WS lingers past the turn (covers the catch path)
       answering = false;
-      send({ type: 'turn_done' });
+      // #19/L-2: if a stashed barge-in is now being answered, DON'T emit this turn's turn_done — the replay's own
+      // finally emits the real idle turn_done (M-1: keep turn_done ⟹ mutex-free so a journey_next can't be dropped).
+      if (!replayPendingBargein()) send({ type: 'turn_done' });
     }
+  };
+
+  // #19/L-2: answer a stashed barge-in the instant we go idle (called from both finally blocks). Null-then-check
+  // so it can NEVER double-fire across the two finallys (only one turn is ever in flight; pendingBargein is
+  // cleared before the re-run). TTL-bounded (8s) so a question the buyer effectively abandoned during an unusually
+  // slow in-flight turn isn't replayed into a stale context. Single-stash = answer the LATEST barged-in question.
+  // Returns TRUE if it started a replay. The caller then SUPPRESSES its own turn_done: a replay re-acquires the
+  // `answering` mutex synchronously (runVoiceTurn sets answering=true before its first await), so emitting the
+  // original turn's turn_done here would tell the client "idle, ready for the next step" while the buyer's question
+  // is still being answered — the client would fire journey_next, hit the busy guard, and silently lose the advance
+  // (review M-1). Instead the replay's OWN finally emits the real idle turn_done once it settles, preserving the
+  // operator-paced "turn_done ⟹ mutex free" contract.
+  const replayPendingBargein = (): boolean => {
+    const p = pendingBargein; pendingBargein = null;
+    if (p && Date.now() - p.at < 8000) { void runVoiceTurn(p.text); return true; }
+    return false;
   };
 
   // ── Journey WALK (voice-led, operator-paced) — the desktop sends {type:'journey_next'} to advance one
@@ -204,22 +223,23 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     answering = true; interrupted = false; streamedThisTurn = false;
     wsReady = openTurnWs(); // #14: open the word-level WS CONCURRENTLY with the walk step (don't block ~6s on it)
     try {
-      send({ type: 'journey_step', index: idx, total: walkPlan.length, kind: walkPlan[idx].stepKind, node: walkPlan[idx].nodeLabel ?? null, ...walkStepView(walkPlan, idx) });
-      const r = await runTurn(ctx, { speaker: 'Presenter', text: walkPlan[idx].caption ?? 'next', advance: true, stream: true }, voiceEmit); // RC-03: stream the walk narration to TTS
+      // #19: the journey_step emit + advance turn + RC-02 position sync now live in the SHARED stepper (so the
+      // eval exercises this exact body). Voice keeps owning its TTS/WS lifecycle around it (stream:true).
+      const res = await walkOneStep(ctx, walkPlan, idx, voiceEmit, { stream: true, speaker: 'Presenter' });
       await wsReady; // #14: ensure the concurrent open settled before draining + closing
       await ttsChain;
       await closeTurnWs(); // RC-31: EOS + drain the WS (no-op if it wasn't open)
-      // RC-02: SYNC the walk position to the GRAPH's authoritative journeyStep (the single owner) rather than
-      // incrementing our own counter — so the spoken caption and the driven screen can never drift apart after
-      // an off-script question or a mid-turn error. Fall back to idx+1 only if the graph didn't report a step.
-      walkStep = (r && typeof r.journeyStep === 'number') ? r.journeyStep : idx + 1;
-      if (walkStep >= walkPlan.length) { if (walkRun) await completeJourneyRun(walkRun.runId, 'completed').catch(() => {}); send({ type: 'journey_complete', steps: walkPlan.length }); }
+      walkStep = res.journeyStep ?? idx + 1; // RC-02: mirror the graph-owned position the stepper returned
+      if (res.isComplete) { if (walkRun) await completeJourneyRun(walkRun.runId, 'completed').catch(() => {}); send({ type: 'journey_complete', steps: walkPlan.length }); }
     } catch (e: any) {
       send({ type: 'error', message: String(e?.message ?? e) });
     } finally {
       await wsReady.catch(() => {}); // #14: if runTurn rejected we skipped the success-path await — reconcile the in-flight WS open NOW so the abort below actually closes it (no leaked socket / post-turn audio)
       try { wsTts?.abort(); } catch { /* */ } wsTts = null; // RC-31: never let a WS linger past the walk step
-      answering = false; send({ type: 'turn_done' });
+      answering = false;
+      // #19/L-2: a question barged in DURING this walk step → answer it now; suppress THIS step's turn_done so the
+      // client doesn't try to advance (journey_next) into the busy mutex — the replay's finally sends turn_done (M-1).
+      if (!replayPendingBargein()) send({ type: 'turn_done' });
     }
   };
 
@@ -238,11 +258,8 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
 
   // Open the demo: a pinned journey AUTO-plays its first step (voice-led); otherwise an operator-set
   // opening scenario is asked. Subsequent steps are driven by the client's {type:'journey_next'}.
-  // KNOWN FOLLOW-ON (review L-2, NOT changed here): runWalkStep sets answering=true before its first await, so a
-  // barge-in DURING step 0 (now more likely, since the bridge speaks into that window) hits runVoiceTurn's busy
-  // guard and the question is dropped. This is the pre-existing walk-step concurrency model — a real fix (stash the
-  // barge-in transcript and run it when the step settles, or let first-step mic_start abort runWalkStep) belongs
-  // with the #19 single-walk-driver/interruption work, not this cold-start pass.
+  // #19/L-2 (now FIXED): a barge-in DURING step 0 (the cold-start bridge invites it) used to hit the busy guard and
+  // be DROPPED; it is now stashed in pendingBargein and replayed the moment the step settles (replayPendingBargein).
   if (ctx.journeyId && walkPlan.length) { speakColdStartBridge(); void runWalkStep(); }
   else if (target.scenario?.trim()) void runVoiceTurn(target.scenario.trim());
 
@@ -258,7 +275,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
         stt = googleSTT.open({
           sampleRate: SAMPLE_RATE,
           onInterim: (t) => send({ type: 'transcript', text: t, final: false }),
-          onFinal: (t) => { send({ type: 'transcript', text: t, final: true }); stt = null; void recordVoice('stt', sttBytes / 32000, {}); sttBytes = 0; if (t) void runVoiceTurn(t); },
+          onFinal: (t) => { send({ type: 'transcript', text: t, final: true }); stt = null; void recordVoice('stt', sttBytes / 32000, {}); sttBytes = 0; if (t) { if (answering) pendingBargein = { text: t, at: Date.now() }; else void runVoiceTurn(t); } }, // #19/L-2: if a turn/walk-step is still in flight, STASH (don't drop) — the finally replays it
           onError: (e) => { send({ type: 'stt_error', message: e.message }); stt = null; },
         });
         send({ type: 'listening' });

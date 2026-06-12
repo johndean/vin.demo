@@ -11,7 +11,7 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { buildGraph } from './graph.js';
 import { getLlm } from './llm.js';
 import { createDemoSession, saveSessionState, loadSessionState } from './session.js';
-import { journeyWalkPlan, startJourneyRun, completeJourneyRun, getJourneyById, walkStepView } from './journeys.js';
+import { journeyWalkPlan, startJourneyRun, completeJourneyRun, getJourneyById, walkStepView, type WalkEntry } from './journeys.js';
 import { beginCostSession, sessionCost } from './cost.js';
 import { db } from './db.js';
 import type { ExecutionMode } from './safety.js';
@@ -409,6 +409,25 @@ export async function runLiveSession(emit: Emit, target: SessionTarget = {}): Pr
 }
 
 /**
+ * #19 — the ONE journey-walk STEPPER, shared by the eval (walkJourney, below) and the LIVE voice path
+ * (voice-session.ts runWalkStep, which imports this as walkOneStep). The two had diverged — walkJourney was an
+ * eval-only orphan — so the eval validated code the demo didn't run. Now BOTH drive exactly this body: emit the
+ * journey_step event (+ the #34 teleprompter view) and run ONE advance:true turn through the brain. The GRAPH
+ * owns the journey position, so we MIRROR its returned journeyStep (RC-02 single-source-of-truth) rather than a
+ * local counter that could desync after an off-script question. Environment-specific concerns stay with each
+ * caller: the eval runs non-stream + deterministic; the voice path passes stream:true and keeps its OWN
+ * ttsChain / openTurnWs / answering / finally lifecycle wrapped around this call.
+ */
+export async function runWalkStep(ctx: SessionCtx, plan: WalkEntry[], stepIndex: number, emit: Emit, opts: { stream?: boolean; speaker?: string } = {}): Promise<{ journeyStep: number | null; isComplete: boolean }> {
+  const e = plan[stepIndex];
+  emit({ type: 'journey_step', index: stepIndex, total: plan.length, kind: e.stepKind, node: e.nodeLabel ?? null, ...walkStepView(plan, stepIndex) });
+  // The JOURNEY decides the screen (navigateJourneyStep); the per-step caption is only narration context.
+  const r = await runTurn(ctx, { speaker: opts.speaker ?? 'Presenter', text: e.caption ?? 'next', advance: true, stream: opts.stream ?? false }, emit);
+  const next = (r && typeof r.journeyStep === 'number') ? r.journeyStep : stepIndex + 1; // RC-02: mirror the graph-owned position
+  return { journeyStep: next, isComplete: next >= plan.length };
+}
+
+/**
  * WALK a pinned journey end to end — the journey RUNS the demo. Each turn advances exactly one story step
  * (the graph's navigateJourneyStep drives the screen on the journey's verified rails AND composes the warm
  * spoken narration into `explanation`, which runTurn emits as the voice line). The JOURNEY decides where the
@@ -423,11 +442,12 @@ export async function walkJourney(ctx: SessionCtx, emit: Emit): Promise<void> {
   emit({ type: 'journey_start', journey: wp.journey.name, goal: wp.journey.businessGoal ?? '', steps: wp.plan.length, sessionId: ctx.sessionId });
   const run = await startJourneyRun(ctx.journeyId, ctx.sessionId).catch(() => null);
   try {
-    for (let i = 0; i < wp.plan.length; i++) {
-      const entry = wp.plan[i];
-      emit({ type: 'journey_step', index: i, total: wp.plan.length, kind: entry.stepKind, node: entry.nodeLabel ?? null, ...walkStepView(wp.plan, i) });
-      // The JOURNEY decides the screen (navigateJourneyStep); the utterance is only narration context.
-      await runTurn(ctx, { speaker: 'Presenter', text: entry.caption ?? `Step ${i + 1}`, loop: 3, advance: true }, emit);
+    // #19: drive each step through the SHARED stepper (the same body the live voice path runs), advancing the
+    // loop index from the graph-owned journeyStep it returns — never a local counter (RC-02).
+    for (let i = 0; i < wp.plan.length; ) {
+      const res = await runWalkStep(ctx, wp.plan, i, emit);
+      i = res.journeyStep ?? i + 1;
+      if (res.isComplete) break;
     }
     if (run) await completeJourneyRun(run.runId, 'completed').catch(() => {});
     emit({ type: 'journey_complete', journey: wp.journey.name, steps: wp.plan.length });

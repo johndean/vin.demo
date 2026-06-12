@@ -10,7 +10,7 @@ import { db } from './db.js';
 import { recordEvalRun } from './eval-record.js';
 import { assembleJourney } from './journey-assembler.js';
 import { journeyWalkPlan } from './journeys.js';
-import { bootSession, walkJourney, runTurn } from './live-session.js';
+import { bootSession, walkJourney, runTurn, runWalkStep } from './live-session.js';
 
 const productId = process.env.PO_VIN_PRODUCT_ID;
 if (!productId) throw new Error('PO_VIN_PRODUCT_ID not set — run `npm run seed`.');
@@ -75,6 +75,27 @@ if (plan.length >= 2) {
     ok('walk turn advances the graph-owned journey position (0→1)', r0.journeyStep === 1, `journeyStep=${r0.journeyStep}`);
     ok('an off-script question does NOT consume a journey step (position holds)', off.journeyStep === 1, `off-script journeyStep=${off.journeyStep}`);
     ok('the next walk turn resumes correctly (1→2) — no desync', r1.journeyStep === 2, `journeyStep=${r1.journeyStep}`);
+  }
+}
+
+// ── #19 INTERRUPTION (unified walk driver): a barge-in mid-walk is ANSWERED, consumes NO journey step, and the
+// walk RESUMES at the right step. Drives the SHARED runWalkStep stepper (the exact body the live voice path runs),
+// so this both validates the interruption contract AND proves the refactor kept the graph-owned journeyStep
+// monotonic. The GRAPH-level contract is deterministic in clientNav mode (no TTS/mic); the voice barge-in REPLAY
+// wiring (pendingBargein stash-and-replay) is out of the eval's deterministic scope → verified by manual/e2e voice.
+if (plan.length >= 2) {
+  const evs: any[] = []; const sink = (ev: any) => evs.push(ev);
+  const ctx3 = await bootSession('eval-walk-interrupt', { productId, journeyId: res.journeyId, clientNav: true, seedRoom: false });
+  if (ctx3) {
+    const s0 = await runWalkStep(ctx3, plan, 0, sink);
+    ok('#19 walk step 0 advances the graph position (0→1) via the shared stepper', s0.journeyStep === 1, `journeyStep=${s0.journeyStep}`);
+    // A genuine off-script QUESTION (not a control word like "hold on"/"pause", which would correctly pause the walk).
+    const off = await runTurn(ctx3, { speaker: 'Buyer', text: 'Quick question — what does this cost?', advance: false }, sink);
+    ok('#19 barge-in question does NOT consume a journey step (holds at 1)', off.journeyStep === 1, `journeyStep=${off.journeyStep}`);
+    const ans = evs.filter((e) => e.type === 'message' && e.side === 'ai').slice(-1)[0];
+    ok('#19 barge-in question was ANSWERED, not dropped', !!ans && typeof ans.text === 'string' && ans.text.trim().length > 0, ans ? `answered: "${String(ans.text).slice(0, 48)}"` : 'no AI answer emitted');
+    const s1 = await runWalkStep(ctx3, plan, off.journeyStep ?? 1, sink);
+    ok('#19 walk RESUMES at the correct step after the interrupt (1→2)', s1.journeyStep === 2, `journeyStep=${s1.journeyStep}`);
   }
 }
 
