@@ -840,16 +840,22 @@ interface LiveState {
   sessionId: string | null; // real demo_sessions id from the engine `start` event (used for hand-off records)
   handoffSuggestion: { topic: string; toPersona: string } | null; // active specialist suggested bringing in another
   journeyName: string | null; journeyStep: number; journeyTotal: number; journeyDone: boolean; turnSeq: number; // V5 voice-walk progress + per-turn completion counter (auto-advance signal)
+  // #34 operator teleprompter: the current beat's caption + arc marker, and a peek at the next beat (from journey_step).
+  journeyArc: string | null; journeyCaption: string | null; journeyNarrated: boolean; journeyNext: { caption: string | null; arc: string | null; narrated: boolean } | null;
+  // #26/#31 (review L-2): tell a walk-step turn apart from an off-script answer so the auto-advance dwell scales
+  // off the step's OWN arc/narration — never off a stale prior step's values. walkPending is armed by journey_step
+  // and consumed by the next turn_done into lastTurnWalk.
+  walkPending: boolean; lastTurnWalk: boolean;
   voices: { id: string; label: string }[]; voice: string; // unified voice catalog (Google + ElevenLabs) + the selected voice id (from the `start` event)
 }
-const LIVE_INIT: LiveState = { running: false, done: false, ready: false, loopIdx: -1, phase: 'Ready', brain: 'Live engine ready — press Run agent to drive po.vin read-only.', sub: 'awaiting start', conf: 0.9, messages: [], cite: null, cost: 0, byType: [], screenshot: null, url: '', blocked: [], error: null, navAction: null, sessionId: null, handoffSuggestion: null, journeyName: null, journeyStep: 0, journeyTotal: 0, journeyDone: false, turnSeq: 0, voices: [], voice: '' };
+const LIVE_INIT: LiveState = { running: false, done: false, ready: false, loopIdx: -1, phase: 'Ready', brain: 'Live engine ready — press Run agent to drive po.vin read-only.', sub: 'awaiting start', conf: 0.9, messages: [], cite: null, cost: 0, byType: [], screenshot: null, url: '', blocked: [], error: null, navAction: null, sessionId: null, handoffSuggestion: null, journeyName: null, journeyStep: 0, journeyTotal: 0, journeyDone: false, turnSeq: 0, journeyArc: null, journeyCaption: null, journeyNarrated: true, journeyNext: null, walkPending: false, lastTurnWalk: false, voices: [], voice: '' };
 
 function reduceLive(p: LiveState, ev: any): LiveState {
   switch (ev.type) {
     case 'start': return { ...LIVE_INIT, running: !ev.interactive, url: ev.product ? `https://${ev.product}` : '', sessionId: typeof ev.sessionId === 'string' ? ev.sessionId : null, voices: Array.isArray(ev.profiles) ? ev.profiles : [], voice: typeof ev.voice === 'string' ? ev.voice : '' };
     case 'voice': return typeof ev.id === 'string' ? { ...p, voice: ev.id } : p; // engine confirmed a voice switch
     case 'ready': return { ...p, ready: true, running: false, phase: 'Ready', brain: 'Ask me anything about the product — I’ll answer live and show the screen.', sub: 'interactive' };
-    case 'turn_done': return { ...p, running: false, turnSeq: p.turnSeq + 1 };
+    case 'turn_done': return { ...p, running: false, turnSeq: p.turnSeq + 1, lastTurnWalk: p.walkPending, walkPending: false }; // L-2: this turn was a walk step iff a journey_step armed walkPending before it
     case 'message': return { ...p, messages: [...p.messages, { side: ev.side, who: ev.who, role: ev.role, av: ev.side === 'ai' ? 'AI' : String(ev.who ?? '?')[0].toUpperCase(), color: ev.side === 'ai' ? '#002855' : '#4D6995', text: ev.text, tag: ev.tag, uncertain: ev.uncertain }], handoffSuggestion: ev.side === 'them' ? null : p.handoffSuggestion };
     case 'handoff_suggestion': return { ...p, handoffSuggestion: { topic: String(ev.topic ?? ''), toPersona: String(ev.toPersona ?? '') } };
     case 'beat': return { ...p, loopIdx: ev.loopIdx ?? p.loopIdx, phase: ev.phase ?? p.phase, brain: ev.brain ?? p.brain, sub: ev.sub ?? p.sub, conf: ev.conf ?? p.conf };
@@ -866,9 +872,13 @@ function reduceLive(p: LiveState, ev: any): LiveState {
     case 'blocked': return { ...p, blocked: ev.actions ?? [] };
     case 'cost': return { ...p, cost: ev.total ?? p.cost, byType: ev.byType ?? p.byType };
     // V5 journey voice-walk progress (from the engine voice session).
-    case 'journey_start': return { ...p, journeyName: String(ev.journey ?? 'Journey'), journeyTotal: Number(ev.steps ?? 0), journeyStep: 0, journeyDone: false };
-    case 'journey_step': return { ...p, journeyStep: Number(ev.index ?? p.journeyStep) };
-    case 'journey_complete': return { ...p, journeyDone: true, journeyStep: Number(ev.steps ?? p.journeyTotal) };
+    case 'journey_start': return { ...p, journeyName: String(ev.journey ?? 'Journey'), journeyTotal: Number(ev.steps ?? 0), journeyStep: 0, journeyDone: false, journeyArc: null, journeyCaption: null, journeyNarrated: true, journeyNext: null, walkPending: false, lastTurnWalk: false };
+    // #34 teleprompter: carry the current beat's caption + arc marker and the next-beat peek (caption falls
+    // back to the screen/node label so a workflow interior step still reads as something the operator can follow);
+    // arm walkPending so the following turn_done knows this turn was a walk step (L-2 dwell-arc accuracy).
+    case 'journey_step': { const cap = (c: any, n: any) => (typeof c === 'string' && c.trim()) ? c.trim() : (typeof n === 'string' && n.trim() ? n.trim() : null); const nx = ev.next as any;
+      return { ...p, journeyStep: Number(ev.index ?? p.journeyStep), journeyArc: typeof ev.arc === 'string' ? ev.arc : null, journeyCaption: cap(ev.caption, ev.node), journeyNarrated: ev.narrated !== false, journeyNext: nx ? { caption: cap(nx.caption, nx.node), arc: typeof nx.arc === 'string' ? nx.arc : null, narrated: nx.narrated !== false } : null, walkPending: true }; }
+    case 'journey_complete': return { ...p, journeyDone: true, journeyStep: Number(ev.steps ?? p.journeyTotal), journeyNext: null };
     case 'journey_unwalkable': return { ...p, error: String(ev.message ?? 'This journey has no walkable steps yet.') };
     case 'done': return { ...p, running: false, done: true, loopIdx: 6 };
     case 'error': return { ...p, running: false, error: ev.message ?? 'engine error' };
@@ -898,6 +908,18 @@ const COST_COLOR: Record<string, string> = { llm: '#002855', navigation: '#0097A
 
 const SEG_BTN: React.CSSProperties = { border: 'none', background: 'transparent', color: 'var(--color-steel-hover)', fontSize: 10.5, fontWeight: 800, letterSpacing: '.04em', textTransform: 'uppercase', padding: '4px 9px', borderRadius: 6, cursor: 'pointer' };
 const SEG_ON: React.CSSProperties = { background: '#fff', color: 'var(--color-navy)' };
+
+// #34 teleprompter: the story-arc position of a beat, shown as a small colored chip so the operator can read
+// the dramatic shape of the walk at a glance — open (set the stakes) · show (the product) · transit (a screen
+// the consultant drives SILENTLY, no narration) · close (the measurable payoff).
+const ARC_META: Record<string, { label: string; bg: string }> = {
+  open: { label: 'OPEN', bg: '#0861CE' }, show: { label: 'SHOW', bg: '#0097A9' },
+  transit: { label: 'TRANSIT', bg: '#6B7B95' }, close: { label: 'CLOSE', bg: '#1f8a5b' },
+};
+function ArcChip({ arc, dim }: { arc?: string | null; dim?: boolean }) {
+  const m = arc ? ARC_META[arc] : undefined; if (!m) return null;
+  return <span style={{ fontSize: 9.5, fontWeight: 800, letterSpacing: '.06em', padding: '1px 6px', borderRadius: 5, background: m.bg, color: '#fff', opacity: dim ? 0.5 : 1, flexShrink: 0 }}>{m.label}</span>;
+}
 
 /* ── Guided demo TOURS (record-and-replay) ── The SCRIPTED tab. The operator drives the REAL product in the
    embedded browser and CAPTURES steps (a page to show · a click to perform · a talking-point note + a
@@ -1465,9 +1487,21 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
     if (!isJourneyWalk || !autoWalk) return;
     if (!live.journeyName || live.journeyDone || live.turnSeq === 0) return; // wait for the first completed step
     if (listening) return;
-    const t = setTimeout(() => vcRef.current?.next(), 1800);
+    // #26/#31 content-aware dwell — hold longer when the consultant just said more (the buyer needs time to
+    // absorb), and longer still on the OPEN/CLOSE bookends (the stakes and the payoff have to land); advance
+    // FAST through a silent transit screen (nothing was said to dwell on). Bounded so a long line can't stall.
+    // Dwell on whatever was JUST spoken, including a hedged/low-confidence line (L-3: don't skip past it). Use the
+    // step's arc/narration ONLY when the just-finished turn was a walk step — after an off-script answer
+    // (lastTurnWalk=false) fall back to neutral length-only pacing so a stale prior-step arc can't mis-time it (L-2).
+    const lastSaid = [...live.messages].reverse().find((m) => m.side === 'ai')?.text ?? '';
+    const arc = live.lastTurnWalk ? live.journeyArc : null;
+    const narrated = live.lastTurnWalk ? live.journeyNarrated : true;
+    const len = (arc === 'transit' || !narrated) ? 0 : lastSaid.length;
+    const mult = (arc === 'open' || arc === 'close') ? 1.5 : 1;
+    const dwell = len === 0 ? 1100 : Math.min(6500, Math.max(1700, Math.round((1100 + len * 14) * mult)));
+    const t = setTimeout(() => vcRef.current?.next(), dwell);
     return () => clearTimeout(t);
-  }, [isJourneyWalk, autoWalk, live.journeyName, live.journeyDone, live.turnSeq, listening]);
+  }, [isJourneyWalk, autoWalk, live.journeyName, live.journeyDone, live.turnSeq, listening]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scripted autoplay (scripted mode only).
   useEffect(() => {
@@ -1523,6 +1557,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
     const history: string[] = [];
     const say = (text: string, uncertain?: boolean) => pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text, uncertain });
     let lastSig = ''; let repeats = 0; let finished = false; const filledDates = new Set<string>();
+    let lastComboFailed = false; // #3: did the PRIOR iteration's comboPick verifiably fail to resolve (no-match/code-mismatch)?
     try {
       for (let i = 0; i < 32; i++) { // a 5-step wizard needs many actions; stuck-detection + `done` end it early
         const page = await ctl.snapshot().catch(() => null);
@@ -1567,17 +1602,27 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
         repeats = repeated ? repeats + 1 : 0;
         lastSig = sig;
         // Never freeze, never loop forever. A non-resolving REPEAT hands the wheel back. Temporal always makes
-        // progress (exempt). Dropdowns/`select` get ONE extra pass (a custom control can need a second try) but
-        // a 3rd identical attempt means it isn't taking — hand off instead of looping ("set it to Asset once more"×N).
-        if (!temporal && repeats >= ((dropdown || res.action === 'select') ? 2 : 1)) {
+        // progress (exempt). Dropdowns/`select` normally get ONE extra pass (a custom control can need a second
+        // try). #3 HARDENING: a dropdown KEEPS that grace UNLESS the executor VERIFIABLY reported the value isn't
+        // resolvable — i.e. the prior identical comboPick returned no-match/code-mismatch (lastComboFailed). We
+        // gate on that verified executor signal, NOT the snapshot's heuristic `filled` flag, which false-negatives
+        // on input-backed custom comboboxes that commit a value the perceiver can't read back (RC-08) and would
+        // otherwise hand back on a field that IS correctly set. A verified no-match means re-issuing the same value
+        // is futile → cut the grace so it hands back promptly instead of looping "set it to Asset once more"×N.
+        const isDropdownish = dropdown || res.action === 'select';
+        const tolerance = isDropdownish ? (lastComboFailed ? 1 : 2) : 1;
+        if (!temporal && repeats >= tolerance) {
           say("I've set what I can on that field — could you confirm it, then tell me to continue? I'll pick it right back up.", true); finished = true; break;
         }
+        lastComboFailed = false; // #3: cleared each dispatch; set true below ONLY on a comboPick that verifiably can't resolve the value
         if (temporal) await ctl.typeInto(res.ref, res.value ?? '').catch(() => {});                 // click/type/select on a date field → future-date filler
         else if (res.action === 'select' || (dropdown && res.action === 'click')) {                 // any dropdown → open + filter + pick, in one shot
           const r = await ctl.comboPick(res.ref, res.value ?? '').catch(() => null);
-          // RC-25: act on the executor's VERIFIED result — if the resolver genuinely found no matching option,
-          // tell the model so it stops re-issuing the same value (don't wait for stuck-detection to catch it).
-          if (r && r.ok === false && (r.reason === 'no-match' || r.reason === 'code-mismatch')) history.push(`(Note: "${res.value}" was not found in that list — pick a different value or hand off; do not repeat it.)`);
+          // RC-25 / #3: act on the executor's VERIFIED result — a genuine no-match both tells the model to stop
+          // re-issuing the same value AND (lastComboFailed) cuts the dropdown's grace on the next identical repeat,
+          // so a truly non-resolving select hands back promptly while a value that committed-but-reads-empty keeps it.
+          lastComboFailed = !!(r && r.ok === false && (r.reason === 'no-match' || r.reason === 'code-mismatch'));
+          if (lastComboFailed) history.push(`(Note: "${res.value}" was not found in that list — pick a different value or hand off; do not repeat it.)`);
         }
         else if (res.action === 'navigate') ctl.navigate(res.value ?? '');                           // RC-31: direct verified-route nav (engine resolved value to a known screen route)
         else if (res.action === 'click') await ctl.clickRef(res.ref).catch(() => {});               // (clickRef itself resolves a typeahead it detects live)
@@ -1615,7 +1660,8 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
       </div>
 
       {isJourneyWalk && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 16px', background: 'var(--cr-navy, #002855)', color: '#fff', borderBottom: '1px solid rgba(0,0,0,.2)', flexShrink: 0 }}>
+        <div style={{ background: 'var(--cr-navy, #002855)', color: '#fff', borderBottom: '1px solid rgba(0,0,0,.2)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '9px 16px' }}>
           {live.journeyName ? <>
             <span style={{ fontWeight: 800, fontSize: 12.5 }}>▶ {live.journeyName}</span>
             <span style={{ opacity: .7, fontSize: 12 }}>{live.journeyDone ? 'Complete' : `Step ${Math.min(live.journeyStep + 1, live.journeyTotal || 1)} / ${live.journeyTotal || '…'}`}</span>
@@ -1645,6 +1691,28 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
             </select>
           )}
           <button onClick={() => { stopVoice(); setMode('start'); }} title="Back to the launcher" style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid rgba(255,255,255,.2)', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer' }}>Exit</button>
+        </div>
+        {/* #34 operator teleprompter — the beat the consultant is on NOW (caption + arc) and a peek at what's
+            NEXT, so the operator can anticipate the walk instead of being surprised by each step. */}
+        {live.journeyName && !live.journeyDone && (live.journeyCaption || live.journeyNext) && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '7px 16px', borderTop: '1px solid rgba(255,255,255,.08)', background: 'rgba(0,0,0,.16)' }}>
+            <ArcChip arc={live.journeyArc} />
+            <span style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '46%' }} title={live.journeyCaption ?? undefined}>
+              {live.journeyCaption ?? (live.journeyNarrated ? '…' : 'Driving to the next screen')}
+            </span>
+            {!live.journeyNarrated && <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,.5)', fontStyle: 'italic', flexShrink: 0 }}>silent</span>}
+            {live.journeyNext && <>
+              <span style={{ color: 'rgba(255,255,255,.32)', fontSize: 12, flexShrink: 0 }}>→ next</span>
+              <ArcChip arc={live.journeyNext.arc} dim />
+              <span style={{ fontSize: 12, color: 'rgba(255,255,255,.6)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '34%' }} title={live.journeyNext.caption ?? undefined}>
+                {live.journeyNext.caption ?? 'next screen'}
+              </span>
+              {/* L-1: mirror the current-beat row — mark an upcoming SILENT transit screen explicitly so the dimmed
+                  TRANSIT chip isn't the only cue that the consultant will drive that screen without narrating. */}
+              {!live.journeyNext.narrated && <span style={{ fontSize: 10.5, color: 'rgba(255,255,255,.4)', fontStyle: 'italic', flexShrink: 0 }}>silent</span>}
+            </>}
+          </div>
+        )}
         </div>
       )}
       <div className="cr-body">

@@ -170,6 +170,19 @@ export async function journeyWalkPlan(journeyId: string): Promise<{ journey: Jou
   return { journey, plan };
 }
 
+/** Experience-audit #34 (operator teleprompter): the per-step fields BOTH walk drivers attach to a
+ * `journey_step` event — the current beat's caption + arc marker, and a peek at the NEXT beat — so the
+ * desktop strip can show the operator where the walk is and what's coming. ONE helper so the two emit
+ * sites (voice-session.ts runWalkStep + live-session.ts walkJourney) stay byte-identical (the Wave-B
+ * drift lesson; also the seam #19 will fold into a single walk driver). */
+export function walkStepView(plan: WalkEntry[], i: number): { caption: string | null; arc: WalkEntry['arcRole']; narrated: boolean; next: { caption: string | null; node: string | null; arc: WalkEntry['arcRole']; narrated: boolean } | null } {
+  const cur = plan[i], nxt = plan[i + 1];
+  return {
+    caption: cur.caption ?? null, arc: cur.arcRole, narrated: cur.narrated,
+    next: nxt ? { caption: nxt.caption ?? null, node: nxt.nodeLabel ?? null, arc: nxt.arcRole, narrated: nxt.narrated } : null,
+  };
+}
+
 /** Create a journey. Audited. Returns the new id. */
 export async function createJourney(productId: string, input: JourneyInput, actor = 'system'): Promise<{ journeyId: string; productId: string }> {
   if (!productId) throw new Error('productId required');

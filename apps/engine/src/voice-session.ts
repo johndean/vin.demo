@@ -21,7 +21,7 @@ import { profileById, defaultProfile, voiceCatalog } from './voice/profiles.js';
 import type { STTStream, VoiceProfile } from './voice/providers.js';
 import { loadPersona } from '../../../src/core/persona.js';
 import { beginCostSession, recordVoice } from '../../../src/core/cost.js';
-import { journeyWalkPlan, startJourneyRun, completeJourneyRun } from '../../../src/core/journeys.js';
+import { journeyWalkPlan, startJourneyRun, completeJourneyRun, walkStepView } from '../../../src/core/journeys.js';
 
 const SAMPLE_RATE = 16000;
 
@@ -204,7 +204,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     answering = true; interrupted = false; streamedThisTurn = false;
     wsReady = openTurnWs(); // #14: open the word-level WS CONCURRENTLY with the walk step (don't block ~6s on it)
     try {
-      send({ type: 'journey_step', index: idx, total: walkPlan.length, kind: walkPlan[idx].stepKind, node: walkPlan[idx].nodeLabel ?? null });
+      send({ type: 'journey_step', index: idx, total: walkPlan.length, kind: walkPlan[idx].stepKind, node: walkPlan[idx].nodeLabel ?? null, ...walkStepView(walkPlan, idx) });
       const r = await runTurn(ctx, { speaker: 'Presenter', text: walkPlan[idx].caption ?? 'next', advance: true, stream: true }, voiceEmit); // RC-03: stream the walk narration to TTS
       await wsReady; // #14: ensure the concurrent open settled before draining + closing
       await ttsChain;

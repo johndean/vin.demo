@@ -11,7 +11,7 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { buildGraph } from './graph.js';
 import { getLlm } from './llm.js';
 import { createDemoSession, saveSessionState, loadSessionState } from './session.js';
-import { journeyWalkPlan, startJourneyRun, completeJourneyRun, getJourneyById } from './journeys.js';
+import { journeyWalkPlan, startJourneyRun, completeJourneyRun, getJourneyById, walkStepView } from './journeys.js';
 import { beginCostSession, sessionCost } from './cost.js';
 import { db } from './db.js';
 import type { ExecutionMode } from './safety.js';
@@ -425,7 +425,7 @@ export async function walkJourney(ctx: SessionCtx, emit: Emit): Promise<void> {
   try {
     for (let i = 0; i < wp.plan.length; i++) {
       const entry = wp.plan[i];
-      emit({ type: 'journey_step', index: i, total: wp.plan.length, kind: entry.stepKind, node: entry.nodeLabel ?? null });
+      emit({ type: 'journey_step', index: i, total: wp.plan.length, kind: entry.stepKind, node: entry.nodeLabel ?? null, ...walkStepView(wp.plan, i) });
       // The JOURNEY decides the screen (navigateJourneyStep); the utterance is only narration context.
       await runTurn(ctx, { speaker: 'Presenter', text: entry.caption ?? `Step ${i + 1}`, loop: 3, advance: true }, emit);
     }
