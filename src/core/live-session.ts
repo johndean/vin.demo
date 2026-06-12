@@ -11,12 +11,12 @@ import { readFile, mkdir } from 'node:fs/promises';
 import { buildGraph } from './graph.js';
 import { getLlm } from './llm.js';
 import { createDemoSession, saveSessionState, loadSessionState } from './session.js';
-import { journeyWalkPlan, startJourneyRun, completeJourneyRun } from './journeys.js';
+import { journeyWalkPlan, startJourneyRun, completeJourneyRun, getJourneyById } from './journeys.js';
 import { beginCostSession, sessionCost } from './cost.js';
 import { db } from './db.js';
 import type { ExecutionMode } from './safety.js';
 import { loadPersona, personaPreamble, handoffSuggestionFor, type Persona } from './persona.js';
-import { getStakeholders, type Stakeholder } from './stakeholders.js';
+import { getStakeholders, getStakeholderRegistry, type Stakeholder } from './stakeholders.js';
 import { getDiscovery } from './discovery.js';
 import { validateCompliance, shouldCite, recordEscalation, recordAuditTurn, type ComplianceResult } from './governance.js';
 
@@ -56,6 +56,10 @@ export interface SessionCtx {
   personaId: string | null;
   journeyId: string | null; // pinned journey the loop walks (null = off-script / intent-driven default)
   journeyGoal: string | null; // RC-17: the pinned journey's business outcome — answers are FRAMED against it
+  // Wave C #10: the linked outcome's quantified frame (metric/baseline/target) → the demo can SPEAK a real number.
+  outcomeMetric: string | null; outcomeBaseline: string | null; outcomeTarget: string | null;
+  // Wave C #9: the journey's buying committee (role + authored objections + decision criteria) → answer executives.
+  committee: { role: string; objections: string[]; decisionCriteria: string[] }[];
   graph: ReturnType<typeof buildGraph>;
   thread: { configurable: { thread_id: string } };
 }
@@ -99,10 +103,29 @@ export async function bootSession(threadPrefix = 'live', target: SessionTarget =
   // Default OFF for bootSession callers: interactive + voice are LIVE single-operator sessions where a
   // fabricated audience made the AI address fictional attendees. The reel opts back in (scripted showcase).
   const journeyId = target.journeyId?.trim() || null;
-  // RC-17: load the pinned journey's business outcome once at boot, so off-script answers can be FRAMED
-  // against the buyer's outcome (consultant) instead of answered in isolation (doc bot). Best-effort.
+  // RC-17 / Wave C #10+#9: load the pinned journey's full business OUTCOME (metric/baseline/target — for a spoken
+  // ROI number) AND its buying COMMITTEE (objections + decision criteria — to answer executives head-on) once at
+  // boot. This authored intelligence was mute; this is where it reaches the spoken layer. Best-effort throughout.
   let journeyGoal: string | null = null;
-  if (journeyId) { try { journeyGoal = (await db().query<{ business_goal: string | null }>('SELECT business_goal FROM journeys WHERE id = $1', [journeyId])).rows[0]?.business_goal ?? null; } catch { /* best-effort */ } }
+  let outcomeMetric: string | null = null, outcomeBaseline: string | null = null, outcomeTarget: string | null = null;
+  let committee: { role: string; objections: string[]; decisionCriteria: string[] }[] = [];
+  if (journeyId) {
+    try {
+      const j = await getJourneyById(journeyId);
+      if (j) {
+        journeyGoal = j.businessGoal;
+        outcomeMetric = j.outcomeMetric ?? null; outcomeBaseline = j.outcomeBaseline ?? null; outcomeTarget = j.outcomeTarget ?? null;
+        // #9: resolve the journey's stakeholder_refs to the registry rows that carry objections + decision
+        // criteria; fall back to the product's full committee when the journey names none. Keep only members WITH
+        // authored objections/criteria (no empty noise), keyed by ROLE (never a fabricated person name).
+        const reg = await getStakeholderRegistry(productId);
+        const refSet = new Set(j.stakeholderRefs.map((r) => r.toLowerCase())); // case-insensitive UUID ref match
+        const scoped = j.stakeholderRefs.length ? reg.filter((s) => refSet.has(s.id.toLowerCase())) : reg;
+        // Keep members WITH authored objections — the #9 answer channel matches on objections; criteria ride along.
+        committee = scoped.filter((s) => s.objections?.length).map((s) => ({ role: s.role ?? s.name ?? 'a stakeholder', objections: s.objections ?? [], decisionCriteria: s.decisionCriteria ?? [] }));
+      }
+    } catch { /* best-effort: a missing journey / outcome / committee degrades to nulls, never blocks the demo */ }
+  }
   const session = await createDemoSession(productId, mode, target.seedRoom ?? false, journeyId);
   beginCostSession(session.id);
   const graph = buildGraph();
@@ -124,7 +147,7 @@ export async function bootSession(threadPrefix = 'live', target: SessionTarget =
     }
   } catch { /* best-effort: no snapshot / column absent / seed failed → unchanged boot behavior */ }
   const personaId = target.personaId?.trim() || null;
-  return { productId, productName, role, mode, baseUrl, clientNav, sessionId: session.id, personaId, journeyId, journeyGoal, graph, thread };
+  return { productId, productName, role, mode, baseUrl, clientNav, sessionId: session.id, personaId, journeyId, journeyGoal, outcomeMetric, outcomeBaseline, outcomeTarget, committee, graph, thread };
 }
 
 /** Stakeholder intelligence + relationship memory (REUSES the existing session stakeholder collection +
@@ -260,6 +283,21 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
     // can appear; it never forces it.
     const k = out.interpretation?.kind;
     const valueRelevant = k === 'objection' || k === 'business_objective' || k === 'curiosity';
+    // Wave C #9 (review-hardened): ONLY on a GROUNDED objection turn, surface the committee concern(s) that
+    // actually OVERLAP the buyer's words (token overlap ≥2 — the assembler's relevance discipline) — never an
+    // unrelated authored objection. Sanitize the authored text, cap to the top 3, keep it role-level (no presence).
+    let committee: { role: string; objection: string; criteria?: string[] }[] | undefined;
+    if (hasSource && k === 'objection' && ctx.committee.length) {
+      const qTokens = new Set(`${turn.text} ${out.interpretation?.intent ?? ''}`.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 3));
+      const overlap = (s: string) => s.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 3 && qTokens.has(t)).length;
+      const sani = (s: string) => s.replace(/[·•|*`]+/g, ';').replace(/\s+/g, ' ').trim();
+      const matched = ctx.committee
+        .map((c) => { const best = (c.objections ?? []).map((o) => ({ o, n: overlap(o) })).sort((a, b) => b.n - a.n)[0]; return best && best.n >= 2 ? { role: c.role, objection: sani(best.o), criteria: (c.decisionCriteria ?? []).map(sani).slice(0, 3), n: best.n } : null; })
+        .filter((x): x is { role: string; objection: string; criteria: string[]; n: number } => !!x)
+        .sort((a, b) => b.n - a.n).slice(0, 3)
+        .map(({ role, objection, criteria }) => ({ role, objection, criteria }));
+      committee = matched.length ? matched : undefined;
+    }
     let text: string;
     try {
       text = await getLlm().answerAs({
@@ -274,6 +312,12 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
         priorContext: room.priorContext || undefined,
         cite: shouldCite(persona?.citationPolicy, band, hasSource),
         outcome: valueRelevant && ctx.journeyGoal ? ctx.journeyGoal : undefined, // #1/RC-17: frame against the outcome ONLY on a value/objection turn — not every turn (that padded every answer)
+        // Wave C #10: alongside the outcome (so the metric rides WITH the goal frame, never stranded), the
+        // quantified metric/baseline→target so an ROI/payback answer can state a REAL number when one is committed.
+        outcomeMetric: valueRelevant && ctx.journeyGoal ? ctx.outcomeMetric || undefined : undefined,
+        outcomeBaseline: valueRelevant && ctx.journeyGoal ? ctx.outcomeBaseline || undefined : undefined,
+        outcomeTarget: valueRelevant && ctx.journeyGoal ? ctx.outcomeTarget || undefined : undefined,
+        committee, // Wave C #9: the GROUNDED, relevance-matched, sanitized committee concern(s) computed above
 
         // RC-03: when the caller is the voice channel (turn.stream), stream completed sentences out as
         // `say_chunk` events so TTS starts on sentence 1. The interactive/reel/CLI paths leave it off (blocking).

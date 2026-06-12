@@ -54,6 +54,9 @@ export interface Journey {
   businessOutcomeId: string | null; environmentId: string | null;
   storyFlow: StoryStep[]; stakeholderRefs: string[]; specialistRules: SpecialistRule[];
   successCriteria: string | null; status: JourneyStatus; version: number; owner: string | null;
+  // Wave C #10: the linked business_outcome's quantified frame (LEFT JOINed by getJourneyById only) so the walk's
+  // close beat + ROI answers can state a REAL number. Null when no outcome is linked / not loaded by this query.
+  outcomeMetric?: string | null; outcomeBaseline?: string | null; outcomeTarget?: string | null;
 }
 
 interface JourneyRow {
@@ -61,6 +64,7 @@ interface JourneyRow {
   business_outcome_id: string | null; environment_id: string | null;
   story_flow: any; stakeholder_refs: any; specialist_rules: any;
   success_criteria: string | null; status: JourneyStatus; version: number; owner: string | null;
+  outcome_metric?: string | null; outcome_baseline?: string | null; outcome_target?: string | null; // Wave C #10 (getJourneyById JOIN only)
 }
 const asArr = (v: any): any[] => (Array.isArray(v) ? v : []);
 const toJourney = (r: JourneyRow): Journey => ({
@@ -69,6 +73,7 @@ const toJourney = (r: JourneyRow): Journey => ({
   storyFlow: asArr(r.story_flow), stakeholderRefs: asArr(r.stakeholder_refs).map(String),
   specialistRules: asArr(r.specialist_rules), successCriteria: r.success_criteria,
   status: r.status, version: r.version, owner: r.owner,
+  outcomeMetric: r.outcome_metric ?? null, outcomeBaseline: r.outcome_baseline ?? null, outcomeTarget: r.outcome_target ?? null,
 });
 
 /** Sanitize an incoming story_flow: keep only known kinds; coerce refId/caption to string|null. */
@@ -90,9 +95,11 @@ export async function getJourneys(productId: string): Promise<Journey[]> {
 /** One journey by id (non-archived), or null. Used by the live runtime to WALK a pinned journey. */
 export async function getJourneyById(journeyId: string): Promise<Journey | null> {
   const { rows } = await db().query<JourneyRow>(
-    `SELECT id, product_id, name, business_goal, business_outcome_id, environment_id,
-            story_flow, stakeholder_refs, specialist_rules, success_criteria, status, version, owner
-       FROM journeys WHERE id = $1 AND archived_at IS NULL`, [journeyId]);
+    `SELECT j.id, j.product_id, j.name, j.business_goal, j.business_outcome_id, j.environment_id,
+            j.story_flow, j.stakeholder_refs, j.specialist_rules, j.success_criteria, j.status, j.version, j.owner,
+            o.metric AS outcome_metric, o.baseline AS outcome_baseline, o.target AS outcome_target
+       FROM journeys j LEFT JOIN business_outcomes o ON o.id = j.business_outcome_id AND o.archived_at IS NULL
+      WHERE j.id = $1 AND j.archived_at IS NULL`, [journeyId]);
   return rows[0] ? toJourney(rows[0]) : null;
 }
 

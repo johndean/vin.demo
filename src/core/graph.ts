@@ -250,11 +250,14 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
   // #2: the OUTCOME frames only the bookend beats (open/close); injecting it on every step is the chief cause of
   // 97%-repetitive narration. Elsewhere it's null so the beat advances the story instead of restating the goal.
   const outcomeFraming = (entry.arcRole === 'open' || entry.arcRole === 'close') ? wp.journey.businessGoal : null;
+  // Wave C #10 (review-hardened): the quantified number is reserved for the CLOSE (payoff) beat — the open beat
+  // frames the goal qualitatively, so the same metric isn't stated twice across the bookends. Null elsewhere.
+  const roi = entry.arcRole === 'close' ? { metric: wp.journey.outcomeMetric ?? null, baseline: wp.journey.outcomeBaseline ?? null, target: wp.journey.outcomeTarget ?? null } : { metric: null, baseline: null, target: null };
   if (entry.kind === 'beat') {
     // Narration beat (knowledge/note/tour) — no navigation; compose ONE warm spoken line (clean fallback).
     // RC-16: pass the resolved knowledge chunk (entry.sourceText) so a knowledge beat paraphrases a GROUNDED
     // source instead of free-improvising product claims; null for note/tour beats → the span orients to context.
-    const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: null, audience, outcome: outcomeFraming, sourceText: entry.sourceText ?? null, recentNarrations: recent, stepIndex: stepNum, stepTotal: total, arcRole: entry.arcRole, onDelta });
+    const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: null, audience, outcome: outcomeFraming, outcomeMetric: roi.metric, outcomeBaseline: roi.baseline, outcomeTarget: roi.target, sourceText: entry.sourceText ?? null, recentNarrations: recent, stepIndex: stepNum, stepTotal: total, arcRole: entry.arcRole, onDelta });
     return { ...advance, navigation: null, navAction: null, blockedMutations: [], explanation: say, recentNarrations: [say], trace: [`journey: [${stepNum}/${total}] ${entry.stepKind} narration beat (${entry.arcRole})`] };
   }
   // #7: a SILENT transit node — drive the screen but speak NOTHING (the walk advances without restating a value
@@ -275,7 +278,7 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
   const facts = await nodeNarrationFacts(state.productId, entry.nodeLabel ?? '');
   const [d, say] = await Promise.all([
     driveTo(state, entry.caption ?? entry.nodeLabel ?? 'demonstrate', { targetLabel: entry.nodeLabel ?? null }),
-    getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: facts.screenName ?? entry.nodeLabel ?? null, screenName: facts.screenName, purpose: facts.purpose, screenFacts: facts.screenFacts, audience, outcome: outcomeFraming, sourceText: entry.sourceText ?? null, recentNarrations: recent, stepIndex: stepNum, stepTotal: total, arcRole: entry.arcRole, onDelta }),
+    getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: facts.screenName ?? entry.nodeLabel ?? null, screenName: facts.screenName, purpose: facts.purpose, screenFacts: facts.screenFacts, audience, outcome: outcomeFraming, outcomeMetric: roi.metric, outcomeBaseline: roi.baseline, outcomeTarget: roi.target, sourceText: entry.sourceText ?? null, recentNarrations: recent, stepIndex: stepNum, stepTotal: total, arcRole: entry.arcRole, onDelta }),
   ]);
   const ok = d.navigation.ok || !!d.navAction;
   const newPos: Position = { intent: entry.nodeLabel ?? 'journey step', url: d.navigation.url, answer: state.retrieved?.[0]?.content ?? null };

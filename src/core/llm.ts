@@ -68,6 +68,11 @@ export interface AnswerContext {
   priorContext?: string;          // prior concerns/objections/topics this session — Phase 2 relationship memory
   cite?: boolean;                 // citation policy (governance) — name the source inline when true
   outcome?: string;               // RC-17: the buyer's business outcome to FRAME the answer against (when relevant) — turns a doc-bot answer into a consultant one
+  // Wave C #10: the quantified frame behind the outcome (from the linked business_outcome) so an ROI/payback
+  // answer can state a REAL number. Wave C #9: the buying committee's authored objections + decision criteria (on
+  // an objection turn) so the answer addresses the executive's concern head-on. All optional → golden-safe (gated).
+  outcomeMetric?: string; outcomeBaseline?: string; outcomeTarget?: string;
+  committee?: { role: string; objection: string; criteria?: string[] }[];
   // RC-03 (streaming voice): when set, the answer is STREAMED and each completed sentence is delivered here
   // as it arrives, so the voice channel can start TTS on sentence 1 instead of waiting for the whole reply.
   // Omitted (interactive/reel/CLI) → the existing blocking call. Claude only; Gemini answers blocking.
@@ -95,6 +100,8 @@ export interface NarrateContext {
   screenFacts?: string | null;
   audience?: string | null;  // who's in the room (committee role/summary)
   outcome?: string | null;   // the business outcome this journey advances (passed only on open/close beats — #2)
+  // Wave C #10: the outcome's quantified frame so the CLOSE beat can land a REAL number (baseline→target). Null elsewhere.
+  outcomeMetric?: string | null; outcomeBaseline?: string | null; outcomeTarget?: string | null;
   // RC-16: GROUNDED source for a knowledge beat — the resolved chunk content. When present, the narration
   // paraphrases ONLY this; when absent, the model orients to the screen rather than asserting product specifics.
   sourceText?: string | null;
@@ -213,17 +220,32 @@ export const sysAnswerAs = (ctx: AnswerContext): string => {
   const screenFactsHint = ctx.screenFacts
     ? ` ${ctx.screenFacts} Reference only the buttons, actions, and fields actually present here — never invent UI that isn't listed, and respect any noted permissions or not-live markers.`
     : '';
-  // RC-17: frame the answer against the buyer's outcome when there is one. In-code wrapper (like navHint), so it
-  // only appears when an outcome is supplied — the byte-identity eval cases set none, so the golden is unchanged.
+  // RC-17 / Wave C #10: frame the answer against the buyer's outcome — and, when present, the quantified
+  // baseline→target so an ROI/payback question gets a REAL number. In-code wrapper (like navHint): only appears
+  // when an outcome is supplied — the byte-identity eval cases set none, so the golden is unchanged.
+  // #10: strip illustrative-example parentheticals (e.g. "(e.g., 48 hours)") AND ·-joined formatting, so no example
+  // number embedded in a QUALITATIVE metric can be lifted as a committed target and nothing leaks to TTS. The only
+  // committed numbers are an explicit baseline/target.
+  const metricClean = (ctx.outcomeMetric ?? '').replace(/\([^)]*\)/g, '').replace(/[·•|*`]+/g, ';').replace(/\s+/g, ' ').slice(0, 200).trim();
+  const numClause = (ctx.outcomeBaseline && ctx.outcomeTarget) ? ` (today ${ctx.outcomeBaseline} → target ${ctx.outcomeTarget})`
+    : ctx.outcomeBaseline ? ` (today ${ctx.outcomeBaseline})` : ctx.outcomeTarget ? ` (targeting ${ctx.outcomeTarget})` : '';
+  const hasNum = !!(ctx.outcomeBaseline || ctx.outcomeTarget);
+  const roi = (metricClean || hasNum) ? ` — success measured by ${metricClean || 'the stated success indicators'}${numClause}` : '';
   const outcomeHint = ctx.outcome
-    ? ` When it is genuinely relevant, connect your answer to the buyer's goal — ${ctx.outcome} — in one natural phrase; never force it, pad with it, or repeat it.`
+    ? ` When it is genuinely relevant, connect your answer to the buyer's goal — ${ctx.outcome}${roi} — in one natural phrase.${hasNum ? ' If they ask about value or ROI, state that committed baseline/target number.' : ' Describe the success measure QUALITATIVELY — do NOT state any specific number as a target, since no baseline or target has been committed for this buyer.'} Never force it, pad with it, or repeat it.`
+    : '';
+  // Wave C #9: on an objection turn, give the model the buying committee's AUTHORED objections + the criteria they
+  // decide on, so it answers the executive's real concern head-on (grounded in the source) instead of reading a
+  // generic chunk. In-code wrapper, gated on presence → eval cases set none → golden unchanged.
+  const committeeHint = ctx.committee && ctx.committee.length
+    ? ` This relates to how the buying committee evaluates: a ${ctx.committee.map((c) => `${c.role} typically weighs "${c.objection}"${c.criteria?.length ? ` and decides on ${c.criteria.slice(0, 2).join(', ')}` : ''}`).join('; a ')}. If your answer can speak to that, address it against their criterion — grounding only in the source; never imply anyone in the room actually raised it.`
     : '';
   return ctx.personaPreamble + '\n\n— — —\n' +
     rp('answerAs.opening') + bandPosture(ctx.band) + recencyHint + '\n' +
     (grounded
       ? rp('answerAs.grounded') + (ctx.cite ? rp('answerAs.cite') : rp('answerAs.noCite')) + rp('answerAs.provenance')
       : rp('answerAs.ungrounded')) +
-    rp('answerAs.style') + navHint + screenFactsHint + outcomeHint + rp('answerAs.closing');
+    rp('answerAs.style') + navHint + screenFactsHint + outcomeHint + committeeHint + rp('answerAs.closing');
 };
 export const sysNarrate = (ctx: NarrateContext): string => {
   // #8: ground the narration in the screen's ACTUAL UX surface (mirrors answerAs's screenFactsHint). In-code
@@ -245,13 +267,16 @@ export function narrateFallback(ctx: NarrateContext): string {
   return (ctx.caption?.trim().slice(0, 280)) || ((ctx.screenName || ctx.screen) ? `Let's look at the ${ctx.screenName ?? ctx.screen}.` : 'Let me walk you through this.');
 }
 export function narrateUserContent(ctx: NarrateContext): string {
+  const metricClean = (ctx.outcomeMetric ?? '').replace(/\([^)]*\)/g, '').replace(/[·•|*`]+/g, ';').replace(/\s+/g, ' ').slice(0, 200).trim(); // #10: strip illustrative-example parentheticals + ·-joined formatting (RC-16; no leaked/fabricated number)
+  const numClause = (ctx.outcomeBaseline && ctx.outcomeTarget) ? ` (today ${ctx.outcomeBaseline} → target ${ctx.outcomeTarget})`
+    : ctx.outcomeBaseline ? ` (today ${ctx.outcomeBaseline})` : ctx.outcomeTarget ? ` (targeting ${ctx.outcomeTarget})` : '';
   return `Now showing: ${ctx.screenName ?? ctx.screen ?? '(a narration moment — no screen change)'}\n` +
     (ctx.purpose ? `What this screen is for: ${ctx.purpose}\n` : '') + // #35: the screen's real purpose, not a routing key
     (ctx.stepIndex && ctx.stepTotal ? `Beat ${ctx.stepIndex} of ${ctx.stepTotal}${ctx.arcRole ? ` — role: ${ctx.arcRole}` : ''}.\n` : '') + // #16: walk position + story role
     (ctx.caption ? `Beat to convey (paraphrase naturally, do NOT read aloud): ${ctx.caption}\n` : '') +
     // RC-16: the grounded source — paraphrase ONLY this; without it the system span keeps us off specifics.
     (ctx.sourceText ? `Source to paraphrase (the ONLY product facts you may state; do NOT read verbatim): ${ctx.sourceText}\n` : '') +
-    (ctx.outcome ? `Outcome this advances (weave in only on this opening/closing beat): ${ctx.outcome}\n` : '') +
+    (ctx.outcome ? `Outcome this advances (weave in only on this opening/closing beat): ${ctx.outcome}${(metricClean || ctx.outcomeBaseline || ctx.outcomeTarget) ? ` — success measured by ${metricClean || 'the stated success indicators'}${numClause}; on a CLOSING beat name ONE concrete measure${(ctx.outcomeBaseline || ctx.outcomeTarget) ? ' (state that committed number)' : ' — but do NOT state a number; none is committed'}` : ''}\n` : '') +
     (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
     `\nSpeak the one or two sentence narration now.`;
 }
