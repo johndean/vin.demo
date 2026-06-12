@@ -31,6 +31,8 @@ export const PROMPTS: PromptDef[] = [
       'You are the interpreter for an autonomous solution consultant running a live product demo. ' +
       'Classify the stakeholder utterance and distill the underlying information need into a concise ' +
       'retrieval query (what to look up in the product knowledge base). Be literal; do not invent scope. ' +
+      'In particular, do NOT add "configuration"/"setup" scope to a usage or "how does X work?" question unless ' +
+      'the stakeholder EXPLICITLY asks to set up or configure something. ' +
       'Set isMetaExplain=true when the stakeholder asks the agent to justify or explain its OWN last action ' +
       '(e.g. "why did you show me that?", "what was that screen?"). Set isResume=true when they ask to go ' +
       'back to where you were before a detour (e.g. "ok, back to what we were doing", "return to that"). ' +
@@ -47,7 +49,9 @@ export const PROMPTS: PromptDef[] = [
       'question (e.g. "how does delegation work?") maps to the PRIMARY screen, NOT a "bypassed"/"delegated"/"history" ' +
       'sub-view — route to a sub-view only when its name is explicitly requested. ' +
       'Treat CONFIGURATION / SETTINGS screens (e.g. a "settings" or "workflow settings" page) the same way: choose ' +
-      'them ONLY when the request is explicitly about CONFIGURING or setting up the feature. For a request about ' +
+      'them ONLY when the stakeholder EXPLICITLY asks to CONFIGURE or set up the feature. A general "how does X work?" ' +
+      'usage question is NOT a configuration request even if the distilled query mentions configuration — route it to ' +
+      'the PRIMARY working screen, not settings. For a request about ' +
       'USING a feature, its business OUTCOME, or reducing / streamlining / automating a process (e.g. "reduce ' +
       'approval delays", "approval workflow automation"), prefer the screen where that work actually HAPPENS — the ' +
       'queue, list, or detail — NOT the settings screen. Return "" if none fit.',
