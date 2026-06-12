@@ -114,16 +114,45 @@ export async function assembleJourney(input: AssembleInput, actor = 'journey-ass
   if (personas.length && !scoredPersonas.some((p) => p.score > 0)) gaps.push({ kind: 'persona', severity: 'weakens', title: `No specialist clearly matches this committee/outcome`, detail: `The journey will fall back to the default specialist — tune a persona's expertise to this audience.` });
   else if (!personas.length) gaps.push({ kind: 'persona', severity: 'weakens', title: `No specialists (personas) configured`, detail: `Configure AI specialists in Personas.` });
 
-  // ── 5. ASSEMBLE story_flow (ordered REFS to existing assets; 'note' steps are journey-internal narration) ──
-  const story: StoryStep[] = [];
+  // ── 5. ASSEMBLE the story_flow as a DRAMATIC ARC (Wave C-3 #6): pain → stakes → show → payoff → proof → close.
+  // Captions are BUYER-FACING talking-point HINTS composed from the committee's AUTHORED objections + the outcome
+  // (#22), human-editable, concise + sanitized. arcRole (open/show/transit/close) is computed downstream in
+  // journeyWalkPlan by POSITION — so the ORDER here IS the arc; outcome framing lands on the bookends and interior
+  // workflow screens drive silently. References still point ONLY at real assets (assembler never invents).
+  // Buyer caption = a concise talking-point HINT. Sanitize the SAME char set as speakableSource (journeys.ts) since
+  // captions also flow into narration context + the LLM-failure fallback; no stage-direction prefixes so the verbatim
+  // fallback reads as buyer speech, not a script directive.
+  const cap = (s: string) => s.replace(/[·•|*`_#>~[\]]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 100);
+  const firstStr = (v: any): string => asArr(v).map((x) => (typeof x === 'string' ? x : '')).find(Boolean) ?? ''; // string-only first element (jsonb-safe)
   const committeeSummary = committee.length ? committee.map((c) => c.role || c.name).slice(0, 4).join(', ') : 'the buying committee';
-  story.push({ kind: 'note', refId: null, caption: `Frame for ${committeeSummary} — target outcome: ${outcome.title}.` });
+  // Deterministic PAIN voice: the highest-influence committee member who actually authored an objection. ROLE-ONLY
+  // (never a person name — matches the #9/#17 role-only invariant; an org-imported member may have name but no role).
+  const painMember = committee.find((c) => norm(c.influence) === 'high' && firstStr(c.objections)) ?? committee.find((c) => firstStr(c.objections)) ?? null;
+  const painRole = painMember?.role || committeeSummary;
+  const painObjection = painMember ? firstStr(painMember.objections).slice(0, 80) : '';
+  const painCriterion = painMember ? firstStr(painMember.decision_criteria).slice(0, 60) : '';
+  const story: StoryStep[] = [];
+  // (1) OPEN on the committee's PAIN — framed as the GAP (NOT attributed to a person/role as a quote), no screen yet.
+  story.push({ kind: 'note', refId: null, caption: cap(painObjection ? `The gap behind ${outcome.title}: ${painObjection}` : `What ${committeeSummary} needs from ${outcome.title}`) });
+  // (2) STAKES — why now, grounded in the outcome baseline (or, absent a number, the cited fact).
   const introK = scoredK.filter((k) => k.score > 0).slice(0, 1);
-  for (const k of introK) story.push({ kind: 'knowledge', refId: k.id, caption: `Context: ${outcome.title}` });
-  for (const w of (wfForOutcome.length ? wfForOutcome : topWf).slice(0, 2)) story.push({ kind: 'workflow', refId: w.id, caption: `Demonstrate: ${w.name}` });
-  for (const t of scoredTours.filter((t) => t.score > 0).slice(0, 1)) story.push({ kind: 'tour', refId: t.id, caption: `Guided tour: ${t.name}` });
-  for (const k of scoredK.filter((k) => k.score > 0 && !introK.some((i) => i.id === k.id)).slice(0, 2)) story.push({ kind: 'knowledge', refId: k.id, caption: `Evidence` });
-  story.push({ kind: 'note', refId: null, caption: outcome.target ? `Close on the measurable result: ${[outcome.metric, outcome.target].filter(Boolean).join(' → ')}.` : `Close on ${outcome.title}.` });
+  for (const k of introK) story.push({ kind: 'knowledge', refId: k.id, caption: cap(outcome.baseline ? `Where things stand today: ${outcome.baseline}` : `Why ${outcome.title} matters now`) });
+  // (3) SHOW the turning point — the workflow(s); a 1-line bridge precedes a 2nd workflow (#27 transition).
+  const showWf = (wfForOutcome.length ? wfForOutcome : topWf).slice(0, 2);
+  showWf.forEach((w, i) => {
+    if (i > 0) story.push({ kind: 'note', refId: null, caption: cap(`The next step toward ${outcome.title}`) }); // #27 bridge between workflows
+    story.push({ kind: 'workflow', refId: w.id, caption: cap(i === 0 ? `${w.name} — where ${outcome.title} actually happens` : w.name) });
+  });
+  for (const t of scoredTours.filter((t) => t.score > 0).slice(0, 1)) story.push({ kind: 'tour', refId: t.id, caption: cap(`${t.name} — end to end`) });
+  // (4) PROOF — claim it "answers the concern" ONLY when the chunk actually overlaps the objection (≥2, the gap
+  // detector's own bar); else a neutral proof framing. The chunk CONTENT is the grounded proof narrate paraphrases.
+  for (const k of scoredK.filter((k) => k.score > 0 && !introK.some((i) => i.id === k.id)).slice(0, 2)) {
+    const answers = !!painObjection && overlap(painObjection, k.content) >= 2;
+    story.push({ kind: 'knowledge', refId: k.id, caption: cap(answers ? `Proof that answers the ${painRole}'s concern` : `Proof for ${outcome.title}`) });
+  }
+  // (5) CLOSE on the measurable result + how the committee judges it. The NUMBER is carried to narrate STRUCTURALLY
+  // (Wave C-1 roi on the close beat, sanitized) — the caption frames it and NEVER embeds the long ·-joined metric.
+  story.push({ kind: 'note', refId: null, caption: cap(`The measurable result for ${outcome.title}${painCriterion ? ` — how the ${painRole} judges it: ${painCriterion}` : ''}`) });
 
   // ── 6. SCORE confidence (coverage-based, deterministic + explainable) ──
   let confidence = 100;
