@@ -121,7 +121,7 @@ export interface AgentStepContext {
 }
 /** The single next action the agent takes to drive the live demo (read-only: never commits). */
 export interface AgentStep {
-  action: 'click' | 'type' | 'select' | 'done';
+  action: 'click' | 'type' | 'select' | 'navigate' | 'done';
   ref: number;             // element ref for click/type/select (-1 when action=done)
   value: string;           // text to type, or the option to choose for 'select' ("" otherwise)
   say: string;             // one-sentence narration, grounded in what's on screen
@@ -443,9 +443,9 @@ class ClaudeProvider implements LlmProvider {
           schema: {
             type: 'object',
             properties: {
-              action: { type: 'string', enum: ['click', 'type', 'select', 'done'] },
-              ref: { type: 'integer', description: 'element ref for click/type/select; -1 for done' },
-              value: { type: 'string', description: 'text to type, or the dropdown option to choose for select; "" otherwise' },
+              action: { type: 'string', enum: ['click', 'type', 'select', 'navigate', 'done'] },
+              ref: { type: 'integer', description: 'element ref for click/type/select; -1 for navigate/done' },
+              value: { type: 'string', description: 'text to type; the dropdown option for select; the verified screen NAME or route for navigate; "" otherwise' },
               say: { type: 'string', description: 'one-sentence narration of this step, grounded in the screen' },
             },
             required: ['action', 'ref', 'value', 'say'],
@@ -460,7 +460,7 @@ class ClaudeProvider implements LlmProvider {
     if (!b || !('text' in b)) return done('I could not read the screen clearly — you can take over and click directly.');
     try {
       const p = JSON.parse(b.text);
-      const action = p.action === 'click' || p.action === 'type' || p.action === 'select' ? p.action : 'done';
+      const action = p.action === 'click' || p.action === 'type' || p.action === 'select' || p.action === 'navigate' ? p.action : 'done';
       return { action, ref: Number.isInteger(p.ref) ? p.ref : -1, value: typeof p.value === 'string' ? p.value : '', say: typeof p.say === 'string' ? p.say : '' };
     } catch {
       return done('I had trouble planning the next step — take over whenever you like.');

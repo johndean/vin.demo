@@ -97,7 +97,7 @@ async function geminiGenerate(system: string, user: string, maxTokens: number, n
 
 // Schemas mirror ClaudeProvider's output_config schemas (plain JSON-Schema; converted to Gemini's shape above).
 const SCHEMA_INTERPRET = { type: 'object', properties: { intent: { type: 'string' }, kind: { type: 'string', enum: ['question', 'clarification', 'objection', 'curiosity', 'business_objective'] }, isMetaExplain: { type: 'boolean' }, isResume: { type: 'boolean' }, control: { type: 'string', enum: ['pause', 'stop', 'continue', 'none'] }, reasoning: { type: 'string' } }, required: ['intent', 'kind', 'isMetaExplain', 'isResume', 'control', 'reasoning'] };
-const SCHEMA_AGENTSTEP = { type: 'object', properties: { action: { type: 'string', enum: ['click', 'type', 'select', 'done'] }, ref: { type: 'integer' }, value: { type: 'string' }, say: { type: 'string' } }, required: ['action', 'ref', 'value', 'say'] };
+const SCHEMA_AGENTSTEP = { type: 'object', properties: { action: { type: 'string', enum: ['click', 'type', 'select', 'navigate', 'done'] }, ref: { type: 'integer' }, value: { type: 'string' }, say: { type: 'string' } }, required: ['action', 'ref', 'value', 'say'] };
 const SCHEMA_DISCOVER = { type: 'object', properties: { painPoints: { type: 'array', items: { type: 'string' } }, buyingSignals: { type: 'array', items: { type: 'string' } }, businessObjective: { type: 'string' }, question: { type: 'string' } }, required: ['painPoints', 'buyingSignals', 'businessObjective', 'question'] };
 const SCHEMA_HARVEST = { type: 'object', properties: { chunks: { type: 'array', items: { type: 'string' } } }, required: ['chunks'] };
 const SCHEMA_VERIFY = { type: 'object', properties: { supported: { type: 'boolean' } }, required: ['supported'] };
@@ -164,7 +164,7 @@ export class GeminiProvider implements LlmProvider {
     if (r.blocked) return done("I'd rather not guess my next move here — want to take over?");
     try {
       const p = JSON.parse(r.text);
-      const action = p.action === 'click' || p.action === 'type' || p.action === 'select' ? p.action : 'done';
+      const action = p.action === 'click' || p.action === 'type' || p.action === 'select' || p.action === 'navigate' ? p.action : 'done';
       return { action, ref: Number.isInteger(p.ref) ? p.ref : -1, value: typeof p.value === 'string' ? p.value : '', say: typeof p.say === 'string' ? p.say : '' };
     } catch { return done('I had trouble planning the next step — take over whenever you like.'); }
   }

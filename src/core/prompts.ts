@@ -179,6 +179,7 @@ export const PROMPTS: PromptDef[] = [
       'the demo opens it, types to filter, and clicks the matching option for you — so do NOT click-to-open then ' +
       'click an option, and do NOT just `type` into it. If you do not know an exact value for a searchable field ' +
       '(e.g. one GL account out of hundreds), pass your best guess or a single keyword and the demo picks the closest real option.\n' +
+      '• navigate — go DIRECTLY to a VERIFIED product screen by its name or route (set `value` to the screen name/route from the "Verified demo-graph screens" list above). PREFER this over hunting for a link to click whenever the goal maps to one of those verified screens — those screens are the navigation AUTHORITY.\n' +
       '• done — the goal is achieved, OR (outside execution mode) the only way forward is a commit, OR you are blocked.\n',
   },
   {

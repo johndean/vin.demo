@@ -514,6 +514,9 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, speci
       typeInto: (r: number, v: string) => ref.current?.executeJavaScript(typeRefJs(r, v), true),
       selectOption: (r: number, v: string) => ref.current?.executeJavaScript(comboPickJs(r, v), true),
       comboPick: (r: number, v: string) => ref.current?.executeJavaScript(comboPickJs(r, v), true),
+      // RC-31: navigate DIRECTLY to a verified route (host-relative resolved against the live origin) — the drive
+      // loop's actionable counterpart to the verified demo-graph screens, instead of hunting for a link to click.
+      navigate: (u: string) => { try { const abs = /^https?:/.test(u) ? u : new URL(u, ref.current?.getURL() || undefined).href; ref.current?.loadURL(abs); } catch { /* */ } },
     };
     return () => { if (controlsRef) controlsRef.current = null; };
   }, [controlsRef]);
@@ -1377,7 +1380,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   // Live engine session.
   const { live, start, startInteractive, ask, stop, pushEvent, reset } = useLiveSession();
   const vcRef = useRef<VoiceClient | null>(null);
-  const browserCtl = useRef<{ snapshot: () => Promise<any>; clickRef: (r: number) => Promise<any>; typeInto: (r: number, v: string) => Promise<any>; selectOption: (r: number, v: string) => Promise<any>; comboPick: (r: number, v: string) => Promise<any> } | null>(null);
+  const browserCtl = useRef<{ snapshot: () => Promise<any>; clickRef: (r: number) => Promise<any>; typeInto: (r: number, v: string) => Promise<any>; selectOption: (r: number, v: string) => Promise<any>; comboPick: (r: number, v: string) => Promise<any>; navigate: (u: string) => void } | null>(null);
   const driving = useRef(false);
   const [driveActive, setDriveActive] = useState(false);
   const [voiceState, setVoiceState] = useState<string>('idle');
@@ -1576,6 +1579,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
           // tell the model so it stops re-issuing the same value (don't wait for stuck-detection to catch it).
           if (r && r.ok === false && (r.reason === 'no-match' || r.reason === 'code-mismatch')) history.push(`(Note: "${res.value}" was not found in that list — pick a different value or hand off; do not repeat it.)`);
         }
+        else if (res.action === 'navigate') ctl.navigate(res.value ?? '');                           // RC-31: direct verified-route nav (engine resolved value to a known screen route)
         else if (res.action === 'click') await ctl.clickRef(res.ref).catch(() => {});               // (clickRef itself resolves a typeahead it detects live)
         else if (res.action === 'type') await ctl.typeInto(res.ref, res.value ?? '').catch(() => {});
         await new Promise((r) => setTimeout(r, 1500)); // let the page settle before the next perception

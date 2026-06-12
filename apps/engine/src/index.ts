@@ -377,6 +377,20 @@ const server = http.createServer(async (req, res) => {
     try {
       const notices = Array.isArray(page?.notices) ? page.notices.slice(0, 6).map((n: any) => String(n).slice(0, 140)).filter(Boolean) : undefined;
       let step = await getLlm().agentStep({ goal, url: String(page.url ?? ''), title: String(page.title ?? ''), headings: Array.isArray(page.headings) ? page.headings.slice(0, 12).map(String) : [], elements, history, role, mode, personaPreamble: personaPreamble(persona), knownScreens, notices, sessionGoal, currentScreen, fieldsDone, journeyStep /* RC-01: session-aware drive + SHARED working state (position + fields-done) */ });
+      // RC-31 (route-nav ENFORCEMENT): a `navigate` action goes DIRECTLY to a VERIFIED screen — the demo-graph as
+      // an ACTIONABLE navigation authority, not just an advisory hint. Resolve the requested target to a known
+      // screen's route; if none matches, degrade to done — NEVER navigate to an arbitrary/unverified URL, so
+      // navigation stays on the verified rails. Navigation is read-only-safe, so it bypasses the mutation gate below.
+      if (step.action === 'navigate') {
+        const want = String(step.value ?? '').trim().toLowerCase();
+        const hit = want
+          ? (knownScreens.find((s) => !!s.route && (s.label.toLowerCase() === want || (s.route ?? '').toLowerCase() === want))
+             ?? knownScreens.find((s) => !!s.route && (s.label.toLowerCase().includes(want) || want.includes(s.label.toLowerCase()))))
+          : null;
+        step = hit?.route
+          ? { action: 'navigate', ref: -1, value: hit.route, say: step.say }
+          : { action: 'done', ref: -1, value: '', say: step.say || "I couldn't match that to a verified screen — take over or tell me where to go." };
+      }
       // A `click` commits via the control itself; a `select` commits via the CHOSEN OPTION. Both must pass the
       // gate — previously only `click` was classified, so a combobox/`select` committing a mutating option
       // (e.g. a Status dropdown set to "Void"/"Approve") executed with NO safety check in any mode. A `type`
@@ -434,7 +448,7 @@ const server = http.createServer(async (req, res) => {
       // Phase 2 telemetry (the bridge — the DOM-driven agent FEEDS the graph): resolve the acted screen to a
       // node + record the attempt. ok = an executable action was issued (not blocked/done). Best-effort.
       const actedEl = step.ref >= 0 ? elements.find((e: any) => e.ref === step.ref) : null;
-      const acted = (step.action === 'click' || step.action === 'type' || step.action === 'select') && !block;
+      const acted = (step.action === 'click' || step.action === 'type' || step.action === 'select' || step.action === 'navigate') && !block;
       if (productId) {
         if (actedEl || block) {
           const resolved = await resolveNodeForScreen(productId, String(page.url ?? ''), actedEl?.text ?? '');
@@ -459,6 +473,10 @@ const server = http.createServer(async (req, res) => {
           try { const latest = await loadSessionState(sessionId); await saveSessionState(sessionId, { ...(latest ?? snapshot ?? {}), driveFieldsDone: [...fieldsSet] }); } catch { /* best-effort persist */ }
         }
       }
+      // RC-01 (bidirectional position): persist the drive loop's CURRENT screen back to the shared snapshot so a
+      // resume (or a later bootSession of the conversational/journey brain) sees where the drive left off.
+      // saveSessionState MERGES, so the other brain's keys are preserved. Best-effort; never blocks the response.
+      if (sessionId && acted) { try { await saveSessionState(sessionId, { currentPosition: { intent: goal, url: String(page.url ?? ''), answer: null } }); } catch { /* best-effort */ } }
       finish(step);
     } catch (e: any) {
       console.error('[engine] agent/step error:', e);
