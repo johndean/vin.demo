@@ -49,6 +49,18 @@ ok('the journey drove one navigation per screen step (not free-roam)', navs.leng
 const dirty = aiMsgs.filter((m) => /\*\*|`|[•·]/.test(String(m.text ?? '')));
 ok('spoken narration is clean — no "**"/markdown reaches the voice', aiMsgs.length > 0 && dirty.length === 0, `${aiMsgs.length} lines, ${dirty.length} dirty${dirty[0] ? `: "${String(dirty[0].text).slice(0, 48)}"` : ''}`);
 
+// ── Wave B (experience-audit #2/#7): only KEY beats are narrated (interior transit screens driven silently),
+// and narration must not lead with a banned stock opener (the chief "scripted" repetition tell).
+const narrationMsgs = aiMsgs.filter((m) => m.tag !== 'discovery'); // narration lines, not the discovery prompt
+const expectedNarrated = plan.filter((e) => e.narrated).length;
+ok('only KEY beats are narrated — interior transit screens are driven SILENTLY (#7)', narrationMsgs.length === expectedNarrated, `${narrationMsgs.length} spoken vs ${expectedNarrated} narrated / ${plan.length} total entries (${nodeEntries.filter((e) => !e.narrated).length} transit)`);
+const BANNED = [/^here'?s where\b/i, /^here'?s the\b/i, /^this is where\b/i, /everything in one place/i, /^for those of you\b/i];
+const stock = narrationMsgs.filter((m) => BANNED.some((re) => re.test(String(m.text ?? '').trim())));
+// Tolerance ≤1: this asserts over LIVE, non-deterministic narration, so a single stray opener is model noise;
+// 2+ signals the prompt ban actually regressed (systemic). The ban itself is proven deterministically by the
+// prompt golden — this is the belt-and-suspenders OUTPUT check, kept non-flaky.
+ok('narration avoids banned stock openers (#2 anti-repetition)', stock.length <= 1, `${stock.length} stock-opener line(s), tolerance ≤1${stock[0] ? `: "${String(stock[0].text).slice(0, 56)}"` : ''}`);
+
 // ── RC-02 / RC-12: the GRAPH is the single owner of the journey position. Drive the SHIPPED per-turn
 // semantics (runTurn advance — the same path the voice walk uses) with an OFF-SCRIPT question interleaved,
 // and assert the position advances monotonically AND an off-script turn does NOT consume a step. This is the

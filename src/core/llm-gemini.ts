@@ -18,7 +18,7 @@ import { db } from './db.js';
 import { currentModel } from './settings.js';
 import {
   detectFn,
-  sysInterpret, sysPickNode, sysExplainWhy, sysAgentStep, sysAnswerAs, sysNarrate, sysDiscover,
+  sysInterpret, sysPickNode, sysExplainWhy, sysAgentStep, sysAnswerAs, sysNarrate, narrateUserContent, narrateFallback, sysDiscover,
   sysHarvestChunks, sysVerifyFaithful, sysDeriveScreens, sysDeriveWorkflows, sysDeriveScreenElements,
   type LlmProvider, type Interpretation, type UtteranceKind, type ExplainContext, type DiscoverContext,
   type AnswerContext, type NarrateContext, type AgentStepContext, type AgentStep, type DiscoverResult,
@@ -191,17 +191,11 @@ export class GeminiProvider implements LlmProvider {
   }
 
   async narrate(ctx: NarrateContext): Promise<string> {
-    const fallback = (ctx.caption?.trim()) || (ctx.screen ? `Here's the ${ctx.screen}.` : 'Let me walk you through this.');
+    // Provider parity (Wave-B review): the fallback + user content come from the SAME shared builders Claude uses,
+    // so the #35/#16 enrichment and the no-banned-opener fallback can never drift between providers again.
+    const fallback = narrateFallback(ctx);
     try {
-      const user =
-        `Now showing: ${ctx.screen ?? '(a narration moment — no screen change)'}\n` +
-        (ctx.caption ? `Beat to convey (paraphrase naturally, do NOT read aloud): ${ctx.caption}\n` : '') +
-        // RC-16: grounded source — paraphrase ONLY this (provider parity with ClaudeProvider).
-        (ctx.sourceText ? `Source to paraphrase (the ONLY product facts you may state; do NOT read verbatim): ${ctx.sourceText}\n` : '') +
-        (ctx.outcome ? `Outcome this advances: ${ctx.outcome}\n` : '') +
-        (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
-        `\nSpeak the one or two sentence narration now.`;
-      const r = await geminiGenerate(sysNarrate(ctx), user, 160, 'narrate');
+      const r = await geminiGenerate(sysNarrate(ctx), narrateUserContent(ctx), 160, 'narrate');
       if (r.blocked) return fallback;
       return r.text.trim() || fallback;
     } catch { return fallback; }

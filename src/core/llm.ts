@@ -88,11 +88,22 @@ export interface NarrateContext {
   stepKind: 'workflow' | 'tour' | 'knowledge' | 'note';
   caption?: string | null;   // authored beat caption / step label — a HINT to paraphrase, never read verbatim
   screen?: string | null;    // the screen now on display (node steps); null for a narration-only beat
+  // #35: the node's DISPLAY screen name + its purpose (page_facts) so narration speaks about a real, named
+  // screen instead of a lowercase routing key. #8: the compact UX surface (buttons/actions/required fields).
+  screenName?: string | null;
+  purpose?: string | null;
+  screenFacts?: string | null;
   audience?: string | null;  // who's in the room (committee role/summary)
-  outcome?: string | null;   // the business outcome this journey advances
+  outcome?: string | null;   // the business outcome this journey advances (passed only on open/close beats — #2)
   // RC-16: GROUNDED source for a knowledge beat — the resolved chunk content. When present, the narration
   // paraphrases ONLY this; when absent, the model orients to the screen rather than asserting product specifics.
   sourceText?: string | null;
+  // #2/#16: the last few lines ALREADY spoken this walk (anti-repetition) + the walk position + story role,
+  // so each beat advances instead of restating. All optional → absent reverts to the prior stateless behavior.
+  recentNarrations?: string[];
+  stepIndex?: number | null;
+  stepTotal?: number | null;
+  arcRole?: 'open' | 'show' | 'transit' | 'close';
   // RC-03 (streaming voice): the voice-led WALK is the primary demo path — stream each completed sentence
   // here so its narration starts speaking on sentence 1 too (not after the whole line). Omitted → blocking.
   onDelta?: (sentence: string) => void;
@@ -214,7 +225,36 @@ export const sysAnswerAs = (ctx: AnswerContext): string => {
       : rp('answerAs.ungrounded')) +
     rp('answerAs.style') + navHint + screenFactsHint + outcomeHint + rp('answerAs.closing');
 };
-export const sysNarrate = (ctx: NarrateContext): string => ctx.personaPreamble + '\n\n— — —\n' + rp('narrate');
+export const sysNarrate = (ctx: NarrateContext): string => {
+  // #8: ground the narration in the screen's ACTUAL UX surface (mirrors answerAs's screenFactsHint). In-code
+  // wrapper — only fires when screenFacts is supplied, so the byte-identity narrate cases (which set none) stay
+  // unchanged. #2: feed the recently-spoken lines so the model varies its opener and advances the story.
+  const screenFactsHint = ctx.screenFacts
+    ? ` ${ctx.screenFacts} You may point out ONE concrete, fresh thing actually on this screen; never name UI that isn't listed.`
+    : '';
+  const recentHint = ctx.recentNarrations && ctx.recentNarrations.length
+    ? ` You have ALREADY said these lines earlier in this walk — do NOT reuse their openers, phrasing, or points; move the story forward to something new: ${ctx.recentNarrations.map((l) => `"${l}"`).join(' ')}`
+    : '';
+  return ctx.personaPreamble + '\n\n— — —\n' + rp('narrate') + screenFactsHint + recentHint;
+};
+// Shared narrate USER message + fallback — used by BOTH providers (like the sysX system builders) so the per-beat
+// enrichment (#35 screenName/purpose, #16 step/arc) can't drift between Claude and Gemini again (Wave-B review).
+// The fallback caption is length-capped so a long authored caption can't bloat the anti-repetition memory on the
+// LLM-failure path, and it never uses a banned stock opener.
+export function narrateFallback(ctx: NarrateContext): string {
+  return (ctx.caption?.trim().slice(0, 280)) || ((ctx.screenName || ctx.screen) ? `Let's look at the ${ctx.screenName ?? ctx.screen}.` : 'Let me walk you through this.');
+}
+export function narrateUserContent(ctx: NarrateContext): string {
+  return `Now showing: ${ctx.screenName ?? ctx.screen ?? '(a narration moment — no screen change)'}\n` +
+    (ctx.purpose ? `What this screen is for: ${ctx.purpose}\n` : '') + // #35: the screen's real purpose, not a routing key
+    (ctx.stepIndex && ctx.stepTotal ? `Beat ${ctx.stepIndex} of ${ctx.stepTotal}${ctx.arcRole ? ` — role: ${ctx.arcRole}` : ''}.\n` : '') + // #16: walk position + story role
+    (ctx.caption ? `Beat to convey (paraphrase naturally, do NOT read aloud): ${ctx.caption}\n` : '') +
+    // RC-16: the grounded source — paraphrase ONLY this; without it the system span keeps us off specifics.
+    (ctx.sourceText ? `Source to paraphrase (the ONLY product facts you may state; do NOT read verbatim): ${ctx.sourceText}\n` : '') +
+    (ctx.outcome ? `Outcome this advances (weave in only on this opening/closing beat): ${ctx.outcome}\n` : '') +
+    (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
+    `\nSpeak the one or two sentence narration now.`;
+}
 export const sysDiscover = (ctx: DiscoverContext): string =>
   (ctx.personaPreamble ? ctx.personaPreamble + '\n\n— — —\n' : '') +
   rp('discover.intro') +
@@ -535,7 +575,7 @@ class ClaudeProvider implements LlmProvider {
   }
 
   async narrate(ctx: NarrateContext): Promise<string> {
-    const fallback = (ctx.caption?.trim()) || (ctx.screen ? `Here's the ${ctx.screen}.` : 'Let me walk you through this.');
+    const fallback = narrateFallback(ctx); // shared builder — provider parity + length-capped, no banned opener (#2)
     const MODEL = currentModel();
     // No thinking on narrate: a 1-2 sentence paraphrase must start INSTANTLY (the walk is the primary path) —
     // adaptive thinking would add silence before speech here, and at 160 tokens could even starve the line.
@@ -543,17 +583,7 @@ class ClaudeProvider implements LlmProvider {
       model: MODEL,
       max_tokens: 160,
       system: sysNarrate(ctx),
-      messages: [{
-        role: 'user' as const,
-        content:
-          `Now showing: ${ctx.screen ?? '(a narration moment — no screen change)'}\n` +
-          (ctx.caption ? `Beat to convey (paraphrase naturally, do NOT read aloud): ${ctx.caption}\n` : '') +
-          // RC-16: the grounded source — paraphrase ONLY this; without it the system span keeps us off specifics.
-          (ctx.sourceText ? `Source to paraphrase (the ONLY product facts you may state; do NOT read verbatim): ${ctx.sourceText}\n` : '') +
-          (ctx.outcome ? `Outcome this advances: ${ctx.outcome}\n` : '') +
-          (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
-          `\nSpeak the one or two sentence narration now.`,
-      }],
+      messages: [{ role: 'user' as const, content: narrateUserContent(ctx) }], // shared with GeminiProvider (no drift)
     };
     try {
       // RC-03: stream the walk narration to TTS sentence-by-sentence so the spoken line starts the moment the

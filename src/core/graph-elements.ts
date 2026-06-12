@@ -109,6 +109,27 @@ export async function screenFactsFor(nodeId: string): Promise<string | null> {
   } catch { return null; }
 }
 
+/** Experience-audit #8/#35: a node's NARRATION context — its display screen name, its purpose (from page_facts),
+ *  and the compact screenFacts surface — resolved by (productId, intent_label) from the product's ACTIVE graph.
+ *  This is STATIC metadata (no live DOM), so the walk's narrate() can be product-aware AND still run concurrently
+ *  with the live drive (Wave-A #13). Best-effort: any miss/failure → nulls, and narrate falls back to the label. */
+export async function nodeNarrationFacts(productId: string | null, intentLabel: string): Promise<{ screenName: string | null; purpose: string | null; screenFacts: string | null }> {
+  const empty = { screenName: null, purpose: null, screenFacts: null };
+  if (!productId || !intentLabel) return empty;
+  try {
+    const node = (await db().query<{ id: string; screen_name: string | null; page_facts: any }>(
+      `SELECT n.id, n.screen_name, n.page_facts
+         FROM demo_graph_nodes n JOIN demo_graphs g ON g.id = n.demo_graph_id
+        WHERE g.product_id = $1 AND g.status = 'active' AND g.archived_at IS NULL
+          AND lower(n.intent_label) = lower($2) AND n.archived_at IS NULL AND n.verification_status <> 'broken'
+        ORDER BY g.graph_version DESC LIMIT 1`, [productId, intentLabel])).rows[0];
+    if (!node) return empty;
+    const purpose = node.page_facts && typeof node.page_facts.purpose === 'string' ? node.page_facts.purpose : null;
+    const screenFacts = await screenFactsFor(node.id);
+    return { screenName: node.screen_name ?? null, purpose, screenFacts };
+  } catch { return empty; }
+}
+
 /** Soft-archive every element for a node (used when re-seeding to replace a page's surface cleanly). */
 export async function archiveNodeElements(nodeId: string, actor = 'system'): Promise<number> {
   const r = await db().query(`UPDATE demo_graph_node_elements SET archived_at=now(), archived_by=$2 WHERE node_id=$1 AND archived_at IS NULL`, [nodeId, actor]);

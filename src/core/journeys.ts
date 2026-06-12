@@ -101,7 +101,12 @@ export async function getJourneyById(journeyId: string): Promise<Journey | null>
 export interface WalkEntry { kind: 'node' | 'beat'; nodeLabel?: string; caption: string | null; stepKind: StoryStepKind; stepIndex: number;
   // RC-16: for a `knowledge` step, the resolved chunk content — GROUNDING for the spoken narration so the
   // voice walk paraphrases the verified source, not free-improvises product claims. Null = nothing to ground on.
-  sourceText?: string | null }
+  sourceText?: string | null;
+  // Experience-audit #7/#16: the story role of this beat + whether it is SPOKEN. A workflow expands to many
+  // screens but the demo narrates only ~3 (first / midpoint / last) plus the bookends; interior screens are
+  // driven SILENTLY (narrated=false) so the walk advances instead of restating a value prop on every screen.
+  arcRole: 'open' | 'show' | 'transit' | 'close';
+  narrated: boolean }
 
 // RC-16: light sanitize of a knowledge chunk before it becomes SPOKEN narration grounding — strip markdown/
 // bullets/backticks and cap length, so leaked formatting can't reach TTS and a long chunk can't crowd the line.
@@ -124,19 +129,36 @@ export async function journeyWalkPlan(journeyId: string): Promise<{ journey: Jou
       const wf = (await db().query<{ node_sequence: any }>(
         `SELECT node_sequence FROM demo_graph_workflows WHERE id = $1 AND archived_at IS NULL`, [step.refId])).rows[0];
       const seq = (wf && Array.isArray(wf.node_sequence) ? wf.node_sequence : []).map((s: any) => String(s)).filter(Boolean);
-      if (seq.length) seq.forEach((label, k) => plan.push({ kind: 'node', nodeLabel: label, caption: k === 0 ? step.caption : null, stepKind: 'workflow', stepIndex: i }));
-      else plan.push({ kind: 'beat', caption: step.caption, stepKind: 'workflow', stepIndex: i });
+      if (seq.length) seq.forEach((label, k) => plan.push({ kind: 'node', nodeLabel: label, caption: k === 0 ? step.caption : null, stepKind: 'workflow', stepIndex: i, arcRole: 'show', narrated: true }));
+      else plan.push({ kind: 'beat', caption: step.caption, stepKind: 'workflow', stepIndex: i, arcRole: 'show', narrated: true });
     } else if (step.kind === 'knowledge' && step.refId && UUID_RE.test(step.refId)) {
       // RC-16: resolve the referenced chunk's CONTENT (same product-scoped query resolveStoryFlow uses, but the
       // full content — not the truncated label) so the narration beat can paraphrase a GROUNDED source, not invent.
       const kc = (await db().query<{ content: string }>(
         `SELECT kc.content FROM knowledge_chunks kc JOIN knowledge_bases kb ON kb.id = kc.knowledge_base_id
           WHERE kc.id = $1 AND kb.product_id = $2 AND kc.archived_at IS NULL`, [step.refId, journey.productId])).rows[0];
-      plan.push({ kind: 'beat', caption: step.caption, stepKind: step.kind, stepIndex: i, sourceText: kc ? speakableSource(String(kc.content)) : null });
+      plan.push({ kind: 'beat', caption: step.caption, stepKind: step.kind, stepIndex: i, sourceText: kc ? speakableSource(String(kc.content)) : null, arcRole: 'show', narrated: true });
     } else {
-      plan.push({ kind: 'beat', caption: step.caption, stepKind: step.kind, stepIndex: i });
+      plan.push({ kind: 'beat', caption: step.caption, stepKind: step.kind, stepIndex: i, arcRole: 'show', narrated: true });
     }
     i++;
+  }
+  // Experience-audit #7/#16: assign story arcRoles + which beats are SPOKEN. A workflow's node run is narrated on
+  // only its first, last (+ a midpoint when long ≥5) → ~3 spoken screens; the interior screens become 'transit'
+  // (driven silently). The plan's first/last entries are the bookends → 'open'/'close' (always spoken; these get
+  // the outcome framing in graph.ts). A short run (≤3 nodes) stays fully narrated.
+  const runs = new Map<number, number[]>(); // stepIndex → plan indices of that workflow's 'node' entries
+  plan.forEach((e, idx) => { if (e.kind === 'node') { const a = runs.get(e.stepIndex) ?? []; a.push(idx); runs.set(e.stepIndex, a); } });
+  for (const idxs of runs.values()) {
+    const n = idxs.length;
+    if (n <= 3) continue; // short workflow → narrate every screen
+    const keep = new Set<number>([idxs[0], idxs[n - 1]]);
+    if (n >= 5) keep.add(idxs[Math.floor(n / 2)]);
+    idxs.forEach((pi) => { if (!keep.has(pi)) { plan[pi].narrated = false; plan[pi].arcRole = 'transit'; } });
+  }
+  if (plan.length) {
+    plan[0].arcRole = 'open'; plan[0].narrated = true;
+    if (plan.length > 1) { plan[plan.length - 1].arcRole = 'close'; plan[plan.length - 1].narrated = true; } // a lone beat stays 'open', not mislabeled 'close'
   }
   return { journey, plan };
 }

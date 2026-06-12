@@ -22,7 +22,7 @@ import { recordDiscovery } from './discovery.js';
 import { setActiveSpeaker, getActiveStakeholder, addOpenItem } from './stakeholders.js';
 import { retrieveAndGate } from './retrieval.js';
 import { selectNavigation, recordNavAttempt } from './graph-lifecycle.js';
-import { screenFactsFor } from './graph-elements.js'; // RC-06: read the navigated node's UX surface at demo time
+import { screenFactsFor, nodeNarrationFacts } from './graph-elements.js'; // RC-06: read the navigated node's UX surface at demo time; #8/#35: static screenName/purpose/facts for narration
 import { journeyWalkPlan } from './journeys.js';
 const EXPLAIN_TRACE_WINDOW = 16; // bound the cross-turn trace fed to explain (it grows unbounded)
 
@@ -245,21 +245,37 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
   const advance = { journeyStep: step + 1 };
   const audience = state.activeStakeholder?.role ?? null;
   const onDelta = config?.configurable?.onDelta; // RC-03: stream this step's narration to TTS when the voice channel gave us a sink
+  const stepNum = step + 1;
+  const recent = state.recentNarrations ?? []; // #2: the last few spoken lines, threaded for anti-repetition
+  // #2: the OUTCOME frames only the bookend beats (open/close); injecting it on every step is the chief cause of
+  // 97%-repetitive narration. Elsewhere it's null so the beat advances the story instead of restating the goal.
+  const outcomeFraming = (entry.arcRole === 'open' || entry.arcRole === 'close') ? wp.journey.businessGoal : null;
   if (entry.kind === 'beat') {
     // Narration beat (knowledge/note/tour) — no navigation; compose ONE warm spoken line (clean fallback).
     // RC-16: pass the resolved knowledge chunk (entry.sourceText) so a knowledge beat paraphrases a GROUNDED
     // source instead of free-improvising product claims; null for note/tour beats → the span orients to context.
-    const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: null, audience, outcome: wp.journey.businessGoal, sourceText: entry.sourceText ?? null, onDelta });
-    return { ...advance, navigation: null, navAction: null, blockedMutations: [], explanation: say, trace: [`journey: [${step + 1}/${total}] ${entry.stepKind} narration beat`] };
+    const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: null, audience, outcome: outcomeFraming, sourceText: entry.sourceText ?? null, recentNarrations: recent, stepIndex: stepNum, stepTotal: total, arcRole: entry.arcRole, onDelta });
+    return { ...advance, navigation: null, navAction: null, blockedMutations: [], explanation: say, recentNarrations: [say], trace: [`journey: [${stepNum}/${total}] ${entry.stepKind} narration beat (${entry.arcRole})`] };
   }
-  // 'node' — drive the live product to this exact screen, on the journey's rails (forced target label).
-  // Experience-audit #13: narrate ∥ driveTo. The narration depends only on the KNOWN node label/caption/source/
-  // outcome — NOT the live DOM — so SPEAK it while the screen navigates (talk-while-driving) instead of after the
-  // full nav resolves. Both are awaited together; on the streaming voice path the first narrated sentence is
-  // already going to TTS while driveTo is still settling the screen.
+  // #7: a SILENT transit node — drive the screen but speak NOTHING (the walk advances without restating a value
+  // prop on every interior screen). No narrate() call (faster + truly silent); explanation stays null and
+  // runTurn emits no AI line for it (it must NOT fall through to answerAs — guarded by turn.advance there).
+  if (!entry.narrated) {
+    const d = await driveTo(state, entry.caption ?? entry.nodeLabel ?? 'demonstrate', { targetLabel: entry.nodeLabel ?? null });
+    const ok = d.navigation.ok || !!d.navAction;
+    const newPos: Position = { intent: entry.nodeLabel ?? 'journey step', url: d.navigation.url, answer: state.retrieved?.[0]?.content ?? null };
+    // Trace: drive detail first, the journey/GAP status LAST so the operator beat (which surfaces the last trace
+    // line) shows a transit GAP — otherwise a silent transit screen that failed to load would be invisible live.
+    return { ...advance, navigation: d.navigation, navAction: d.navAction ?? null, blockedMutations: d.blockedMutations, currentPosition: ok ? newPos : state.currentPosition, screenFacts: d.screenFacts ?? null, explanation: null, trace: [...d.traceLines, ok ? `journey: [${stepNum}/${total}] → "${entry.nodeLabel}" (transit · silent)` : `journey: [${stepNum}/${total}] GAP — "${entry.nodeLabel}" did NOT resolve (transit) — operator: this screen did not load`] };
+  }
+  // Narrated 'node' — drive the live product to this exact screen, on the journey's rails (forced target label).
+  // #8/#35: enrich the narration with the node's display screenName + purpose + screenFacts (STATIC metadata
+  // resolved independent of the live drive — a fast prelude that preserves the Wave-A #13 narrate ∥ driveTo
+  // concurrency for the expensive LLM + nav work). Best-effort: nulls → narrate falls back to the bare label.
+  const facts = await nodeNarrationFacts(state.productId, entry.nodeLabel ?? '');
   const [d, say] = await Promise.all([
     driveTo(state, entry.caption ?? entry.nodeLabel ?? 'demonstrate', { targetLabel: entry.nodeLabel ?? null }),
-    getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: entry.nodeLabel ?? null, audience, outcome: wp.journey.businessGoal, sourceText: entry.sourceText ?? null, onDelta }), // RC-16: node entries carry no sourceText → screen-oriented
+    getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: facts.screenName ?? entry.nodeLabel ?? null, screenName: facts.screenName, purpose: facts.purpose, screenFacts: facts.screenFacts, audience, outcome: outcomeFraming, sourceText: entry.sourceText ?? null, recentNarrations: recent, stepIndex: stepNum, stepTotal: total, arcRole: entry.arcRole, onDelta }),
   ]);
   const ok = d.navigation.ok || !!d.navAction;
   const newPos: Position = { intent: entry.nodeLabel ?? 'journey step', url: d.navigation.url, answer: state.retrieved?.[0]?.content ?? null };
@@ -271,9 +287,10 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
     currentPosition: ok ? newPos : state.currentPosition,
     screenFacts: d.screenFacts ?? null, // RC-06: an off-script question on this walk-pinned session answers FROM this screen's surface
     explanation: say,
+    recentNarrations: [say], // #2: remember what we just said so the next beat doesn't repeat it
     // RC-26: a forced journey target that didn't resolve on the live product is a GAP — flag it in the operator
     // trace (surfaced as a beat) rather than letting the step glide past silently as if the screen were shown.
-    trace: [ok ? `journey: [${step + 1}/${total}] → "${entry.nodeLabel}"` : `journey: [${step + 1}/${total}] GAP — "${entry.nodeLabel}" did not resolve on the live product (degraded — narrated without the screen)`, ...d.traceLines],
+    trace: [ok ? `journey: [${stepNum}/${total}] → "${entry.nodeLabel}" (${entry.arcRole})` : `journey: [${stepNum}/${total}] GAP — "${entry.nodeLabel}" did not resolve on the live product (degraded — narrated without the screen)`, ...d.traceLines],
   };
 }
 
@@ -289,6 +306,11 @@ async function navigate(state: DemoStateT, config?: GraphRunConfig): Promise<Par
 // ── discover (active discovery, P2.2 / Gap E) — capture signals + offer one Q ──
 async function discover(state: DemoStateT): Promise<Partial<DemoStateT>> {
   if (!state.sessionId || !state.interpretation) return {};
+  // Experience-audit (Wave B, kill the scripted feel): on a JOURNEY WALK step the AI is presenting a narrated
+  // story — it must NOT interrupt itself with a discovery question after every beat (the walk caption isn't a
+  // buyer utterance, so there's no real signal to extract either). Discovery still runs on off-script/interactive
+  // turns (journeyAdvance=false), where a real stakeholder spoke.
+  if (state.journeyAdvance) return { trace: ['discover: skipped on a journey walk step (presenter-led narration, no discovery interrupt)'] };
   try {
     const d = await getLlm().discover({
       utterance: state.utterance,

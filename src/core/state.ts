@@ -8,6 +8,9 @@ import type { ExecutionMode } from './safety.js';
 import type { Stakeholder } from './stakeholders.js';
 import type { ConfidenceBand } from './retrieval.js';
 
+// Experience-audit #2/#16: how many recent spoken journey-narration lines to keep for anti-repetition.
+const RECENT_NARRATIONS_MAX = 4;
+
 /** A place in the demo we can return to after a detour (mid-flight pivot support). */
 export interface Position {
   intent: string;
@@ -114,6 +117,12 @@ export const DemoState = Annotation.Root({
 
   // Trace — appends, so "why did you show this?" can replay the loop's decisions.
   trace: Annotation<string[]>({ reducer: (a, b) => a.concat(b), default: () => [] }),
+
+  // Experience-audit #2/#16: the last few SPOKEN journey-narration lines, so each new walk beat can avoid
+  // reusing the prior lines' openers/value-phrases (the chief cause of 97%-repetitive narration). Append +
+  // bounded to the last RECENT_NARRATIONS_MAX; only navigateJourneyStep writes it (off-script answers don't).
+  // PERSISTS across turns (deliberately NOT reset by interpret) so the model sees what it already said this walk.
+  recentNarrations: Annotation<string[]>({ reducer: (a, b) => [...a, ...b].slice(-RECENT_NARRATIONS_MAX), default: () => [] }),
 });
 
 export type DemoStateT = typeof DemoState.State;

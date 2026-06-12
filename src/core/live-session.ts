@@ -233,8 +233,11 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
   let escalation: { trigger: string; reason: string; toPersona: string | null } | null = null;
 
   if (out.explanation) {
-    // Meta-explain / govern / resume — already composed in-voice via explainWhy.
+    // Meta-explain / govern / resume / journey narration — already composed in-voice.
     emit({ type: 'message', side: 'ai', who: aiWho, role: 'VIN Demo', text: out.explanation, uncertain: !!out.gated });
+  } else if (turn.advance) {
+    // #7: a SILENT journey transit step — the screen was driven but intentionally not narrated. Emit no AI
+    // line and do NOT fall through to answerAs (which would invent an off-script answer for a transit screen).
   } else if (!compliance.ok) {
     // A guardrail fired → DEGRADE: never emit the ungoverned answer. Record + (on escalate) suggest a hand-off.
     const cat = (compliance.violations.find((v) => v.layer === 'behavior')?.rule.split(':')[0] ?? 'that').replace(/_/g, ' ');
