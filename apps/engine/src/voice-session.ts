@@ -15,6 +15,7 @@ import { googleSTT } from './voice/stt-google.js';
 import { googleTTS } from './voice/tts-google.js';
 import { elevenLabsTTS } from './voice/tts-elevenlabs.js';
 import { openElevenWs, type ElevenWsHandle } from './voice/tts-elevenlabs-ws.js'; // RC-31: word-level WS streaming (gated)
+import { shouldReplayPendingBargein } from './voice/barge-in.js'; // #19/L-2: pure TTL guard (deterministically tested)
 import { splitSentences } from './voice/segmenter.js';
 import type { TTSProvider } from './voice/providers.js';
 import { profileById, defaultProfile, voiceCatalog } from './voice/profiles.js';
@@ -99,7 +100,10 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
       const handle = await openElevenWs(profile, {
         onAudio: (audio, mime) => {
           if (interrupted || myU !== utterance) return; // barge-in / superseded turn → drop late audio
-          if (audio.length) send({ type: 'audio', mime, data: audio.toString('base64') });
+          // #33: tag word-level WS frames so the client routes these arbitrary mid-stream mp3 fragments to a
+          // MediaSource (gapless) instead of decodeAudioData (which can't decode a standalone fragment). The
+          // per-sentence Google path (speak(), below) sends NO source → the client's existing decode path, unchanged.
+          if (audio.length) send({ type: 'audio', mime, data: audio.toString('base64'), source: 'ws' });
         },
         // Post-open transport error: stop using the WS for the rest of the turn. Already-fed sentences can't be
         // re-spoken, but no FURTHER say_chunk is lost — voiceEmit falls back to speak() once wsTts is cleared.
@@ -195,7 +199,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
   // operator-paced "turn_done ⟹ mutex free" contract.
   const replayPendingBargein = (): boolean => {
     const p = pendingBargein; pendingBargein = null;
-    if (p && Date.now() - p.at < 8000) { void runVoiceTurn(p.text); return true; }
+    if (p && shouldReplayPendingBargein(p, Date.now())) { void runVoiceTurn(p.text); return true; }
     return false;
   };
 

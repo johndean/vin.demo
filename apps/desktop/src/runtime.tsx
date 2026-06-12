@@ -7,6 +7,7 @@ import { VD } from './data';
 import { LOOP, PLAN, QUOTES, SEED, BEATS, type Beat, type Msg } from './beats';
 import { useReal, useDemoProduct, type RealProduct, type RealPersona, type RealWorkflow, type RealTour, type RealJourney } from './real-data';
 import { VoiceClient } from './voice-client';
+import { shouldRecordDriveStep } from './drive-record';
 
 /** What the operator can define per session, sent to the engine as query params. */
 type TargetParams = { productId?: string; role?: string; mode?: string; url?: string; scenario?: string; clientNav?: string; journeyId?: string };
@@ -1559,6 +1560,11 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
     pushEvent({ type: 'message', side: 'them', who: target?.role ?? 'You', role: 'Operator', text: goal, tag: 'question' });
     pushEvent({ type: 'beat', loopIdx: 2, phase: 'Driving the demo', brain: 'Reading the live screen and taking the next step.', sub: goal });
     const history: string[] = [];
+    // #30(a): a SEPARATE verified-only narrative — only steps whose action VERIFIABLY took (see shouldRecordDriveStep).
+    // Sent as driveNarrative; the engine persists it as driveHistory (the ASK→TALK memory a later TALK turn folds in)
+    // instead of the raw `history`, so the conversational brain never restates a blocked/failed step as done. `history`
+    // itself is UNCHANGED (still every attempt) → the agent loop is byte-identical.
+    const verified: string[] = [];
     const say = (text: string, uncertain?: boolean) => pushEvent({ type: 'message', side: 'ai', who: 'Consultant', role: 'VIN Demo', text, uncertain });
     let lastSig = ''; let repeats = 0; let finished = false; const filledDates = new Set<string>();
     let lastComboFailed = false; // #3: did the PRIOR iteration's comboPick verifiably fail to resolve (no-match/code-mismatch)?
@@ -1579,7 +1585,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
           say(dueDates.length === 1 ? `I'll set ${dueDates[0].text && dueDates[0].text !== 'dd/mm/yyyy' ? `“${dueDates[0].text}”` : 'the required date'} to a valid date in the future.` : `I'll set the date fields to valid future dates.`);
           await wait(900); continue; // re-perceive so the model sees them filled and advances
         }
-        const res = await api.agentStep({ goal, page, history, role: target?.role, mode: target?.mode, personaId: activePersona?.id, sessionId: live.sessionId ?? undefined, productId: target?.productId });
+        const res = await api.agentStep({ goal, page, history, driveNarrative: verified.slice(-10), role: target?.role, mode: target?.mode, personaId: activePersona?.id, sessionId: live.sessionId ?? undefined, productId: target?.productId });
         if (!res) { say('Lost the connection to the engine for a moment — try again.', true); finished = true; break; }
         // RC-29: detect a repeated action BEFORE narrating, so an action that didn't visibly take (e.g. a custom
         // dropdown re-read as empty) is retried quietly instead of re-narrated to the buyer ("set it to Asset
@@ -1619,9 +1625,11 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
           say("I've set what I can on that field — could you confirm it, then tell me to continue? I'll pick it right back up.", true); finished = true; break;
         }
         lastComboFailed = false; // #3: cleared each dispatch; set true below ONLY on a comboPick that verifiably can't resolve the value
+        let dres: unknown; // #30(a): the dispatch's VERIFIED result, used to decide if this step enters the cross-modality narrative
         if (temporal) await ctl.typeInto(res.ref, res.value ?? '').catch(() => {});                 // click/type/select on a date field → future-date filler
         else if (res.action === 'select' || (dropdown && res.action === 'click')) {                 // any dropdown → open + filter + pick, in one shot
           const r = await ctl.comboPick(res.ref, res.value ?? '').catch(() => null);
+          dres = r;
           // RC-25 / #3: act on the executor's VERIFIED result — a genuine no-match both tells the model to stop
           // re-issuing the same value AND (lastComboFailed) cuts the dropdown's grace on the next identical repeat,
           // so a truly non-resolving select hands back promptly while a value that committed-but-reads-empty keeps it.
@@ -1629,8 +1637,12 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
           if (lastComboFailed) history.push(`(Note: "${res.value}" was not found in that list — pick a different value or hand off; do not repeat it.)`);
         }
         else if (res.action === 'navigate') ctl.navigate(res.value ?? '');                           // RC-31: direct verified-route nav (engine resolved value to a known screen route)
-        else if (res.action === 'click') await ctl.clickRef(res.ref).catch(() => {});               // (clickRef itself resolves a typeahead it detects live)
-        else if (res.action === 'type') await ctl.typeInto(res.ref, res.value ?? '').catch(() => {});
+        else if (res.action === 'click') dres = await ctl.clickRef(res.ref).catch(() => false);     // (clickRef itself resolves a typeahead it detects live)
+        else if (res.action === 'type') dres = await ctl.typeInto(res.ref, res.value ?? '').catch(() => false);
+        // #30(a): record this step into the VERIFIED narrative (driveNarrative → ASK→TALK driveHistory) ONLY if its
+        // action verifiably took — so a later TALK turn never restates a blocked/failed/no-match step as done. A
+        // repeated (non-resolving) step was not re-narrated to the buyer, so it isn't recorded here either.
+        if (res.say && !repeated && shouldRecordDriveStep(res.action, dres, temporal)) verified.push(res.say);
         await new Promise((r) => setTimeout(r, 1500)); // let the page settle before the next perception
       }
       if (!finished) say("That's as far as I'll take this automatically — your turn to finish up, then ask me to continue.", true);

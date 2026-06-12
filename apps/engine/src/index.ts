@@ -310,6 +310,10 @@ const server = http.createServer(async (req, res) => {
     const ALLOWED: ExecutionMode[] = ['read-only', 'safe', 'approval', 'execution'];
     const mode: ExecutionMode = ALLOWED.includes(body?.mode) ? body.mode : 'read-only';
     const history = Array.isArray(body?.history) ? body.history.filter((x: any) => typeof x === 'string').slice(-12) : [];
+    // #30(a): the desktop's VERIFIED-only drive narrative (only steps whose action took). Persisted as driveHistory
+    // (the ASK→TALK memory) instead of the raw history, so a later TALK turn never restates a failed step as done.
+    // Falls back to `history` for older clients that don't send it — fully backward-compatible.
+    const driveNarrative = Array.isArray(body?.driveNarrative) ? body.driveNarrative.filter((x: any) => typeof x === 'string').slice(-10) : null;
     const elements = Array.isArray(page?.elements)
       ? page.elements.slice(0, 140).map((e: any) => ({
           ref: Number(e?.ref), text: String(e?.text ?? '').slice(0, 120),
@@ -479,7 +483,7 @@ const server = http.createServer(async (req, res) => {
       // #30: also mirror the recent drive NARRATIVE (history already carries the consultant's says + RC-25 "not
       // found" notes) so a later TALK turn's priorContext knows what the hands-on drive did. Merged (jsonb ||), so
       // it never clobbers the conversational brain's keys; bounded to the last 10 lines.
-      if (sessionId && acted) { try { await saveSessionState(sessionId, { currentPosition: { intent: goal, url: String(page.url ?? ''), answer: null }, driveHistory: history.slice(-10), driveHistoryAt: Date.now() }); } catch { /* best-effort */ } }
+      if (sessionId && acted) { try { await saveSessionState(sessionId, { currentPosition: { intent: goal, url: String(page.url ?? ''), answer: null }, driveHistory: driveNarrative ?? history.slice(-10), driveHistoryAt: Date.now() }); } catch { /* best-effort */ } }
       finish(step);
     } catch (e: any) {
       console.error('[engine] agent/step error:', e);

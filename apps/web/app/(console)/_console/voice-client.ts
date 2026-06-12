@@ -9,6 +9,21 @@ export type VoiceState = 'connecting' | 'ready' | 'listening' | 'speaking' | 'er
 // the cold-start the #15 bridge already covers); frames appended to a playing queue continue gaplessly at nextAt.
 const JITTER_LEAD_S = 0.12;
 
+// #33: where an audio frame plays. Word-level WS frames (source:'ws') are arbitrary MID-STREAM mp3 fragments that
+// decodeAudioData CANNOT decode standalone → a streaming MediaSource SourceBuffer. Per-sentence Google frames (no
+// source) are complete self-contained mp3 → the EXISTING decodeAudioData path. Pure + exported so the routing rule
+// is deterministically testable — proving the DEFAULT (no-source) path always decodes, untouched. 'mse' only when
+// a frame is WS-tagged AND a MediaSource is actually usable.
+export function routeAudioFrame(source: string | undefined, mseAvailable: boolean): 'mse' | 'decode' {
+  return source === 'ws' && mseAvailable ? 'mse' : 'decode';
+}
+
+// #33: is a streaming MediaSource usable here? Electron/Chromium supports audio/mpeg SourceBuffers; some browsers
+// don't → the caller falls back to decodeAudioData. Wrapped so a missing global never throws.
+function mseSupported(): boolean {
+  try { return typeof MediaSource !== 'undefined' && MediaSource.isTypeSupported('audio/mpeg'); } catch { return false; }
+}
+
 export class VoiceClient {
   private ws: WebSocket | null = null;
   private ac: AudioContext | null = null;
@@ -20,6 +35,8 @@ export class VoiceClient {
   private nextAt = 0;
   private listening = false;
   private audioFailed = false; // L-3: surface a dead audio path ONCE per session, not per dropped chunk
+  private mse: { el: HTMLAudioElement; ms: MediaSource; sb: SourceBuffer | null; pending: Uint8Array[] } | null = null; // #33: streaming player for WS frames
+  private mseDead = false; // #33: a fatal MSE error this session → route the rest to decodeAudioData (never silent)
 
   constructor(private url: string, private onEvent: (ev: any) => void, private onState: (s: VoiceState) => void) {}
 
@@ -43,7 +60,7 @@ export class VoiceClient {
       let ev: any; try { ev = JSON.parse(e.data); } catch { return; }
       if (ev.type === 'ready') this.onState('ready');
       else if (ev.type === 'listening') this.onState('listening');
-      else if (ev.type === 'audio') { this.onState('speaking'); void this.play(ev.data); }
+      else if (ev.type === 'audio') { this.onState('speaking'); void this.play(ev.data, ev.source); }
       else if (ev.type === 'flush') { this.stopPlayback(); return; } // RC-11: barge-in — drop queued/playing audio now (don't forward)
       else if (ev.type === 'turn_done') this.onState('ready');
       this.onEvent(ev);
@@ -90,8 +107,17 @@ export class VoiceClient {
   sendText(text: string) { try { this.ws?.send(JSON.stringify({ type: 'text', text })); } catch { /* */ } }
   close() { this.stopMic(); this.stopPlayback(); try { this.ws?.close(); } catch { /* */ } try { void this.ac?.close(); } catch { /* */ } this.ac = null; }
 
-  private async play(b64: string) {
+  private async play(b64: string, source?: string) {
     if (!b64) return;
+    // #33: route gated WS word-level frames to the streaming MediaSource; a non-WS frame OR any MSE failure falls
+    // THROUGH to the existing decodeAudioData path UNCHANGED → the default per-sentence (Google) path is byte-identical.
+    if (routeAudioFrame(source, !this.mseDead) === 'mse') {
+      try {
+        const bin = atob(b64); const bytes = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        if (this.mseAppend(bytes)) return;
+      } catch { /* fall through to decodeAudioData */ }
+    }
     const ac = this.ensureAc(); // #15: guarantees a RUNNING context (resumes if suspended) before scheduling
     // L-3: if the context can't even be CREATED (constructor threw), every frame would be silently dropped and the
     // consultant goes mute with no signal. Surface it once so the operator knows why — but don't kill the session.
@@ -115,6 +141,67 @@ export class VoiceClient {
   private stopPlayback() {
     for (const s of this.queue) { try { s.stop(); } catch { /* */ } }
     this.queue = []; this.nextAt = 0;
+    this.mseTeardown(); // #33: tear down the streaming MSE on barge-in/flush; the next turn rebuilds it
+  }
+
+  // #33 — stream the gated word-level WS mp3 frames through a MediaSource SourceBuffer so the many small fragments
+  // play GAPLESSLY (decodeAudioData can't decode a standalone fragment). Defensive throughout: ANY failure flips
+  // mseDead and the caller falls back to the decode path — it can never break the default per-sentence path (which
+  // never reaches here) and never goes silent. appendBuffer is async, so frames queue and drain on 'updateend'.
+  private mseEnsure(): boolean {
+    if (this.mseDead) return false;
+    if (this.mse) return true;
+    if (!mseSupported()) { this.mseDead = true; return false; }
+    try {
+      const el = new Audio();
+      const ms = new MediaSource();
+      el.src = URL.createObjectURL(ms);
+      const st = { el, ms, sb: null as SourceBuffer | null, pending: [] as Uint8Array[] };
+      ms.addEventListener('sourceopen', () => {
+        try {
+          const sb = ms.addSourceBuffer('audio/mpeg');
+          st.sb = sb;
+          sb.addEventListener('updateend', () => this.mseDrain());
+          this.mseDrain();
+        } catch { this.mseFail(); }
+      }, { once: true });
+      this.mse = st;
+      void el.play().catch(() => {}); // Chromium autoplay (gesture-initiated session) is allowed; a deferred play is harmless
+      return true;
+    } catch { this.mseFail(); return false; }
+  }
+  private mseDrain(): void {
+    const st = this.mse; if (!st || !st.sb || st.sb.updating) return;
+    const next = st.pending[0]; if (next === undefined) return; // PEEK — consume only on a successful append (so a recoverable quota error can retry this frame)
+    try {
+      st.sb.appendBuffer(next as unknown as BufferSource);
+      st.pending.shift();
+    } catch (e: any) {
+      // QuotaExceededError is RECOVERABLE (the coded-frame buffer is full on a long turn) — evict the already-played
+      // portion and retry THIS frame on the next 'updateend' instead of killing MSE for the whole session. Only a
+      // genuinely fatal error flips mseDead → decode fallback. (Dark path; matters when #33 is eventually un-gated.)
+      if (e && e.name === 'QuotaExceededError') {
+        try {
+          const cur = st.el.currentTime;
+          if (st.sb.buffered.length && cur > 2) st.sb.remove(0, cur - 2); // remove fires 'updateend' → mseDrain re-tries the kept frame with space freed
+          else this.mseFail(); // buffer full but nothing played yet to evict → genuinely stuck
+        } catch { this.mseFail(); }
+      } else this.mseFail();
+    }
+  }
+  private mseAppend(bytes: Uint8Array): boolean {
+    if (!this.mseEnsure()) return false;
+    const st = this.mse; if (!st) return false;
+    st.pending.push(bytes);
+    this.mseDrain();
+    return true;
+  }
+  private mseFail(): void { this.mseDead = true; this.mseTeardown(); } // fatal → never use MSE again this session
+  private mseTeardown(): void {
+    const st = this.mse; this.mse = null; if (!st) return;
+    try { st.el.pause(); } catch { /* */ }
+    try { if (st.ms.readyState === 'open') st.ms.endOfStream(); } catch { /* */ }
+    try { URL.revokeObjectURL(st.el.src); } catch { /* */ }
   }
 }
 
