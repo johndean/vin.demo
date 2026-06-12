@@ -11,6 +11,7 @@ import { recordEvalRun } from './eval-record.js';
 import { assembleJourney } from './journey-assembler.js';
 import { journeyWalkPlan } from './journeys.js';
 import { bootSession, walkJourney, runTurn, runWalkStep } from './live-session.js';
+import { saveSessionState, loadSessionState } from './session.js';
 
 const productId = process.env.PO_VIN_PRODUCT_ID;
 if (!productId) throw new Error('PO_VIN_PRODUCT_ID not set — run `npm run seed`.');
@@ -96,6 +97,20 @@ if (plan.length >= 2) {
     ok('#19 barge-in question was ANSWERED, not dropped', !!ans && typeof ans.text === 'string' && ans.text.trim().length > 0, ans ? `answered: "${String(ans.text).slice(0, 48)}"` : 'no AI answer emitted');
     const s1 = await runWalkStep(ctx3, plan, off.journeyStep ?? 1, sink);
     ok('#19 walk RESUMES at the correct step after the interrupt (1→2)', s1.journeyStep === 2, `journeyStep=${s1.journeyStep}`);
+  }
+}
+
+// ── #30 ASK→TALK shared memory: the live-drive narrative (driveHistory) persists to the session snapshot AND the
+// RC-30 jsonb merge preserves it alongside driveFieldsDone (a separate writer), so a later TALK turn's priorContext
+// can fold it in. Deterministic round-trip against the real snapshot column (no model in the loop). ──
+{
+  const ctxM = await bootSession('eval-30-memory', { productId, clientNav: true, seedRoom: false });
+  if (ctxM?.sessionId) {
+    await saveSessionState(ctxM.sessionId, { driveHistory: ['Set the GL account to FA104.', 'Submitted the purchase order.'] });
+    await saveSessionState(ctxM.sessionId, { driveFieldsDone: ['GL Account = FA104'] }); // a SEPARATE merge write (the other brain) — must not clobber driveHistory
+    const snap = await loadSessionState(ctxM.sessionId);
+    ok('#30 driveHistory persists for ASK→TALK continuity', !!snap?.driveHistory && snap.driveHistory.length === 2 && snap.driveHistory[0].includes('FA104'), `driveHistory=${JSON.stringify(snap?.driveHistory ?? null)}`);
+    ok('#30 the RC-30 jsonb merge preserves driveHistory alongside driveFieldsDone (no clobber)', !!(snap?.driveHistory?.length && snap?.driveFieldsDone?.length), `fieldsDone=${JSON.stringify(snap?.driveFieldsDone ?? null)}`);
   }
 }
 

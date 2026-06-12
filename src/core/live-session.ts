@@ -167,7 +167,7 @@ export async function bootSession(threadPrefix = 'live', target: SessionTarget =
 async function gatherRoom(sessionId: string | null, active: Stakeholder | null | undefined): Promise<{ audience: string; priorContext: string }> {
   if (!sessionId) return { audience: '', priorContext: '' };
   try {
-    const [people, disc] = await Promise.all([getStakeholders(sessionId), getDiscovery(sessionId)]);
+    const [people, disc, snap] = await Promise.all([getStakeholders(sessionId), getDiscovery(sessionId), loadSessionState(sessionId)]);
     // Stakeholder governance the specialist should weigh: decision authority · influence · risk level.
     // (riskLevel was seeded + shown in the console but never reached the brain — now it does.)
     const auth = (s: Stakeholder) => {
@@ -184,10 +184,22 @@ async function gatherRoom(sessionId: string | null, active: Stakeholder | null |
     const audience = people.length
       ? `Speaking now: ${activeP ? fmt(activeP) : 'unknown'}.${others.length ? ` Also in the room: ${others.map(fmt).join('; ')}.` : ''}`
       : '';
+    // #30 ASK→TALK continuity: if the hands-on drive loop ran RECENTLY this session, surface its last few steps so a
+    // TALK turn answers WITH that context. Golden-free (user-content, not the byte-locked system prompt). Honesty
+    // guards from the review: (L-2) only fold a RECENT drive episode so a stale drive doesn't bleed into every later
+    // answer; (L-1) drop the internal "(Note: …)" coaching lines — only genuine consultant narration; (M-1) the drive
+    // narration is the model's INTENT, not success-verified, so frame it as an ATTEMPT and tell the model NOT to
+    // claim any step as done unless the buyer confirms (prevents "you submitted the PO" when it was blocked/failed).
+    const driveAt = typeof snap?.driveHistoryAt === 'number' ? snap.driveHistoryAt : 0;
+    const driveFresh = driveAt > 0 && Date.now() - driveAt < 3 * 60 * 1000; // recent episode only
+    const drive = driveFresh
+      ? (snap?.driveHistory ?? []).filter((x): x is string => typeof x === 'string').map((s) => s.trim()).filter((s) => s && !/^\(note:/i.test(s))
+      : [];
     const priorContext = [
       disc.businessObjective ? `objective — ${disc.businessObjective}` : '',
       disc.painPoints.length ? `pain points raised — ${disc.painPoints.slice(0, 3).join('; ')}` : '',
       disc.buyingSignals.length ? `buying signals — ${disc.buyingSignals.slice(0, 3).join('; ')}` : '',
+      drive.length ? `the hands-on drive just ATTEMPTED these steps (attempts, not confirmed — do NOT state any as done unless the buyer confirms): ${drive.slice(-3).join('; ')}` : '',
     ].filter(Boolean).join(' · ');
     return { audience, priorContext };
   } catch { return { audience: '', priorContext: '' }; }

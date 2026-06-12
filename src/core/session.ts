@@ -75,6 +75,12 @@ export interface SessionStateSnapshot {
   // already set this session. Mirrored here (in addition to the in-process Map in index.ts) so a redeploy/crash or
   // a fresh process rehydrates the drive loop's progress. Append-only window; absent on sessions that never drove.
   driveFieldsDone?: string[];
+  // #30 (ASK→TALK shared memory): the recent NARRATIVE of the ASK-mode drive loop (the consultant's spoken steps).
+  // Folded into the conversational brain's priorContext (golden-free) so a later TALK turn knows what the hands-on
+  // drive just did — cross-modality continuity. Bounded window; jsonb-merged. driveHistoryAt stamps the last write
+  // so a stale drive from earlier in a long session doesn't bleed into every answer forever (review L-2).
+  driveHistory?: string[];
+  driveHistoryAt?: number;
 }
 
 /** RC-30: best-effort persist of a resumable snapshot to demo_sessions.state_snapshot. Wrapped so a

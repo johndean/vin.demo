@@ -476,7 +476,10 @@ const server = http.createServer(async (req, res) => {
       // RC-01 (bidirectional position): persist the drive loop's CURRENT screen back to the shared snapshot so a
       // resume (or a later bootSession of the conversational/journey brain) sees where the drive left off.
       // saveSessionState MERGES, so the other brain's keys are preserved. Best-effort; never blocks the response.
-      if (sessionId && acted) { try { await saveSessionState(sessionId, { currentPosition: { intent: goal, url: String(page.url ?? ''), answer: null } }); } catch { /* best-effort */ } }
+      // #30: also mirror the recent drive NARRATIVE (history already carries the consultant's says + RC-25 "not
+      // found" notes) so a later TALK turn's priorContext knows what the hands-on drive did. Merged (jsonb ||), so
+      // it never clobbers the conversational brain's keys; bounded to the last 10 lines.
+      if (sessionId && acted) { try { await saveSessionState(sessionId, { currentPosition: { intent: goal, url: String(page.url ?? ''), answer: null }, driveHistory: history.slice(-10), driveHistoryAt: Date.now() }); } catch { /* best-effort */ } }
       finish(step);
     } catch (e: any) {
       console.error('[engine] agent/step error:', e);
