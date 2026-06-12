@@ -4,6 +4,11 @@
    the mic stops any in-progress playback. Pure Web APIs — identical copy in apps/desktop/src. */
 export type VoiceState = 'connecting' | 'ready' | 'listening' | 'speaking' | 'error' | 'closed';
 
+// #33: when starting playback from an IDLE queue, lead the first frame by this much so the small word-level WS
+// frames that follow have headroom to decode/arrive and don't underrun-gap mid-utterance. Tiny (imperceptible vs
+// the cold-start the #15 bridge already covers); frames appended to a playing queue continue gaplessly at nextAt.
+const JITTER_LEAD_S = 0.12;
+
 export class VoiceClient {
   private ws: WebSocket | null = null;
   private ac: AudioContext | null = null;
@@ -98,7 +103,8 @@ export class VoiceClient {
       const buf = await ac.decodeAudioData(bytes.buffer);
       const src = ac.createBufferSource();
       src.buffer = buf; src.connect(ac.destination);
-      const start = Math.max(ac.currentTime, this.nextAt);
+      // #33: lead only when (re)starting from idle; otherwise continue gaplessly at nextAt.
+      const start = this.nextAt > ac.currentTime ? this.nextAt : ac.currentTime + JITTER_LEAD_S;
       src.start(start);
       this.nextAt = start + buf.duration;
       this.queue.push(src);

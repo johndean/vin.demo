@@ -17,7 +17,7 @@ import { record, currentSession } from './cost.js';
 import { db } from './db.js';
 import { currentModel } from './settings.js';
 import {
-  detectFn,
+  detectFn, flushSentences,
   sysInterpret, sysPickNode, sysExplainWhy, sysAgentStep, sysAnswerAs, answerUserContent, sysNarrate, narrateUserContent, narrateFallback, sysDiscover,
   sysHarvestChunks, sysVerifyFaithful, sysDeriveScreens, sysDeriveWorkflows, sysDeriveScreenElements,
   type LlmProvider, type Interpretation, type UtteranceKind, type ExplainContext, type DiscoverContext,
@@ -79,8 +79,15 @@ async function geminiGenerate(system: string, user: string, maxTokens: number, n
   // spent entirely on thinking). A MAX_TOKENS finish that DID emit partial text is left to the parser.
   const declined = fr === 'SAFETY' || fr === 'PROHIBITED_CONTENT' || fr === 'BLOCKLIST' || fr === 'RECITATION' || fr === 'SPII';
   const blocked = !!j?.promptFeedback?.blockReason || declined || (!!fr && fr !== 'STOP' && !text.trim());
-  const u = j?.usageMetadata ?? {};
-  // Cached prompt tokens bill at ~25% on Gemini → discount them so input cost isn't overstated. Thinking → output.
+  await recordGeminiCall(system, user, text, j?.usageMetadata, node);
+  return { text, blocked };
+}
+
+/** Cost event + ai_calls log for ONE Gemini call — shared by the blocking and streaming paths so they meter and
+ *  capture identically (no drift). Cached prompt tokens bill at ~25% → discounted; thinking tokens → output. */
+async function recordGeminiCall(system: string, user: string, text: string, usage: any, node: string): Promise<void> {
+  const model = currentModel();
+  const u = usage ?? {};
   const cached = u.cachedContentTokenCount ?? 0;
   const input = Math.max(0, (u.promptTokenCount ?? 0) - Math.round(cached * 0.75));
   const output = (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0);
@@ -92,7 +99,73 @@ async function geminiGenerate(system: string, user: string, maxTokens: number, n
       [currentSession(), detectFn(system), model, system, user, text, input, output],
     );
   } catch { /* best-effort: never break or slow a demo to log a call */ }
-  return { text, blocked };
+}
+
+/** #25 STREAMING variant for the SPOKEN paths (answerAs/narrate): hit :streamGenerateContent?alt=sse and emit
+ *  each COMPLETED sentence via onDelta the instant it lands (mirrors ClaudeProvider's stream + flushSentences),
+ *  so TTS starts on sentence 1 instead of after the whole reply — closing the Gemini-vs-Claude latency
+ *  asymmetry on voice. Free text (no responseSchema). Thinking parts are NEVER emitted (filtered) so the model's
+ *  reasoning is never spoken aloud. On a CLEAN total failure (nothing streamed) it throws so the caller falls
+ *  back to ONE blocking call; if it already streamed partial text it keeps that (no double-speak, no second
+ *  call). Cost + ai_calls logged via the same recordGeminiCall as the blocking path. */
+async function geminiGenerateStream(system: string, user: string, maxTokens: number, node: string, onDelta: (s: string) => void): Promise<GeminiResult> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('GEMINI_API_KEY is not set.');
+  const model = currentModel();
+  const isFlash = /flash/i.test(model);
+  const thinkingBudget = isFlash ? 0 : 1024; // same posture as the blocking path: flash thinks none; pro can't disable, so bound it
+  const body = {
+    systemInstruction: { parts: [{ text: system }] },
+    contents: [{ role: 'user', parts: [{ text: user }] }],
+    generationConfig: { maxOutputTokens: maxTokens + thinkingBudget, thinkingConfig: { thinkingBudget } },
+  };
+  let acc = '', cursor = 0;
+  let usage: any = {}, finishReason = '', blockReason = '';
+  try {
+    const r = await fetch(`${GEMINI_BASE}/${model}:streamGenerateContent?alt=sse`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key }, body: JSON.stringify(body),
+    });
+    if (!r.ok || !r.body) { const j: any = await r.json().catch(() => ({})); throw new Error(`gemini stream ${r.status}: ${String(j?.error?.message ?? 'request failed').slice(0, 200)}`); }
+    const reader = (r.body as any).getReader();
+    const decoder = new TextDecoder();
+    let sse = '';
+    // Parse ONE SSE line. Reused for the trailing residue so a final un-terminated `data:` frame (truncated close)
+    // still lands its terminal usageMetadata/finishReason/text instead of being dropped (review L-1/L-3).
+    const handleLine = (raw: string) => {
+      const line = raw.trim();
+      if (!line.startsWith('data:')) return;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === '[DONE]') return;
+      let j: any; try { j = JSON.parse(payload); } catch { return; }
+      const cand = j?.candidates?.[0];
+      if (cand?.finishReason) finishReason = cand.finishReason;
+      if (j?.promptFeedback?.blockReason) blockReason = j.promptFeedback.blockReason;
+      if (j?.usageMetadata) usage = j.usageMetadata;
+      // Filter `thought` parts so the model's reasoning is NEVER spoken; join only answer text.
+      const t = (cand?.content?.parts ?? []).filter((p: any) => !p?.thought).map((p: any) => (typeof p?.text === 'string' ? p.text : '')).join('');
+      if (t) { acc += t; cursor = flushSentences(acc, cursor, onDelta, false); }
+    };
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      sse += decoder.decode(value, { stream: true });
+      let nl: number;
+      while ((nl = sse.indexOf('\n')) >= 0) { handleLine(sse.slice(0, nl)); sse = sse.slice(nl + 1); }
+    }
+    if (sse.trim()) handleLine(sse); // drain a final newline-less frame (L-1/L-3)
+  } catch (e) {
+    // Partial already spoken → keep it (chat matches audio), don't double-speak via a fallback call. Nothing
+    // spoken yet → rethrow so the caller makes ONE blocking call (spoken via the message path); but if the stream
+    // already reported usage before dying, meter that billed input so a failed stream isn't a cost blind spot (L-2).
+    if (acc.trim()) { flushSentences(acc, cursor, onDelta, true); await recordGeminiCall(system, user, acc, usage, node).catch(() => {}); return { text: acc, blocked: false }; }
+    if (usage && Object.keys(usage).length) await recordGeminiCall(system, user, '', usage, node).catch(() => {});
+    throw e;
+  }
+  flushSentences(acc, cursor, onDelta, true); // speak any trailing partial sentence
+  const declined = finishReason === 'SAFETY' || finishReason === 'PROHIBITED_CONTENT' || finishReason === 'BLOCKLIST' || finishReason === 'RECITATION' || finishReason === 'SPII';
+  const blocked = !!blockReason || declined || (!!finishReason && finishReason !== 'STOP' && !acc.trim());
+  await recordGeminiCall(system, user, acc, usage, node);
+  return { text: acc, blocked };
 }
 
 // Schemas mirror ClaudeProvider's output_config schemas (plain JSON-Schema; converted to Gemini's shape above).
@@ -169,18 +242,41 @@ export class GeminiProvider implements LlmProvider {
   }
 
   async answerAs(ctx: AnswerContext): Promise<string> {
+    const REFUSAL = "I'd rather not guess here — let me show you the screen instead.";
+    const EMPTY = "Let me show you on the screen rather than guess at the specifics.";
     // User content shared with ClaudeProvider (incl. Wave C #18 secondary source) — provider parity, no drift.
-    const r = await geminiGenerate(sysAnswerAs(ctx), answerUserContent(ctx), 900, 'answerAs');
-    if (r.blocked) return "I'd rather not guess here — let me show you the screen instead.";
-    return r.text.trim() || "Let me show you on the screen rather than guess at the specifics.";
+    const sys = sysAnswerAs(ctx), user = answerUserContent(ctx);
+    // #25: stream the spoken answer sentence-by-sentence when the voice path wants it (ctx.onDelta), so TTS starts
+    // on sentence 1 — parity with ClaudeProvider's streaming answerAs. A total stream failure falls back to ONE
+    // blocking call (then spoken via the message path); a partial stream is kept (no double-speak).
+    if (ctx.onDelta) {
+      try {
+        const r = await geminiGenerateStream(sys, user, 900, 'answerAs', ctx.onDelta);
+        const txt = r.text.trim();
+        return txt || (r.blocked ? REFUSAL : EMPTY);
+      } catch { /* stream failed before any audio → fall through to a single blocking call */ }
+    }
+    const r = await geminiGenerate(sys, user, 900, 'answerAs');
+    if (r.blocked) return REFUSAL;
+    return r.text.trim() || EMPTY;
   }
 
   async narrate(ctx: NarrateContext): Promise<string> {
     // Provider parity (Wave-B review): the fallback + user content come from the SAME shared builders Claude uses,
     // so the #35/#16 enrichment and the no-banned-opener fallback can never drift between providers again.
     const fallback = narrateFallback(ctx);
+    const sys = sysNarrate(ctx), user = narrateUserContent(ctx);
+    // #25: stream the walk narration to TTS sentence-by-sentence (parity with ClaudeProvider) so the spoken line
+    // starts the moment the first clause lands — the walk is the demo's primary path. Degrades cleanly: a partial
+    // stream is kept; a total failure falls through to the blocking call; any error → the clean fallback line.
+    if (ctx.onDelta) {
+      try {
+        const r = await geminiGenerateStream(sys, user, 160, 'narrate', ctx.onDelta);
+        return r.text.trim() || fallback;
+      } catch { /* fall through to the blocking narrate */ }
+    }
     try {
-      const r = await geminiGenerate(sysNarrate(ctx), narrateUserContent(ctx), 160, 'narrate');
+      const r = await geminiGenerate(sys, user, 160, 'narrate');
       if (r.blocked) return fallback;
       return r.text.trim() || fallback;
     } catch { return fallback; }
