@@ -16,7 +16,7 @@ import { googleTTS } from './voice/tts-google.js';
 import { elevenLabsTTS } from './voice/tts-elevenlabs.js';
 import { splitSentences } from './voice/segmenter.js';
 import type { TTSProvider } from './voice/providers.js';
-import { profileById, DEFAULT_PROFILE, VOICE_PROFILES } from './voice/profiles.js';
+import { profileById, defaultProfile, voiceCatalog } from './voice/profiles.js';
 import type { STTStream, VoiceProfile } from './voice/providers.js';
 import { loadPersona } from '../../../src/core/persona.js';
 import { beginCostSession, recordVoice } from '../../../src/core/cost.js';
@@ -24,12 +24,12 @@ import { journeyWalkPlan, startJourneyRun, completeJourneyRun } from '../../../s
 
 const SAMPLE_RATE = 16000;
 
-// TTS vendor selection: ElevenLabs (more natural prosody) ONLY when its key is present, else Google
-// (the default). Evaluated per call so setting/unsetting the env key takes effect without a code change,
-// and with NO key behavior is byte-identical to today (Google). On any ElevenLabs error the caller's
-// speak() catch already degrades gracefully (text was already sent).
-function selectTTS(): TTSProvider {
-  return process.env.ELEVENLABS_API_KEY ? elevenLabsTTS : googleTTS;
+// TTS routing per the SELECTED voice's provider: a Google voice → Google, an ElevenLabs voice → ElevenLabs.
+// Evaluated per call so a mid-session voice switch (or toggling the env key) takes effect immediately. An
+// ElevenLabs voice with no key configured falls back to Google (safe — never silent); a Google voice always
+// uses Google. On any ElevenLabs error the caller's speak() catch already degrades gracefully.
+function selectTTS(voice: VoiceProfile): TTSProvider {
+  return (voice.provider === 'elevenlabs' && process.env.ELEVENLABS_API_KEY) ? elevenLabsTTS : googleTTS;
 }
 
 export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {}): Promise<void> {
@@ -41,7 +41,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
 
   // If a specialist is active (hand-off), speak in its configured voice; else the default profile.
   const bootPersona = await loadPersona(ctx.personaId);
-  let profile: VoiceProfile = bootPersona?.voiceProfileId ? profileById(bootPersona.voiceProfileId) : DEFAULT_PROFILE;
+  let profile: VoiceProfile = bootPersona?.voiceProfileId ? profileById(bootPersona.voiceProfileId) : defaultProfile();
   let stt: STTStream | null = null;
   let answering = false;
   let interrupted = false;        // barge-in flag: stop emitting TTS for the current answer
@@ -51,7 +51,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
   let sttBytes = 0;               // LINEAR16 @16kHz mono bytes for the current utterance → STT audio seconds
   const speaker = 'Procurement';
 
-  send({ type: 'start', product: ctx.productName, scenario: 'Voice', mode: ctx.mode, loop: LOOP, sessionId: ctx.sessionId, interactive: true, voice: profile.id, profiles: VOICE_PROFILES.map((p) => ({ id: p.id, label: p.label })) });
+  send({ type: 'start', product: ctx.productName, scenario: 'Voice', mode: ctx.mode, loop: LOOP, sessionId: ctx.sessionId, interactive: true, voice: profile.id, profiles: voiceCatalog().map((p) => ({ id: p.id, label: p.label })) });
   send({ type: 'ready' });
 
   // Speak one answer: synthesize sentence-by-sentence so audio starts on the first sentence.
@@ -60,7 +60,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     for (const sentence of splitSentences(text)) {
       if (interrupted || myU !== utterance) return;
       try {
-        const { audio, mime } = await selectTTS().synthesize(sentence, profile);
+        const { audio, mime } = await selectTTS(profile).synthesize(sentence, profile);
         void recordVoice('tts', sentence.length, { voice: profile.id }); // TTS billed by characters synthesized
         if (interrupted || myU !== utterance) return;
         if (audio.length) send({ type: 'audio', mime, data: audio.toString('base64') });

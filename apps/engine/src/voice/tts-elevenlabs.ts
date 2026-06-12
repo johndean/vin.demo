@@ -33,7 +33,12 @@ const PROFILE_VOICE: Record<string, string> = {
 };
 
 function voiceIdFor(voice: VoiceProfile): string {
-  // A single global override wins for every profile when set (operator pins one ElevenLabs voice).
+  // Unified catalog: an ElevenLabs profile carries its OWN voice_id in `name` — that wins, so per-voice
+  // SELECTION works (pick Eryn → Eryn, Tessa → Tessa). This must take precedence over the global env override,
+  // otherwise ELEVENLABS_VOICE_ID would clobber every selection back to one voice.
+  if (voice.provider === 'elevenlabs' && voice.name) return voice.name;
+  // Legacy/fallback (a non-catalog or Google-shaped profile routed here): the operator's single global pin,
+  // then the stock map, then a warm default.
   const override = process.env.ELEVENLABS_VOICE_ID?.trim();
   if (override) return override;
   return PROFILE_VOICE[voice.id] ?? DEFAULT_VOICE_ID;

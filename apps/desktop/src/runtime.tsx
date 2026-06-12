@@ -815,12 +815,14 @@ interface LiveState {
   sessionId: string | null; // real demo_sessions id from the engine `start` event (used for hand-off records)
   handoffSuggestion: { topic: string; toPersona: string } | null; // active specialist suggested bringing in another
   journeyName: string | null; journeyStep: number; journeyTotal: number; journeyDone: boolean; turnSeq: number; // V5 voice-walk progress + per-turn completion counter (auto-advance signal)
+  voices: { id: string; label: string }[]; voice: string; // unified voice catalog (Google + ElevenLabs) + the selected voice id (from the `start` event)
 }
-const LIVE_INIT: LiveState = { running: false, done: false, ready: false, loopIdx: -1, phase: 'Ready', brain: 'Live engine ready — press Run agent to drive po.vin read-only.', sub: 'awaiting start', conf: 0.9, messages: [], cite: null, cost: 0, byType: [], screenshot: null, url: '', blocked: [], error: null, navAction: null, sessionId: null, handoffSuggestion: null, journeyName: null, journeyStep: 0, journeyTotal: 0, journeyDone: false, turnSeq: 0 };
+const LIVE_INIT: LiveState = { running: false, done: false, ready: false, loopIdx: -1, phase: 'Ready', brain: 'Live engine ready — press Run agent to drive po.vin read-only.', sub: 'awaiting start', conf: 0.9, messages: [], cite: null, cost: 0, byType: [], screenshot: null, url: '', blocked: [], error: null, navAction: null, sessionId: null, handoffSuggestion: null, journeyName: null, journeyStep: 0, journeyTotal: 0, journeyDone: false, turnSeq: 0, voices: [], voice: '' };
 
 function reduceLive(p: LiveState, ev: any): LiveState {
   switch (ev.type) {
-    case 'start': return { ...LIVE_INIT, running: !ev.interactive, url: ev.product ? `https://${ev.product}` : '', sessionId: typeof ev.sessionId === 'string' ? ev.sessionId : null };
+    case 'start': return { ...LIVE_INIT, running: !ev.interactive, url: ev.product ? `https://${ev.product}` : '', sessionId: typeof ev.sessionId === 'string' ? ev.sessionId : null, voices: Array.isArray(ev.profiles) ? ev.profiles : [], voice: typeof ev.voice === 'string' ? ev.voice : '' };
+    case 'voice': return typeof ev.id === 'string' ? { ...p, voice: ev.id } : p; // engine confirmed a voice switch
     case 'ready': return { ...p, ready: true, running: false, phase: 'Ready', brain: 'Ask me anything about the product — I’ll answer live and show the screen.', sub: 'interactive' };
     case 'turn_done': return { ...p, running: false, turnSeq: p.turnSeq + 1 };
     case 'message': return { ...p, messages: [...p.messages, { side: ev.side, who: ev.who, role: ev.role, av: ev.side === 'ai' ? 'AI' : String(ev.who ?? '?')[0].toUpperCase(), color: ev.side === 'ai' ? '#002855' : '#4D6995', text: ev.text, tag: ev.tag, uncertain: ev.uncertain }], handoffSuggestion: ev.side === 'them' ? null : p.handoffSuggestion };
@@ -1606,6 +1608,14 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
             </span>
             <div style={{ flex: 1 }} />
           </>}
+          {/* Voice selection for the journey — the unified catalog (Google Neural2 + your ElevenLabs voices);
+              switches live mid-walk via the WS 'voice' control. ElevenLabs voices appear only when its key is set. */}
+          {live.voices.length > 0 && (
+            <select value={live.voice} onChange={(e) => vcRef.current?.setVoice(e.target.value)} title="Voice for this journey — Google Neural2 or your ElevenLabs voices"
+              style={{ padding: '4px 8px', borderRadius: 7, border: '1px solid rgba(255,255,255,.2)', background: 'var(--cr-navy, #002855)', color: '#fff', fontSize: 12, maxWidth: 230, cursor: 'pointer' }}>
+              {live.voices.map((v) => <option key={v.id} value={v.id} style={{ color: '#000' }}>{v.label}</option>)}
+            </select>
+          )}
           <button onClick={() => { stopVoice(); setMode('start'); }} title="Back to the launcher" style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid rgba(255,255,255,.2)', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer' }}>Exit</button>
         </div>
       )}

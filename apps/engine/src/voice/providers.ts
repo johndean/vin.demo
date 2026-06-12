@@ -6,10 +6,11 @@
 export interface VoiceProfile {
   id: string;
   label: string;
+  provider?: 'google' | 'elevenlabs'; // which TTS service synthesizes this voice (default 'google')
   languageCode: string;
-  name: string;        // provider voice name (e.g. Google 'en-US-Neural2-F')
-  rate: number;        // speaking rate (1.0 = normal)
-  pitch: number;       // semitones
+  name: string;        // provider voice id — a Google Neural2 name (e.g. 'en-US-Neural2-F') OR an ElevenLabs voice_id
+  rate: number;        // speaking rate (1.0 = normal) — Google only; ElevenLabs uses voice_settings
+  pitch: number;       // semitones — Google only
 }
 
 export interface TTSResult {
