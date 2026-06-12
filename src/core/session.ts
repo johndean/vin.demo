@@ -71,6 +71,10 @@ export interface SessionStateSnapshot {
   journeyStep?: number;
   currentPosition?: { intent: string; url: string; answer: string | null } | null;
   sessionStatus?: 'active' | 'paused' | 'stopped' | 'done';
+  // RC-01 (shared working state): the live-drive loop's field-completion set — which form fields /agent/step has
+  // already set this session. Mirrored here (in addition to the in-process Map in index.ts) so a redeploy/crash or
+  // a fresh process rehydrates the drive loop's progress. Append-only window; absent on sessions that never drove.
+  driveFieldsDone?: string[];
 }
 
 /** RC-30: best-effort persist of a resumable snapshot to demo_sessions.state_snapshot. Wrapped so a
@@ -78,7 +82,15 @@ export interface SessionStateSnapshot {
 export async function saveSessionState(sessionId: string | null, snapshot: SessionStateSnapshot): Promise<void> {
   if (!sessionId) return;
   try {
-    await db().query(`UPDATE demo_sessions SET state_snapshot = $2 WHERE id = $1`, [sessionId, JSON.stringify(snapshot)]);
+    // MERGE (jsonb ||) onto the existing snapshot so the two concurrent writers — the conversational/journey
+    // brain (journeyId/journeyStep/currentPosition/sessionStatus) and the live-drive loop (driveFieldsDone) —
+    // each PRESERVE the other's keys instead of clobbering on a full-column replace (the RC-01 durable-layer fix).
+    // undefined keys are dropped by JSON.stringify, so they never null out a prior value. Best-effort: missing
+    // column (0029 not applied) → silent no-op.
+    await db().query(
+      `UPDATE demo_sessions SET state_snapshot = COALESCE(state_snapshot, '{}'::jsonb) || $2::jsonb WHERE id = $1`,
+      [sessionId, JSON.stringify(snapshot)],
+    );
   } catch { /* column may not exist until 0029 is applied — best-effort, never blocks a turn */ }
 }
 

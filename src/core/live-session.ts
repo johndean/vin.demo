@@ -219,7 +219,9 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
     emit({ type: 'cite', k: { title: top.source_title ?? String(top.content).slice(0, 64), content: top.content, source: top.source, conf: top.confidence, ver: String(top.product_version ?? '').replace(/^v/i, ''), status: top.validation_status, verified: top.last_verified, type: top.category ?? 'docs', lifecycle: top.lifecycle_state ?? null, owner: top.source_owner ?? null, validatedBy: top.validated_by ?? null, validatedAt: top.validated_at ?? null, recencyDays } });
   }
   if (out.navAction) {
-    emit({ type: 'nav', clientDriven: true, label: out.navAction.label, selectors: out.navAction.selectors ?? [], url: out.navAction.url ?? '', healedVia: null });
+    // RC-31: carry productId + intent so the desktop can report the LANDED url back for drift detection
+    // (the engine turns this nav's ok=NULL selection into a real outcome + a drift event on divergence).
+    emit({ type: 'nav', clientDriven: true, label: out.navAction.label, selectors: out.navAction.selectors ?? [], url: out.navAction.url ?? '', healedVia: null, productId: ctx.productId, intent: turn.text });
   } else if (out.navigation?.url) {
     emit({ type: 'nav', url: out.navigation.url, healedVia: out.navigation.healedVia ?? null, screenshot: await shot() });
   }

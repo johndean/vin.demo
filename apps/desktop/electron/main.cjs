@@ -269,6 +269,23 @@ ipcMain.handle('session:agentStep', async (_e, payload) => {
     return null;
   }
 });
+// RC-31: report a client-driven nav's LANDED url to the engine (drift detection). Best-effort: the engine
+// turns the prior ok=NULL selection into a real outcome and emits a drift event on divergence. A failure
+// here never affects the live demo (the loop already navigated) — so we swallow errors and return softly.
+ipcMain.handle('session:navLanded', async (_e, payload) => {
+  if (!sessionCookie) return { ok: null, diverged: false };
+  try {
+    const res = await fetch(`${ENGINE_BASE}/agent/nav-landed`, {
+      method: 'POST',
+      headers: { Cookie: sessionCookie, 'content-type': 'application/json' },
+      body: JSON.stringify(payload || {}),
+    });
+    if (!res.ok) return { ok: null, diverged: false };
+    return await res.json();
+  } catch {
+    return { ok: null, diverged: false };
+  }
+});
 // Record a specialist hand-off — engine sets the active persona on the live session + logs the event.
 ipcMain.handle('session:handoff', async (_e, payload) => {
   if (!sessionCookie) return { ok: false };

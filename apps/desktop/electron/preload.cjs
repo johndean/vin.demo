@@ -32,6 +32,9 @@ contextBridge.exposeInMainWorld('session', {
   ask: (text, speaker) => ipcRenderer.invoke('session:ask', { text, speaker }),
   // One step of the agentic drive loop — sends the live page + goal, gets back the next action.
   agentStep: (payload) => ipcRenderer.invoke('session:agentStep', payload),
+  // RC-31: report the URL the live webview LANDED on after a client-driven nav, so the engine can turn the
+  // ok=NULL selection into a real outcome + surface drift. Fire-and-forget (best-effort telemetry).
+  navLanded: (payload) => ipcRenderer.invoke('session:navLanded', payload),
   // Record a specialist hand-off (the active persona for subsequent agent steps + the real metric).
   handoff: (payload) => ipcRenderer.invoke('session:handoff', payload),
   stop: () => ipcRenderer.invoke('session:stop'),

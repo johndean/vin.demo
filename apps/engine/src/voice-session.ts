@@ -14,6 +14,7 @@ import { bootSession, runTurn, LOOP, type SessionCtx, type SessionTarget } from 
 import { googleSTT } from './voice/stt-google.js';
 import { googleTTS } from './voice/tts-google.js';
 import { elevenLabsTTS } from './voice/tts-elevenlabs.js';
+import { openElevenWs, type ElevenWsHandle } from './voice/tts-elevenlabs-ws.js'; // RC-31: word-level WS streaming (gated)
 import { splitSentences } from './voice/segmenter.js';
 import type { TTSProvider } from './voice/providers.js';
 import { profileById, defaultProfile, voiceCatalog } from './voice/profiles.js';
@@ -30,6 +31,16 @@ const SAMPLE_RATE = 16000;
 // uses Google. On any ElevenLabs error the caller's speak() catch already degrades gracefully.
 function selectTTS(voice: VoiceProfile): TTSProvider {
   return (voice.provider === 'elevenlabs' && process.env.ELEVENLABS_API_KEY) ? elevenLabsTTS : googleTTS;
+}
+
+// RC-31: WORD/TOKEN-LEVEL WS streaming is used for a turn ONLY when ALL hold — (a) the selected voice is an
+// ElevenLabs voice, (b) ELEVENLABS_API_KEY is set, AND (c) the ELEVENLABS_WS env flag is truthy. Evaluated per
+// turn so toggling the flag/voice mid-session takes effect immediately. OFF by default → byte-identical to the
+// per-sentence selectTTS().synthesize path. On any WS failure the turn degrades to that path (see runVoiceTurn).
+function wsStreamEnabled(voice: VoiceProfile): boolean {
+  const flag = process.env.ELEVENLABS_WS;
+  const on = flag && flag !== '0' && flag.toLowerCase() !== 'false';
+  return Boolean(on && voice.provider === 'elevenlabs' && process.env.ELEVENLABS_API_KEY);
 }
 
 export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {}): Promise<void> {
@@ -49,6 +60,8 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
   let utterance = 0;              // RC-11: monotonic id, bumped on barge-in so stale TTS from a prior turn bails
   let ttsChain: Promise<void> = Promise.resolve();
   let sttBytes = 0;               // LINEAR16 @16kHz mono bytes for the current utterance → STT audio seconds
+  let wsTts: ElevenWsHandle | null = null; // RC-31: the OPEN ElevenLabs WS for the current turn (null unless gated on + open)
+  let wsTtsU = -1;                // RC-31: which utterance owns wsTts — a stale handle from a superseded turn is ignored/closed
   const speaker = 'Procurement';
 
   send({ type: 'start', product: ctx.productName, scenario: 'Voice', mode: ctx.mode, loop: LOOP, sessionId: ctx.sessionId, interactive: true, voice: profile.id, profiles: voiceCatalog().map((p) => ({ id: p.id, label: p.label })) });
@@ -70,13 +83,58 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     }
   };
 
+  // RC-31: open ONE ElevenLabs WS for this turn (word-level streaming). Best-effort: resolves true if the
+  // socket opened and audio will flow through it; false on any failure (open timeout/error/non-EL) so the
+  // caller leaves wsTts null and the existing per-sentence speak() path runs UNCHANGED for the turn. Audio
+  // frames are forwarded as the SAME {type:'audio',mime,data} the client already plays (mp3 → no client change).
+  const openTurnWs = async (): Promise<boolean> => {
+    if (!wsStreamEnabled(profile)) return false;
+    const myU = utterance;
+    try {
+      const handle = await openElevenWs(profile, {
+        onAudio: (audio, mime) => {
+          if (interrupted || myU !== utterance) return; // barge-in / superseded turn → drop late audio
+          if (audio.length) send({ type: 'audio', mime, data: audio.toString('base64') });
+        },
+        // Post-open transport error: stop using the WS for the rest of the turn. Already-fed sentences can't be
+        // re-spoken, but no FURTHER say_chunk is lost — voiceEmit falls back to speak() once wsTts is cleared.
+        onError: (e) => { if (interrupted || myU !== utterance) return; /* error after an intentional barge-in teardown — not a real failure, don't toast */ if (wsTtsU === myU) { try { wsTts?.abort(); } catch { /* */ } wsTts = null; } send({ type: 'tts_error', message: String(e?.message ?? e) }); },
+      });
+      if (interrupted || myU !== utterance) { try { handle.abort(); } catch { /* */ } return false; } // barge-in during open
+      wsTts = handle; wsTtsU = myU;
+      return true;
+    } catch (e: any) {
+      // Open failed → silent fallback to per-sentence for this turn (never crash, never silent).
+      send({ type: 'tts_error', message: `WS unavailable, using per-sentence TTS: ${String(e?.message ?? e)}` });
+      return false;
+    }
+  };
+
+  // RC-31: flush + close this turn's WS (EOS), meter its characters best-effort, then null it. Awaited in the
+  // turn's finally so queued WS audio finishes before turn_done — mirrors `await ttsChain` for the sentence path.
+  const closeTurnWs = async () => {
+    const h = wsTts; if (!h) return;
+    wsTts = null;
+    try {
+      void recordVoice('tts', h.charCount(), { voice: profile.id, ws: true }); // best-effort, by characters fed
+      await h.end();
+    } catch { /* socket already gone */ }
+  };
+
   // Forward every brain event to the client; when the consultant SAYS something, also speak it.
   const voiceEmit = (ev: Record<string, unknown>) => {
     // RC-03: a streamed sentence (say_chunk) is spoken IMMEDIATELY and NOT forwarded to the client — it's a
     // server-internal TTS signal (the full `message` still arrives for the chat panel). Speaking each sentence
     // as the answer streams is what lets audio start on sentence 1 instead of after the whole reply.
     if (ev.type === 'say_chunk' && typeof ev.text === 'string') {
-      if (!interrupted) { streamedThisTurn = true; ttsChain = ttsChain.then(() => speak(ev.text as string)); }
+      if (!interrupted) {
+        streamedThisTurn = true;
+        // RC-31: with the WS open for this turn, feed the sentence into it (continuous word-level audio out);
+        // otherwise the UNCHANGED per-sentence synthesize path. If the WS died mid-turn (wsTts cleared by
+        // onError), this naturally falls back to speak() for the remaining sentences — never silent.
+        if (wsTts && wsTtsU === utterance) wsTts.feed(ev.text as string);
+        else ttsChain = ttsChain.then(() => speak(ev.text as string));
+      }
       return;
     }
     send(ev);
@@ -93,12 +151,15 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     if (!q) return;
     if (answering) { send({ type: 'busy', message: 'One moment — still answering.' }); return; }
     answering = true; interrupted = false; streamedThisTurn = false;
+    await openTurnWs(); // RC-31: best-effort open the word-level WS for this turn (no-op/false unless gated on)
     try {
       await runTurn(ctx, { speaker, text: q, stream: true }, voiceEmit); // RC-03: stream the spoken answer to TTS
       await ttsChain; // let queued TTS finish before signaling the turn is done
+      await closeTurnWs(); // RC-31: EOS + drain the WS (no-op if it wasn't open) so its audio finishes too
     } catch (e: any) {
       send({ type: 'error', message: String(e?.message ?? e) });
     } finally {
+      try { wsTts?.abort(); } catch { /* */ } wsTts = null; // RC-31: ensure no WS lingers past the turn (covers the catch path)
       answering = false;
       send({ type: 'turn_done' });
     }
@@ -126,10 +187,12 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     if (walkStep >= walkPlan.length) { send({ type: 'journey_complete', steps: walkPlan.length }); return; }
     const idx = walkStep;
     answering = true; interrupted = false; streamedThisTurn = false;
+    await openTurnWs(); // RC-31: best-effort open the word-level WS for this walk step (no-op/false unless gated on)
     try {
       send({ type: 'journey_step', index: idx, total: walkPlan.length, kind: walkPlan[idx].stepKind, node: walkPlan[idx].nodeLabel ?? null });
       const r = await runTurn(ctx, { speaker: 'Presenter', text: walkPlan[idx].caption ?? 'next', advance: true, stream: true }, voiceEmit); // RC-03: stream the walk narration to TTS
       await ttsChain;
+      await closeTurnWs(); // RC-31: EOS + drain the WS (no-op if it wasn't open)
       // RC-02: SYNC the walk position to the GRAPH's authoritative journeyStep (the single owner) rather than
       // incrementing our own counter — so the spoken caption and the driven screen can never drift apart after
       // an off-script question or a mid-turn error. Fall back to idx+1 only if the graph didn't report a step.
@@ -138,6 +201,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     } catch (e: any) {
       send({ type: 'error', message: String(e?.message ?? e) });
     } finally {
+      try { wsTts?.abort(); } catch { /* */ } wsTts = null; // RC-31: never let a WS linger past the walk step
       answering = false; send({ type: 'turn_done' });
     }
   };
@@ -153,6 +217,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     switch (msg?.type) {
       case 'mic_start':
         interrupted = true; utterance++; send({ type: 'flush' }); // RC-11: barge-in — cut current TTS + tell the client to drop queued audio
+        try { wsTts?.abort(); } catch { /* */ } wsTts = null; // RC-31: barge-in also tears down the word-level WS so it stops emitting audio
         if (stt) { try { stt.end(); } catch { /* */ } }
         sttBytes = 0; // meter this utterance's audio for STT cost
         stt = googleSTT.open({
@@ -168,6 +233,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
         break;
       case 'interrupt':
         interrupted = true; utterance++; send({ type: 'flush' });
+        try { wsTts?.abort(); } catch { /* */ } wsTts = null; // RC-31: barge-in — tear down the word-level WS too
         break;
       case 'voice':
         profile = profileById(msg.id);
@@ -182,5 +248,5 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     }
   });
 
-  ws.on('close', () => { if (stt) { try { stt.end(); } catch { /* */ } stt = null; } });
+  ws.on('close', () => { if (stt) { try { stt.end(); } catch { /* */ } stt = null; } try { wsTts?.abort(); } catch { /* */ } wsTts = null; }); // RC-31: also close any open TTS WS
 }

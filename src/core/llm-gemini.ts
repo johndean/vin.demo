@@ -150,6 +150,10 @@ export class GeminiProvider implements LlmProvider {
     }).join('\n');
     const user =
       `Goal: ${JSON.stringify(ctx.goal)}\n` +
+      // RC-01: session-awareness + shared working state (provider parity with ClaudeProvider). USER message only.
+      (ctx.sessionGoal ? `This demo is in service of: ${JSON.stringify(ctx.sessionGoal)} — keep actions aligned to it.\n` : '') +
+      (ctx.currentScreen ? `The session was last on: ${JSON.stringify(ctx.currentScreen)}${ctx.journeyStep != null ? ` (journey step ${ctx.journeyStep})` : ''} — continue from there; don't re-navigate to it if you're already here.\n` : '') +
+      (ctx.fieldsDone?.length ? `Fields already set this session (do NOT re-fill or re-select these): ${ctx.fieldsDone.map((f) => JSON.stringify(f)).join(', ')}\n` : '') +
       `Driving as: ${ctx.role}\n` +
       `Current URL: ${ctx.url}\nTitle: ${ctx.title}\n` +
       `Headings: ${JSON.stringify(ctx.headings.slice(0, 12))}\n` +

@@ -42,7 +42,7 @@ import { recordAuditTurn, recordEscalation } from '../../../src/core/governance.
 import { addChunk, editChunk, validateChunk, archiveChunk } from '../../../src/core/knowledge.js';
 import { runAutogen } from '../../../src/core/graph-autogen.js';
 import { runGraphVerify } from '../../../src/core/graph-verify.js';
-import { publishGraph, archiveGraph, createWorkflow, updateWorkflow, setWorkflowApproval, archiveWorkflow, createNode, updateNode, archiveNode, selectNavigation, resolveNodeForScreen, recordNavAttempt, rollbackGraph, linkTourNodes } from '../../../src/core/graph-lifecycle.js';
+import { publishGraph, archiveGraph, createWorkflow, updateWorkflow, setWorkflowApproval, archiveWorkflow, createNode, updateNode, archiveNode, selectNavigation, resolveNodeForScreen, recordNavAttempt, recordNavLanded, rollbackGraph, linkTourNodes } from '../../../src/core/graph-lifecycle.js';
 import { createOutcome, updateOutcome, archiveOutcome, setWorkflowOutcome } from '../../../src/core/outcomes.js';
 import { createProductStakeholder, updateProductStakeholder, archiveProductStakeholder, addStakeholderRelationship, archiveStakeholderRelationship } from '../../../src/core/stakeholders.js';
 import { createJourney, updateJourney, setJourneyStatus, archiveJourney } from '../../../src/core/journeys.js';
@@ -50,6 +50,7 @@ import { createOrgPerson, updateOrgPerson, archiveOrgPerson } from '../../../src
 import { assembleJourney } from '../../../src/core/journey-assembler.js';
 import { setGapStatus } from '../../../src/core/gap-records.js';
 import { beginCostSession } from '../../../src/core/cost.js';
+import { loadSessionState, saveSessionState, type SessionStateSnapshot } from '../../../src/core/session.js';
 import { promptCatalog, loadOverrides, saveOverride, resetOverride } from '../../../src/core/prompts.js';
 import { modelCatalog, loadSettings, setModel, clearModel } from '../../../src/core/settings.js';
 import { db } from '../../../src/core/db.js';
@@ -108,6 +109,11 @@ let sessionSeq = 0;   // monotonic session counter
 let preempt: (() => void) | null = null; // tear down the current owner so a newcomer can take over
 let interactive: InteractiveSession | null = null; // the open interactive session, fed by POST /session/utterance
 let scripted: ScriptedSession | null = null; // the open SCRIPTED session, advanced by POST /session/advance
+// RC-01 (shared working state): per-session field-completion map for the (otherwise stateless) live-drive loop —
+// which form fields THIS drive loop has already set this session, keyed by sessionId. An in-process Map is the fast
+// path; the set is ALSO mirrored into the RC-30 session snapshot (saveSessionState) each step so a redeploy/crash or
+// a fresh process rehydrates it from the snapshot. Bounded set per session; best-effort, never blocks a turn.
+const driveFieldsDone = new Map<string, Set<string>>();
 
 /** Claim the single-session lock for a new session, tearing down whoever holds it. Returns this
  *  session's id; pass it to `release(id)` when the session ends so a preempted session's late
@@ -340,13 +346,37 @@ const server = http.createServer(async (req, res) => {
         if (typeof g === 'string' && g.trim()) sessionGoal = g.trim();
       } catch { /* best-effort: no journey / not found → drive without session framing */ }
     }
+    // RC-01 (shared working state — closes the two-brain gap): load the conversational/journey brain's working
+    // state from the RC-30 session snapshot (currentPosition = where the conversational brain last navigated,
+    // journeyStep = the journey position it reached) and rehydrate THIS drive loop's field-completion set from the
+    // same snapshot (so a redeploy/crash or a fresh process recovers what's already been filled). Best-effort +
+    // null-safe: a session with no snapshot/journey leaves these undefined and drives exactly as today.
+    let snapshot: SessionStateSnapshot | null = null;
+    if (sessionId) { try { snapshot = await loadSessionState(sessionId); } catch { /* best-effort: no snapshot → drive as today */ } }
+    const currentScreen = snapshot?.currentPosition?.intent ?? null; // where the conversational brain last navigated
+    const journeyStep = typeof snapshot?.journeyStep === 'number' ? snapshot.journeyStep : null;
+    // The drive loop's own field-completion set — in-process Map is the fast path; seed it once from the snapshot
+    // (persisted as `driveFieldsDone`) so it survives a process restart. Keyed by sessionId; ad-hoc (no session) drives stateless.
+    let fieldsSet: Set<string> | null = null;
+    if (sessionId) {
+      fieldsSet = driveFieldsDone.get(sessionId) ?? null;
+      if (!fieldsSet) {
+        const persisted = Array.isArray(snapshot?.driveFieldsDone) ? snapshot.driveFieldsDone.filter((x): x is string => typeof x === 'string') : [];
+        fieldsSet = new Set<string>(persisted);
+        // Bounded LRU so a long-lived engine never accumulates one entry per session forever. The RC-30 snapshot
+        // is the durable source, so evicting the oldest in-process entry is safe — a later /agent/step re-seeds it.
+        if (driveFieldsDone.size >= 400) { const oldest = driveFieldsDone.keys().next().value; if (oldest !== undefined) driveFieldsDone.delete(oldest); }
+        driveFieldsDone.set(sessionId, fieldsSet);
+      }
+    }
+    const fieldsDone = fieldsSet ? [...fieldsSet].slice(-24) : undefined; // bounded; most-recent window handed to the model
     // Active specialist (if handed off): its overlay focuses the agent + its prohibited actions tighten the gate.
     const persona = await loadPersona(typeof body?.personaId === 'string' ? body.personaId : null);
     // A governance block on this step (recorded below). layer/escalate drive the audit + escalation rows.
     let block: { control: string; layer: 'behavior' | 'execution'; reason: string; escalate: boolean } | null = null;
     try {
       const notices = Array.isArray(page?.notices) ? page.notices.slice(0, 6).map((n: any) => String(n).slice(0, 140)).filter(Boolean) : undefined;
-      let step = await getLlm().agentStep({ goal, url: String(page.url ?? ''), title: String(page.title ?? ''), headings: Array.isArray(page.headings) ? page.headings.slice(0, 12).map(String) : [], elements, history, role, mode, personaPreamble: personaPreamble(persona), knownScreens, notices, sessionGoal /* RC-01: session-aware drive */ });
+      let step = await getLlm().agentStep({ goal, url: String(page.url ?? ''), title: String(page.title ?? ''), headings: Array.isArray(page.headings) ? page.headings.slice(0, 12).map(String) : [], elements, history, role, mode, personaPreamble: personaPreamble(persona), knownScreens, notices, sessionGoal, currentScreen, fieldsDone, journeyStep /* RC-01: session-aware drive + SHARED working state (position + fields-done) */ });
       // A `click` commits via the control itself; a `select` commits via the CHOSEN OPTION. Both must pass the
       // gate — previously only `click` was classified, so a combobox/`select` committing a mutating option
       // (e.g. a Status dropdown set to "Void"/"Approve") executed with NO safety check in any mode. A `type`
@@ -403,18 +433,63 @@ const server = http.createServer(async (req, res) => {
       }
       // Phase 2 telemetry (the bridge — the DOM-driven agent FEEDS the graph): resolve the acted screen to a
       // node + record the attempt. ok = an executable action was issued (not blocked/done). Best-effort.
+      const actedEl = step.ref >= 0 ? elements.find((e: any) => e.ref === step.ref) : null;
+      const acted = (step.action === 'click' || step.action === 'type' || step.action === 'select') && !block;
       if (productId) {
-        const actedEl = step.ref >= 0 ? elements.find((e: any) => e.ref === step.ref) : null;
-        const acted = (step.action === 'click' || step.action === 'type' || step.action === 'select') && !block;
         if (actedEl || block) {
           const resolved = await resolveNodeForScreen(productId, String(page.url ?? ''), actedEl?.text ?? '');
           await recordNavAttempt({ source: 'agent-step', productId, sessionId, graphId: resolved?.graphId ?? null, nodeId: resolved?.nodeId ?? null, intent: goal, url: String(page.url ?? ''), ok: acted, healedVia: null, selectorUsed: actedEl?.text ?? null });
+        }
+      }
+      // RC-01 (shared working state): record the FIELD this drive step just set so the next step (this turn or a
+      // later one) knows not to re-fill it — the two brains now track completion progress together. A `type` fills a
+      // field; a `select` commits an option to one (a bare `click` is navigation, not a field-set, so it's excluded).
+      // Keyed by the element's LABEL + committed value (stable across snapshots, unlike the re-stamped ref). Persisted
+      // into the RC-30 snapshot so it survives a process restart. Best-effort; never blocks the response.
+      if (fieldsSet && actedEl && acted && (step.action === 'type' || step.action === 'select')) {
+        const label = String(actedEl.text ?? '').trim();
+        const committed = String(step.value ?? '').trim();
+        if (label) {
+          fieldsSet.add(committed ? `${label} = ${committed}` : label);
+          // bound the set so a long session can't grow it unboundedly (keep the most recent window)
+          if (fieldsSet.size > 60) { fieldsSet = new Set([...fieldsSet].slice(-60)); driveFieldsDone.set(sessionId!, fieldsSet); }
+          // Mirror into the durable snapshot WITHOUT clobbering the conversational brain's slice: re-read the LATEST
+          // snapshot (the conversational brain may have advanced journeyStep/currentPosition mid-turn) and merge only
+          // our driveFieldsDone onto it, so neither brain overwrites the other's working state.
+          try { const latest = await loadSessionState(sessionId); await saveSessionState(sessionId, { ...(latest ?? snapshot ?? {}), driveFieldsDone: [...fieldsSet] }); } catch { /* best-effort persist */ }
         }
       }
       finish(step);
     } catch (e: any) {
       console.error('[engine] agent/step error:', e);
       finish({ action: 'done', ref: -1, value: '', say: 'I hit a snag planning the next step — take over whenever you like.' });
+    }
+    return;
+  }
+
+  // RC-31: client-nav DRIFT DETECTION. The desktop's LiveBrowser performs a client-driven nav (graph.ts
+  // driveTo → emit {type:'nav',clientDriven}) and then reports the URL it actually LANDED on. The original
+  // selection was recorded with ok=NULL (the server can't see the live DOM); here we turn that into a REAL
+  // outcome and, on divergence from the verified route, emit a graph DRIFT event. Best-effort + null-safe:
+  // a missing/garbled report never throws and never blocks — drift detection is purely additive telemetry,
+  // so if this report never arrives the engine behaves exactly as today.
+  if (req.method === 'POST' && url.pathname === '/agent/nav-landed') {
+    const payload = await verifyToken(tokenFrom(req, url));
+    if (!payload) { res.writeHead(401, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify({ error: 'unauthorized' })); return; }
+    const body = await readJson(req);
+    const landedUrl = typeof body?.url === 'string' ? body.url.trim() : '';
+    const sessionId = typeof body?.sessionId === 'string' && body.sessionId.trim() ? body.sessionId.trim() : null;
+    const productId = typeof body?.productId === 'string' && body.productId.trim() ? body.productId.trim() : null;
+    const expectedRoute = typeof body?.route === 'string' && body.route.trim() ? body.route.trim() : null;
+    const expectedLabel = typeof body?.label === 'string' && body.label.trim() ? body.label.trim() : null;
+    const intent = typeof body?.intent === 'string' && body.intent.trim() ? body.intent.trim() : null;
+    if (!landedUrl) { res.writeHead(200, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify({ ok: null, diverged: false })); return; }
+    try {
+      const r = await recordNavLanded({ sessionId, productId, landedUrl, expectedRoute, expectedLabel, intent });
+      res.writeHead(200, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify(r));
+    } catch (e: any) {
+      // never surface internals; a drift-telemetry failure is non-fatal to the demo
+      res.writeHead(200, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify({ ok: null, diverged: false }));
     }
     return;
   }

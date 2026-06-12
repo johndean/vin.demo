@@ -56,6 +56,73 @@ export async function recordNavAttempt(a: NavAttempt): Promise<void> {
   } catch (err) { console.error('[graph] recordNavAttempt failed (best-effort):', err); }
 }
 
+// RC-31: client-nav DRIFT DETECTION. A client-driven nav (graph.ts driveTo, state.clientNav) records its
+// SELECTION with ok=NULL because the server never observes the live DOM. The desktop's LiveBrowser DOES
+// observe the resulting URL after it performs the nav; when it reports that URL back here we turn the
+// ignorant ok=NULL into a REAL outcome and surface divergence. ok = the landed URL contains the expected
+// screen_route (host-relative) OR matches the expected node label/host; diverged = there WAS an expectation
+// (route or label) and the landing didn't satisfy it → the live route drifted from the verified graph.
+// Best-effort: this never throws into the caller (mirrors recordNavAttempt) and, on divergence, also emits a
+// first-class graph DRIFT event so the verification investment surfaces drift instead of silently passing.
+export interface NavLanded {
+  sessionId?: string | null; productId?: string | null;
+  landedUrl: string;                    // the URL the live webview actually settled on (wv.getURL())
+  expectedRoute?: string | null;        // the verified node's screen_route the nav was instructed toward
+  expectedLabel?: string | null;        // the node's on-screen label (the label-click target), for label-based intents
+  intent?: string | null;
+}
+/** Returns the computed { ok, diverged } so the caller can shape a response/telemetry; both null when there
+ *  was no expectation to judge against (nothing to record). */
+export async function recordNavLanded(a: NavLanded): Promise<{ ok: boolean | null; diverged: boolean }> {
+  const landed = (a.landedUrl || '').trim();
+  if (!landed) return { ok: null, diverged: false }; // report never carried a usable URL → behave exactly as today
+  const route = (a.expectedRoute || '').trim();
+  const label = (a.expectedLabel || '').trim();
+  // Normalize for comparison: route is host-relative ("/approvals") or absolute; compare on the lower-cased
+  // path/substring so "https://po.vin/approvals?x=1" satisfies expected "/approvals". A route shorter than 2
+  // chars ("/" alone) is not a discriminating expectation.
+  const lu = landed.toLowerCase();
+  // RC-31: compare a host-relative route against the landed PATH (not the full URL incl. host), so a short
+  // route like "/po" can't false-match the host of "https://po.vin/dashboard". Absolute routes compare full.
+  const landedPath = (() => { try { return new URL(landed).pathname.toLowerCase(); } catch { return lu; } })();
+  let routeMatch: boolean | null = null;
+  if (route.length > 1) {
+    try {
+      if (/^https?:/.test(route)) { routeMatch = lu.includes(route.toLowerCase()); }
+      else { const needle = new URL(route, /^https?:/.test(landed) ? landed : `https://x${route}`).pathname.toLowerCase(); routeMatch = landedPath.includes(needle); }
+    } catch { routeMatch = landedPath.includes(route.toLowerCase()); }
+  }
+  // A label expectation can't be confirmed from the URL alone (a SPA click may not change the path); treat a
+  // label-only intent as a soft expectation — confirmed if the label token shows up in the URL, otherwise
+  // UNDETERMINED (ok=null, no false drift) rather than asserting divergence on a route-less click.
+  const labelMatch = label.length > 2 && lu.includes(label.toLowerCase().replace(/\s+/g, '-'));
+  // Resolve the landing to a node for the telemetry row (the same resolver the agent-step bridge uses).
+  const resolved = a.productId ? await resolveNodeForScreen(a.productId, landed, label).catch(() => null) : null;
+  let ok: boolean | null;
+  let diverged = false;
+  if (routeMatch !== null) {
+    ok = routeMatch; diverged = !routeMatch;          // a verified route is the authoritative expectation
+  } else if (label.length > 2) {
+    ok = labelMatch ? true : null;                     // label-only: confirm OR leave undetermined (never false-drift)
+    diverged = false;
+  } else {
+    ok = null; diverged = false;                       // no expectation at all → nothing to judge
+  }
+  await recordNavAttempt({
+    source: 'path-a', productId: a.productId ?? null, sessionId: a.sessionId ?? null,
+    graphId: resolved?.graphId ?? null, nodeId: resolved?.nodeId ?? null, intent: a.intent ?? null,
+    url: landed, ok, healedVia: diverged ? 'drift:diverged' : (ok ? 'observed:landed' : null), selectorUsed: null,
+  });
+  if (diverged) {
+    // Surface the drift: the live route diverged from the verified graph route the nav was driven toward.
+    await recordGraphEvent('drift', {
+      graphId: resolved?.graphId ?? null, nodeId: resolved?.nodeId ?? null, productId: a.productId ?? null,
+      actor: 'live-drift', after: { expectedRoute: route || null, expectedLabel: label || null, landedUrl: landed, intent: a.intent ?? null },
+    });
+  }
+  return { ok, diverged };
+}
+
 /** Create a new DRAFT graph version for (product, name): graph_version = max+1, copies the environment.
  *  The active graph is untouched until publishGraph flips this one. Returns the new graph id. */
 export async function newDraftGraph(productId: string, name: string, environmentId: string | null, actor = 'system'): Promise<string> {

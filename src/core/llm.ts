@@ -111,6 +111,13 @@ export interface AgentStepContext {
   knownScreens?: { label: string; route: string | null }[]; // the product's VERIFIED demo-graph screens (the navigation authority) — prefer these (Phase 2 bridge)
   notices?: string[];      // RC-08: visible alerts/validation/toasts on screen now (so the agent can react to a failed submit, a success banner, etc.)
   sessionGoal?: string | null; // RC-01: the session's pinned-journey business goal/outcome — light framing so the (otherwise stateless) drive loop keeps its actions aligned to the demo's purpose. Best-effort; absent → drives exactly as before.
+  // RC-01 (shared working state): the conversational/journey brain's working state, loaded from the session
+  // snapshot (RC-30) + the server-side field-completion map, so the (otherwise stateless) drive loop knows
+  // WHERE the session already is and WHAT it has already done — making a conversation→drive (and cross-turn)
+  // hand-off coherent. All best-effort + null-safe: absent → drives exactly as before.
+  currentScreen?: string | null; // where the conversational brain last navigated this session (snapshot.currentPosition.intent)
+  fieldsDone?: string[];          // form fields this drive loop has already set this session (so it doesn't re-fill / loop on a done field)
+  journeyStep?: number | null;    // the journey position the conversational brain last reached (light progress framing)
 }
 /** The single next action the agent takes to drive the live demo (read-only: never commits). */
 export interface AgentStep {
@@ -418,6 +425,10 @@ class ClaudeProvider implements LlmProvider {
           // RC-01: session awareness — frame the immediate goal against the pinned journey's business outcome so
           // an otherwise-stateless drive step stays aligned to the demo's purpose. USER message only (no golden change).
           (ctx.sessionGoal ? `This demo is in service of: ${JSON.stringify(ctx.sessionGoal)} — keep actions aligned to it.\n` : '') +
+          // RC-01 (shared working state): tell the drive loop where the session already is and what it has already
+          // done so a conversation→drive (and cross-turn) hand-off is coherent. USER message only (no golden change).
+          (ctx.currentScreen ? `The session was last on: ${JSON.stringify(ctx.currentScreen)}${ctx.journeyStep != null ? ` (journey step ${ctx.journeyStep})` : ''} — continue from there; don't re-navigate to it if you're already here.\n` : '') +
+          (ctx.fieldsDone?.length ? `Fields already set this session (do NOT re-fill or re-select these): ${ctx.fieldsDone.map((f) => JSON.stringify(f)).join(', ')}\n` : '') +
           `Driving as: ${ctx.role}\n` +
           `Current URL: ${ctx.url}\nTitle: ${ctx.title}\n` +
           `Headings: ${JSON.stringify(ctx.headings.slice(0, 12))}\n` +

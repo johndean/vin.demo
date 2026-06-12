@@ -531,6 +531,26 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, speci
     if (!wv || !navAction || navAction.seq === lastSeq.current) return;
     lastSeq.current = navAction.seq;
     const { label, selectors = [], url } = navAction;
+    // RC-31: client-nav DRIFT DETECTION (least-invasive channel = the existing `window.session` Electron
+    // bridge — no LiveBrowser shell/WS-protocol change). After this nav settles, read the URL the webview
+    // actually LANDED on (wv.getURL()) and report it + the EXPECTED route/label so the engine can turn this
+    // nav's ok=NULL selection into a real outcome and emit a drift event when the live route diverged. The
+    // expected route / session / product travel as DATA on navAction (not via the prop signature) — read via
+    // a cast so LiveBrowser's signature stays byte-identical. Best-effort + fire-and-forget: a missing bridge
+    // / missing url / settle-after-unmount is a no-op (behavior is exactly as today if it never reports).
+    const na = navAction as { route?: string; sessionId?: string; productId?: string; intent?: string };
+    const reportLanded = (delayMs: number) => {
+      const expectedRoute = na.route, sessionId = na.sessionId, productId = na.productId, intent = na.intent;
+      setTimeout(() => {
+        let landed = ''; try { landed = wv.getURL(); } catch { /* webview gone */ }
+        if (!landed) return;
+        try {
+          (window as unknown as { session?: { navLanded?(p: any): Promise<any> } }).session?.navLanded?.({
+            url: landed, route: expectedRoute ?? null, label: label ?? null, sessionId: sessionId ?? null, productId: productId ?? null, intent: intent ?? null,
+          })?.catch?.(() => {});
+        } catch { /* bridge absent (web build) → drift telemetry simply doesn't report */ }
+      }, delayMs);
+    };
     // RC-31: route-preferred — resolve the route against the current origin and navigate directly. Only treat
     // a route as preferred when it's absolute or ROOT-relative ("/approvals"); a slashless value would resolve
     // against the current path segment and navigate to the wrong page, so fall through to the locator/label click.
@@ -538,6 +558,7 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, speci
       try {
         const abs = /^https?:/.test(url) ? url : new URL(url, wv.getURL() || undefined).href;
         wv.loadURL(abs);
+        reportLanded(1400); // settle: let loadURL navigate before sampling the landed URL
         return;
       } catch { /* relative resolve failed (no origin yet) → fall through to locator/label click below */ }
     }
@@ -569,6 +590,7 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, speci
           if(best) return act(best.closest('a,button,[role="button"],[role="menuitem"],[role="tab"]')||best); }
         return false; })();`;
       try { wv.executeJavaScript(code, true).catch(() => {}); } catch { /* */ }
+      reportLanded(1400); // RC-31: the click fires at +420ms; sample the landed URL after an SPA route change settles
     }
   }, [navAction?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -811,7 +833,7 @@ interface LiveState {
   running: boolean; done: boolean; ready: boolean; loopIdx: number; phase: string; brain: string; sub: string; conf: number;
   messages: Msg[]; cite: any | null; cost: number; byType: { type: string; usd: number }[];
   screenshot: string | null; url: string; blocked: string[]; error: string | null;
-  navAction: { label?: string; selectors?: string[]; url?: string; seq: number } | null; // client-driven nav instruction for the embedded browser
+  navAction: { label?: string; selectors?: string[]; url?: string; seq: number; sessionId?: string; productId?: string; route?: string; intent?: string } | null; // client-driven nav instruction for the embedded browser (+ RC-31 drift-report data)
   sessionId: string | null; // real demo_sessions id from the engine `start` event (used for hand-off records)
   handoffSuggestion: { topic: string; toPersona: string } | null; // active specialist suggested bringing in another
   journeyName: string | null; journeyStep: number; journeyTotal: number; journeyDone: boolean; turnSeq: number; // V5 voice-walk progress + per-turn completion counter (auto-advance signal)
@@ -834,7 +856,9 @@ function reduceLive(p: LiveState, ev: any): LiveState {
       screenshot: ev.screenshot ?? p.screenshot,
       url: ev.url ?? p.url,
       // Client-driven instruction → bump seq so the embedded browser performs it (click the labeled element).
-      navAction: ev.clientDriven ? { label: ev.label, selectors: ev.selectors ?? [], url: ev.url || undefined, seq: (p.navAction?.seq ?? 0) + 1 } : p.navAction,
+      // RC-31: carry sessionId/productId/route/intent as DATA on the nav instruction so the LiveBrowser can
+      // report the URL it lands on back to the engine for drift detection (no shell/signature change).
+      navAction: ev.clientDriven ? { label: ev.label, selectors: ev.selectors ?? [], url: ev.url || undefined, seq: (p.navAction?.seq ?? 0) + 1, sessionId: p.sessionId ?? undefined, productId: ev.productId || undefined, route: ev.url || undefined, intent: ev.intent || undefined } : p.navAction,
     };
     case 'blocked': return { ...p, blocked: ev.actions ?? [] };
     case 'cost': return { ...p, cost: ev.total ?? p.cost, byType: ev.byType ?? p.byType };
