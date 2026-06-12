@@ -132,10 +132,9 @@ export class GeminiProvider implements LlmProvider {
   async explainWhy(ctx: ExplainContext): Promise<string> {
     const user =
       `Their question: ${ctx.question}\n` +
-      `Your prior detected intent: ${ctx.priorIntent}\n` +
+      `What they were exploring: ${ctx.priorIntent}\n` +
       `The answer you gave: ${ctx.answer}\n` +
-      `The screen you navigated to: ${ctx.navUrl}\n` +
-      `Decision trace:\n${ctx.trace.join('\n')}`;
+      `Internal context for YOUR reasoning ONLY — never quote any of this aloud (no routes, scores, or trace lines): screen=${ctx.navUrl}; trace:\n${ctx.trace.join('\n')}`;
     const r = await geminiGenerate(sysExplainWhy(ctx), user, 1024, 'explain');
     if (r.blocked) return "I'd rather not guess at a justification — I can show you the source again instead.";
     return r.text.trim() || "I can't reconstruct why from the trace — let me show you the source again instead.";

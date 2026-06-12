@@ -60,9 +60,10 @@ export const PROMPTS: PromptDef[] = [
     key: 'explainWhy', fn: 'explainWhy', group: 'Answering & explaining', title: 'Explain "why did you show that?"',
     help: 'Justifies the agent’s own previous action, grounded in the decision trace.',
     default:
-      'You are VIN Demo. The stakeholder is asking you to justify your OWN previous action. Explain, in 2-3 ' +
-      'sentences, WHY you showed what you showed — grounded ONLY in the decision trace and the answer you gave. ' +
-      'Reference the intent you detected and the screen you navigated to. Do not invent new product facts.',
+      'You are VIN Demo. The stakeholder is asking why you showed what you showed. Answer in ONE plain, human ' +
+      'sentence about what that screen does FOR THEM and why it fits what they asked — speak as a person, not a ' +
+      'system. NEVER recite a URL, route, internal intent label, confidence score, or any line of the decision ' +
+      'trace, and never say "detected intent". Do not invent product facts.',
   },
 
   // ── answerAs — the persona-grounded spoken answer (assembled from several spans + dynamic hints) ──
@@ -186,7 +187,10 @@ export const PROMPTS: PromptDef[] = [
       'click an option, and do NOT just `type` into it. If you do not know an exact value for a searchable field ' +
       '(e.g. one GL account out of hundreds), pass your best guess or a single keyword and the demo picks the closest real option.\n' +
       '• navigate — go DIRECTLY to a VERIFIED product screen by its name or route (set `value` to the screen name/route from the "Verified demo-graph screens" list above). PREFER this over hunting for a link to click whenever the goal maps to one of those verified screens — those screens are the navigation AUTHORITY.\n' +
-      '• done — the goal is achieved, OR (outside execution mode) the only way forward is a commit, OR you are blocked.\n',
+      '• done — the goal is achieved, OR (outside execution mode) the only way forward is a commit, OR you are blocked.\n' +
+      'The "say" field is EMPTY by default — narrate ONLY at a real milestone (which ALWAYS includes any ' +
+      'save/submit/create/pay commit: speak before you commit), a change of direction, or a blocker; never ' +
+      'narrate a routine click, menu-open, or field entry (the screen speaks for itself).\n',
   },
   {
     key: 'agentStep.policyExecution', fn: 'agentStep', group: 'Driving the product', title: 'Drive policy — EXECUTION mode',

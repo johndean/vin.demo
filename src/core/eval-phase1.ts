@@ -38,7 +38,7 @@ const checks = [
   { name: 'T1 cited answer (source+confidence+version)', pass: !t1.gated && !!top?.source && top?.confidence != null && !!top?.product_version, detail: top ? `${top.source} · ${top.confidence} · ${top.product_version}` : 'none' },
   { name: 'T1 navigated with self-heal', pass: !!t1.navigation?.ok && !!t1.navigation?.healedVia, detail: `${t1.navigation?.url} via ${t1.navigation?.healedVia}` },
   { name: 'T1 never fires mutating (Approve+Delegate blocked)', pass: t1Blocked.some((l: string) => /approve/.test(l)) && t1Blocked.some((l: string) => /delegate/.test(l)), detail: `${t1Blocked.length} blocked` },
-  { name: 'T2 answers "why did you show that?"', pass: !!t2.explanation && t2.explanation.length > 20, detail: (t2.explanation ?? '').slice(0, 60) },
+  { name: 'T2 answers "why did you show that?" (slug-free — #11)', pass: !!t2.explanation && t2.explanation.length > 20 && !/https?:\/\/|\/[a-z]+\/|\bpo\.vin\b|confidence=|band=|distance=|graph v\d|detected intent/i.test(t2.explanation), detail: (t2.explanation ?? '').slice(0, 60) },
   { name: 'T3 pivot pushes context (stack=1, new screen)', pass: (t3.contextStack?.length ?? 0) === 1 && t3.navigation?.url !== t1.navigation?.url, detail: `stack=${t3.contextStack?.length} url=${t3.navigation?.url}` },
   { name: 'T4 returns to context (stack=0, back to T1 screen)', pass: (t4.contextStack?.length ?? 0) === 0 && t4.navigation?.url === t1.navigation?.url, detail: `stack=${t4.contextStack?.length} url=${t4.navigation?.url}` },
   { name: 'Off-topic gates ("I\'m not certain")', pass: gate.gated === true, detail: `gated=${gate.gated}` },

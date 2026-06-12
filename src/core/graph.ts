@@ -284,6 +284,12 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
     getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: facts.screenName ?? entry.nodeLabel ?? null, screenName: facts.screenName, purpose: facts.purpose, screenFacts: facts.screenFacts, audience, framedFor, outcome: outcomeFraming, outcomeMetric: roi.metric, outcomeBaseline: roi.baseline, outcomeTarget: roi.target, sourceText: entry.sourceText ?? null, recentNarrations: recent, stepIndex: stepNum, stepTotal: total, arcRole: entry.arcRole, onDelta }),
   ]);
   const ok = d.navigation.ok || !!d.navAction;
+  // Wave D #20: graceful recovery — if the screen did NOT resolve, never deliver the screen-asserting narration
+  // (confident wrongness): speak a brief recovery line, don't remember it. NOTE: on clientNav (the live desktop
+  // walk) driveTo returns ok=true for any MATCHED node (the server can't observe the embedded DOM), so this fires
+  // only on a true no-match (e.g. a stale/renamed journey ref); a matched node that fails to RENDER client-side is
+  // surfaced out-of-band by the desktop drift report (recordNavLanded), not here. (Follow-on: feed drift→recovery.)
+  const spoken = ok ? say : 'Let me pull that one up a different way — give me one moment.';
   const newPos: Position = { intent: entry.nodeLabel ?? 'journey step', url: d.navigation.url, answer: state.retrieved?.[0]?.content ?? null };
   return {
     ...advance,
@@ -292,8 +298,8 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
     blockedMutations: d.blockedMutations,
     currentPosition: ok ? newPos : state.currentPosition,
     screenFacts: d.screenFacts ?? null, // RC-06: an off-script question on this walk-pinned session answers FROM this screen's surface
-    explanation: say,
-    recentNarrations: [say], // #2: remember what we just said so the next beat doesn't repeat it
+    explanation: spoken,
+    recentNarrations: ok ? [say] : [], // #2/#20: remember a real beat; a non-resolving (recovery) beat is NOT remembered
     // RC-26: a forced journey target that didn't resolve on the live product is a GAP — flag it in the operator
     // trace (surfaced as a beat) rather than letting the step glide past silently as if the screen were shown.
     trace: [ok ? `journey: [${stepNum}/${total}] → "${entry.nodeLabel}" (${entry.arcRole})` : `journey: [${stepNum}/${total}] GAP — "${entry.nodeLabel}" did not resolve on the live product (degraded — narrated without the screen)`, ...d.traceLines],

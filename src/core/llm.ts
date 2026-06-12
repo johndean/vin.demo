@@ -330,7 +330,7 @@ export const sysDeriveScreenElements = (): string => rp('deriveScreenElements');
 const FN_SIG: [string, string][] = [
   ['You are the interpreter', 'interpret'],
   ['Pick the demo screen', 'pickNode'],
-  ['justify your OWN previous action', 'explainWhy'],
+  ['asking why you showed what you showed', 'explainWhy'],
   ['DRIVING a live product demo', 'agentStep'],
   ['answering live, out loud', 'answerAs'],
   ['presenting a LIVE product demo, speaking OUT LOUD', 'narrate'],
@@ -495,10 +495,9 @@ class ClaudeProvider implements LlmProvider {
           role: 'user',
           content:
             `Their question: ${ctx.question}\n` +
-            `Your prior detected intent: ${ctx.priorIntent}\n` +
+            `What they were exploring: ${ctx.priorIntent}\n` +
             `The answer you gave: ${ctx.answer}\n` +
-            `The screen you navigated to: ${ctx.navUrl}\n` +
-            `Decision trace:\n${ctx.trace.join('\n')}`,
+            `Internal context for YOUR reasoning ONLY — never quote any of this aloud (no routes, scores, or trace lines): screen=${ctx.navUrl}; trace:\n${ctx.trace.join('\n')}`,
         },
       ],
     });
