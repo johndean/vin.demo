@@ -124,6 +124,23 @@ export async function gateForVector(vec: number[], productId: string | null, min
   return { rows, top, gated, navigable, band, reason, ageDays };
 }
 
+/** Wave C #18: does a SINGLE chunk INDEPENDENTLY clear the SAME trust bar gateForVector applies to `top`
+ *  (confidence floor · validated · lifecycle not draft/pending/deprecated · fresh · ACTIVE product version ·
+ *  relevant)? Used to gate a SECONDARY source so an extra grounded clause can NEVER come from an untrusted,
+ *  draft/deprecated, stale, version-superseded, or off-topic chunk — closing the gap that gateForVector (which
+ *  validates only rows[0]) leaves on rows[1+]. Reuses the same constants, so it can't drift from the primary gate. */
+export function chunkPassesGate(c: RetrievedChunk | undefined | null, minConfidence?: number | null): boolean {
+  if (!c) return false;
+  const confFloor = typeof minConfidence === 'number' && minConfidence > 0 ? minConfidence : CONFIDENCE_THRESHOLD;
+  const ageDays = c.last_verified != null ? Math.floor((Date.now() - Date.parse(c.last_verified)) / 86_400_000) : null;
+  return c.confidence >= confFloor
+    && c.validation_status === 'validated'
+    && c.lifecycle_state !== 'draft' && c.lifecycle_state !== 'pending_review' && c.lifecycle_state !== 'deprecated'
+    && (c.product_version_status == null || c.product_version_status === 'active')
+    && ageDays != null && ageDays <= MAX_VERIFY_AGE_DAYS
+    && c.distance != null && c.distance <= RELEVANCE_MAX_DISTANCE;
+}
+
 /** Embed a single query, then gate. (The graph's per-turn path.) */
 export async function retrieveAndGate(query: string, productId: string | null, minConfidence?: number | null, knowledgePriority?: string[]): Promise<GateResult> {
   const [vec] = await getEmbeddingProvider().embed([query]);

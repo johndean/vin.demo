@@ -28,7 +28,7 @@ const EXPLAIN_TRACE_WINDOW = 16; // bound the cross-turn trace fed to explain (i
 
 // Per-invoke LangGraph config (NOT checkpointed): carries a streaming sink so a node can stream spoken
 // sentences out to TTS as they generate (RC-03). thread_id rides here too via ctx.thread.configurable.
-type GraphRunConfig = { configurable?: { thread_id?: string; onDelta?: (sentence: string) => void } };
+type GraphRunConfig = { configurable?: { thread_id?: string; onDelta?: (sentence: string) => void; framedFor?: string | null } };
 
 // ── whoSpeaks (multi-stakeholder, P2.3 / Gap F) — resolve the active speaker ───
 async function whoSpeaks(state: DemoStateT): Promise<Partial<DemoStateT>> {
@@ -245,6 +245,9 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
   const advance = { journeyStep: step + 1 };
   const audience = state.activeStakeholder?.role ?? null;
   const onDelta = config?.configurable?.onDelta; // RC-03: stream this step's narration to TTS when the voice channel gave us a sink
+  // Wave C #17: frame the OPENING beat for the committee this journey targets (role-level; distinct from the
+  // in-the-room `audience`). Null on every other beat so the framing lands once, at the open.
+  const framedFor = entry.arcRole === 'open' ? (config?.configurable?.framedFor ?? null) : null;
   const stepNum = step + 1;
   const recent = state.recentNarrations ?? []; // #2: the last few spoken lines, threaded for anti-repetition
   // #2: the OUTCOME frames only the bookend beats (open/close); injecting it on every step is the chief cause of
@@ -257,7 +260,7 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
     // Narration beat (knowledge/note/tour) — no navigation; compose ONE warm spoken line (clean fallback).
     // RC-16: pass the resolved knowledge chunk (entry.sourceText) so a knowledge beat paraphrases a GROUNDED
     // source instead of free-improvising product claims; null for note/tour beats → the span orients to context.
-    const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: null, audience, outcome: outcomeFraming, outcomeMetric: roi.metric, outcomeBaseline: roi.baseline, outcomeTarget: roi.target, sourceText: entry.sourceText ?? null, recentNarrations: recent, stepIndex: stepNum, stepTotal: total, arcRole: entry.arcRole, onDelta });
+    const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: null, audience, framedFor, outcome: outcomeFraming, outcomeMetric: roi.metric, outcomeBaseline: roi.baseline, outcomeTarget: roi.target, sourceText: entry.sourceText ?? null, recentNarrations: recent, stepIndex: stepNum, stepTotal: total, arcRole: entry.arcRole, onDelta });
     return { ...advance, navigation: null, navAction: null, blockedMutations: [], explanation: say, recentNarrations: [say], trace: [`journey: [${stepNum}/${total}] ${entry.stepKind} narration beat (${entry.arcRole})`] };
   }
   // #7: a SILENT transit node — drive the screen but speak NOTHING (the walk advances without restating a value
@@ -278,7 +281,7 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
   const facts = await nodeNarrationFacts(state.productId, entry.nodeLabel ?? '');
   const [d, say] = await Promise.all([
     driveTo(state, entry.caption ?? entry.nodeLabel ?? 'demonstrate', { targetLabel: entry.nodeLabel ?? null }),
-    getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: facts.screenName ?? entry.nodeLabel ?? null, screenName: facts.screenName, purpose: facts.purpose, screenFacts: facts.screenFacts, audience, outcome: outcomeFraming, outcomeMetric: roi.metric, outcomeBaseline: roi.baseline, outcomeTarget: roi.target, sourceText: entry.sourceText ?? null, recentNarrations: recent, stepIndex: stepNum, stepTotal: total, arcRole: entry.arcRole, onDelta }),
+    getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: facts.screenName ?? entry.nodeLabel ?? null, screenName: facts.screenName, purpose: facts.purpose, screenFacts: facts.screenFacts, audience, framedFor, outcome: outcomeFraming, outcomeMetric: roi.metric, outcomeBaseline: roi.baseline, outcomeTarget: roi.target, sourceText: entry.sourceText ?? null, recentNarrations: recent, stepIndex: stepNum, stepTotal: total, arcRole: entry.arcRole, onDelta }),
   ]);
   const ok = d.navigation.ok || !!d.navAction;
   const newPos: Position = { intent: entry.nodeLabel ?? 'journey step', url: d.navigation.url, answer: state.retrieved?.[0]?.content ?? null };

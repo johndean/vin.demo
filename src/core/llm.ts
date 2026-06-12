@@ -62,6 +62,9 @@ export interface AnswerContext {
     owner?: string | null; validatedBy?: string | null; validatedAt?: string | null;
     sourceType?: string | null; recencyDays?: number | null;
   } | null;
+  // Wave C #18: the SECOND-ranked retrieved chunk, supplied so the answer can weave ONE extra grounded clause
+  // (a criterion/outcome the primary source doesn't cover). The primary still drives the answer; gated → golden-safe.
+  sourceAlternate?: { content: string; source: string } | null;
   screen?: string;                // the live screen navigated to (context only)
   screenFacts?: string;           // RC-06: a COMPACT read of the navigated screen's UX surface (key buttons/actions/required-fields/permissions, from the per-element model) so the answer speaks from what's ACTUALLY on the page, not just the doc chunk
   audience?: string;              // who's in the room (active speaker + stakeholder collection) — Phase 2
@@ -111,6 +114,9 @@ export interface NarrateContext {
   stepIndex?: number | null;
   stepTotal?: number | null;
   arcRole?: 'open' | 'show' | 'transit' | 'close';
+  // Wave C #17: the committee this journey is FRAMED for (a role-level summary) — DISTINCT from `audience` (who is
+  // actually in the room). Lets the opening beat frame the demo for the committee WITHOUT claiming they're present.
+  framedFor?: string | null;
   // RC-03 (streaming voice): the voice-led WALK is the primary demo path — stream each completed sentence
   // here so its narration starts speaking on sentence 1 too (not after the whole line). Omitted → blocking.
   onDelta?: (sentence: string) => void;
@@ -240,13 +246,40 @@ export const sysAnswerAs = (ctx: AnswerContext): string => {
   const committeeHint = ctx.committee && ctx.committee.length
     ? ` This relates to how the buying committee evaluates: a ${ctx.committee.map((c) => `${c.role} typically weighs "${c.objection}"${c.criteria?.length ? ` and decides on ${c.criteria.slice(0, 2).join(', ')}` : ''}`).join('; a ')}. If your answer can speak to that, address it against their criterion — grounding only in the source; never imply anyone in the room actually raised it.`
     : '';
+  // Wave C #18: a 2nd grounded chunk is available — permit ONE extra grounded clause from it when the primary
+  // doesn't cover the active concern. In-code wrapper gated on presence → eval cases set none → golden unchanged.
+  const secondaryHint = ctx.sourceAlternate
+    ? ` A secondary source is provided below; if the primary does not ground the buyer's active concern but the secondary does, you MAY add ONE extra grounded clause from it — at most one sentence, never letting it derail the direct answer.`
+    : '';
   return ctx.personaPreamble + '\n\n— — —\n' +
     rp('answerAs.opening') + bandPosture(ctx.band) + recencyHint + '\n' +
     (grounded
       ? rp('answerAs.grounded') + (ctx.cite ? rp('answerAs.cite') : rp('answerAs.noCite')) + rp('answerAs.provenance')
       : rp('answerAs.ungrounded')) +
-    rp('answerAs.style') + navHint + screenFactsHint + outcomeHint + committeeHint + rp('answerAs.closing');
+    rp('answerAs.style') + navHint + screenFactsHint + outcomeHint + committeeHint + secondaryHint + rp('answerAs.closing');
 };
+// Shared answerAs USER message — used by BOTH providers (like narrateUserContent) so the SOURCE/provenance + the
+// Wave C #18 secondary-source assembly can't drift between Claude and Gemini. The byte-identity golden captures the
+// SYSTEM prompt only, so this user-content builder is golden-free.
+export function answerUserContent(ctx: AnswerContext): string {
+  const grounded = ctx.band !== 'very_low' && ctx.source?.content;
+  return `Question: ${JSON.stringify(ctx.question)}\n` +
+    `Detected intent: ${ctx.intent}\n` +
+    (ctx.screen ? `Live screen now: ${ctx.screen}\n` : '') +
+    (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
+    (ctx.priorContext ? `Earlier in this session: ${ctx.priorContext}\n` : '') +
+    (grounded
+      ? `\nSOURCE (the only facts you may state — verbatim from the product knowledge base):\n"""\n${ctx.source!.content}\n"""\n` +
+        `Provenance: ${ctx.source!.source}` +
+        (ctx.source!.version ? ` · ${ctx.source!.version}` : '') +
+        (ctx.source!.owner ? ` · owned by ${ctx.source!.owner}` : '') +
+        (ctx.source!.validatedBy ? ` · validated by ${ctx.source!.validatedBy}${ctx.source!.validatedAt ? ` on ${String(ctx.source!.validatedAt).slice(0, 10)}` : ''}` : '') +
+        (ctx.source!.recencyDays != null ? ` · last verified ${ctx.source!.recencyDays}d ago` : '') +
+        // Wave C #18: feed the 2nd-ranked chunk (golden-free user content) so the model can ground ONE extra
+        // clause the primary doesn't cover. Strictly supplemental — the primary SOURCE drives the answer.
+        (ctx.sourceAlternate ? `\n\nSECONDARY SOURCE (use ONLY to ground ONE extra criterion/outcome clause the primary does not cover — never as the main answer):\n"""\n${ctx.sourceAlternate.content}\n"""` : '')
+      : `\n(No verified source is available for this question.)`);
+}
 export const sysNarrate = (ctx: NarrateContext): string => {
   // #8: ground the narration in the screen's ACTUAL UX surface (mirrors answerAs's screenFactsHint). In-code
   // wrapper — only fires when screenFacts is supplied, so the byte-identity narrate cases (which set none) stay
@@ -277,6 +310,7 @@ export function narrateUserContent(ctx: NarrateContext): string {
     // RC-16: the grounded source — paraphrase ONLY this; without it the system span keeps us off specifics.
     (ctx.sourceText ? `Source to paraphrase (the ONLY product facts you may state; do NOT read verbatim): ${ctx.sourceText}\n` : '') +
     (ctx.outcome ? `Outcome this advances (weave in only on this opening/closing beat): ${ctx.outcome}${(metricClean || ctx.outcomeBaseline || ctx.outcomeTarget) ? ` — success measured by ${metricClean || 'the stated success indicators'}${numClause}; on a CLOSING beat name ONE concrete measure${(ctx.outcomeBaseline || ctx.outcomeTarget) ? ' (state that committed number)' : ' — but do NOT state a number; none is committed'}` : ''}\n` : '') +
+    (ctx.framedFor ? `This journey TARGETS these roles (they are NOT in the room): ${ctx.framedFor}. Speak to what those roles value; address only whoever is actually present, and never greet or address these roles as if they are attending.\n` : '') + // Wave C #17
     (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
     `\nSpeak the one or two sentence narration now.`;
 }
@@ -542,22 +576,8 @@ class ClaudeProvider implements LlmProvider {
   }
 
   async answerAs(ctx: AnswerContext): Promise<string> {
-    const grounded = ctx.band !== 'very_low' && ctx.source?.content; // also gates the SOURCE block in the user content below
     const MODEL = currentModel();
-    const userContent =
-      `Question: ${JSON.stringify(ctx.question)}\n` +
-      `Detected intent: ${ctx.intent}\n` +
-      (ctx.screen ? `Live screen now: ${ctx.screen}\n` : '') +
-      (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
-      (ctx.priorContext ? `Earlier in this session: ${ctx.priorContext}\n` : '') +
-      (grounded
-        ? `\nSOURCE (the only facts you may state — verbatim from the product knowledge base):\n"""\n${ctx.source!.content}\n"""\n` +
-          `Provenance: ${ctx.source!.source}` +
-          (ctx.source!.version ? ` · ${ctx.source!.version}` : '') +
-          (ctx.source!.owner ? ` · owned by ${ctx.source!.owner}` : '') +
-          (ctx.source!.validatedBy ? ` · validated by ${ctx.source!.validatedBy}${ctx.source!.validatedAt ? ` on ${String(ctx.source!.validatedAt).slice(0, 10)}` : ''}` : '') +
-          (ctx.source!.recencyDays != null ? ` · last verified ${ctx.source!.recencyDays}d ago` : '')
-        : `\n(No verified source is available for this question.)`);
+    const userContent = answerUserContent(ctx); // shared with GeminiProvider — no drift (incl. the #18 secondary source)
     // Base request. The streaming (voice) and blocking (CLI/reel/interactive) paths differ ONLY in `thinking`
     // (see each branch). max_tokens is headroom; spoken LENGTH is governed by the concision span, not this ceiling.
     const baseParams = {

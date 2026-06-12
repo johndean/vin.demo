@@ -18,7 +18,7 @@ import { db } from './db.js';
 import { currentModel } from './settings.js';
 import {
   detectFn,
-  sysInterpret, sysPickNode, sysExplainWhy, sysAgentStep, sysAnswerAs, sysNarrate, narrateUserContent, narrateFallback, sysDiscover,
+  sysInterpret, sysPickNode, sysExplainWhy, sysAgentStep, sysAnswerAs, answerUserContent, sysNarrate, narrateUserContent, narrateFallback, sysDiscover,
   sysHarvestChunks, sysVerifyFaithful, sysDeriveScreens, sysDeriveWorkflows, sysDeriveScreenElements,
   type LlmProvider, type Interpretation, type UtteranceKind, type ExplainContext, type DiscoverContext,
   type AnswerContext, type NarrateContext, type AgentStepContext, type AgentStep, type DiscoverResult,
@@ -170,22 +170,8 @@ export class GeminiProvider implements LlmProvider {
   }
 
   async answerAs(ctx: AnswerContext): Promise<string> {
-    const grounded = ctx.band !== 'very_low' && ctx.source?.content;
-    const user =
-      `Question: ${JSON.stringify(ctx.question)}\n` +
-      `Detected intent: ${ctx.intent}\n` +
-      (ctx.screen ? `Live screen now: ${ctx.screen}\n` : '') +
-      (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
-      (ctx.priorContext ? `Earlier in this session: ${ctx.priorContext}\n` : '') +
-      (grounded
-        ? `\nSOURCE (the only facts you may state — verbatim from the product knowledge base):\n"""\n${ctx.source!.content}\n"""\n` +
-          `Provenance: ${ctx.source!.source}` +
-          (ctx.source!.version ? ` · ${ctx.source!.version}` : '') +
-          (ctx.source!.owner ? ` · owned by ${ctx.source!.owner}` : '') +
-          (ctx.source!.validatedBy ? ` · validated by ${ctx.source!.validatedBy}${ctx.source!.validatedAt ? ` on ${String(ctx.source!.validatedAt).slice(0, 10)}` : ''}` : '') +
-          (ctx.source!.recencyDays != null ? ` · last verified ${ctx.source!.recencyDays}d ago` : '')
-        : `\n(No verified source is available for this question.)`);
-    const r = await geminiGenerate(sysAnswerAs(ctx), user, 900, 'answerAs');
+    // User content shared with ClaudeProvider (incl. Wave C #18 secondary source) — provider parity, no drift.
+    const r = await geminiGenerate(sysAnswerAs(ctx), answerUserContent(ctx), 900, 'answerAs');
     if (r.blocked) return "I'd rather not guess here — let me show you the screen instead.";
     return r.text.trim() || "Let me show you on the screen rather than guess at the specifics.";
   }

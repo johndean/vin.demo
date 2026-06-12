@@ -18,6 +18,7 @@ import type { ExecutionMode } from './safety.js';
 import { loadPersona, personaPreamble, handoffSuggestionFor, type Persona } from './persona.js';
 import { getStakeholders, getStakeholderRegistry, type Stakeholder } from './stakeholders.js';
 import { getDiscovery } from './discovery.js';
+import { chunkPassesGate } from './retrieval.js'; // Wave C #18: gate the SECONDARY source to the same bar as the primary
 import { validateCompliance, shouldCite, recordEscalation, recordAuditTurn, type ComplianceResult } from './governance.js';
 
 export type Emit = (ev: Record<string, unknown>) => void;
@@ -60,6 +61,9 @@ export interface SessionCtx {
   outcomeMetric: string | null; outcomeBaseline: string | null; outcomeTarget: string | null;
   // Wave C #9: the journey's buying committee (role + authored objections + decision criteria) → answer executives.
   committee: { role: string; objections: string[]; decisionCriteria: string[] }[];
+  // Wave C #17: a concise role-level summary of the committee this journey is FRAMED for (roles + top concerns),
+  // threaded into the walk's opening narration — distinct from the live in-the-room audience. Null when no committee.
+  framedFor: string | null;
   graph: ReturnType<typeof buildGraph>;
   thread: { configurable: { thread_id: string } };
 }
@@ -109,6 +113,7 @@ export async function bootSession(threadPrefix = 'live', target: SessionTarget =
   let journeyGoal: string | null = null;
   let outcomeMetric: string | null = null, outcomeBaseline: string | null = null, outcomeTarget: string | null = null;
   let committee: { role: string; objections: string[]; decisionCriteria: string[] }[] = [];
+  let framedFor: string | null = null;
   if (journeyId) {
     try {
       const j = await getJourneyById(journeyId);
@@ -123,6 +128,12 @@ export async function bootSession(threadPrefix = 'live', target: SessionTarget =
         const scoped = j.stakeholderRefs.length ? reg.filter((s) => refSet.has(s.id.toLowerCase())) : reg;
         // Keep members WITH authored objections — the #9 answer channel matches on objections; criteria ride along.
         committee = scoped.filter((s) => s.objections?.length).map((s) => ({ role: s.role ?? s.name ?? 'a stakeholder', objections: s.objections ?? [], decisionCriteria: s.decisionCriteria ?? [] }));
+        // Wave C #17: a role-level framing summary from the FULL journey committee (roles + their top concerns) for
+        // the walk's opening beat — framed by role, never claiming presence. Sanitized + capped.
+        const san = (s: string) => s.replace(/[·•|*`]+/g, ';').replace(/\s+/g, ' ').trim();
+        const fRoles = Array.from(new Set(scoped.map((s) => s.role).filter((r): r is string => !!r).map((r) => san(r).slice(0, 40)))).slice(0, 4);
+        const fConcerns = Array.from(new Set(scoped.flatMap((s) => s.decisionCriteria ?? []).filter(Boolean).map((c) => san(c).slice(0, 70)))).slice(0, 2);
+        framedFor = fRoles.length ? `the ${fRoles.join(', ')}${fConcerns.length ? `, who evaluate on ${fConcerns.join('; ')}` : ''}`.slice(0, 240) : null;
       }
     } catch { /* best-effort: a missing journey / outcome / committee degrades to nulls, never blocks the demo */ }
   }
@@ -147,7 +158,7 @@ export async function bootSession(threadPrefix = 'live', target: SessionTarget =
     }
   } catch { /* best-effort: no snapshot / column absent / seed failed → unchanged boot behavior */ }
   const personaId = target.personaId?.trim() || null;
-  return { productId, productName, role, mode, baseUrl, clientNav, sessionId: session.id, personaId, journeyId, journeyGoal, outcomeMetric, outcomeBaseline, outcomeTarget, committee, graph, thread };
+  return { productId, productName, role, mode, baseUrl, clientNav, sessionId: session.id, personaId, journeyId, journeyGoal, outcomeMetric, outcomeBaseline, outcomeTarget, committee, framedFor, graph, thread };
 }
 
 /** Stakeholder intelligence + relationship memory (REUSES the existing session stakeholder collection +
@@ -202,9 +213,9 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
   try {
     // RC-03: on a streaming (voice) turn, ride a TTS sink through the LangGraph config (NOT state — config
     // isn't checkpointed) so navigateJourneyStep's narrate streams the WALK narration out sentence-by-sentence.
-    const runConfig = turn.stream
-      ? { configurable: { ...ctx.thread.configurable, onDelta: (s: string) => emit({ type: 'say_chunk', text: s }) } }
-      : ctx.thread;
+    // Carry framedFor (Wave C #17) on EVERY walk turn + the TTS sink on streaming turns, both via config (config
+    // is NOT checkpointed). navigateJourneyStep reads framedFor for the opening beat's committee framing.
+    const runConfig = { configurable: { ...ctx.thread.configurable, framedFor: ctx.framedFor, ...(turn.stream ? { onDelta: (s: string) => emit({ type: 'say_chunk', text: s }) } : {}) } };
     out = await ctx.graph.invoke({ utterance: turn.text, speaker: turn.speaker, productId: ctx.productId, sessionId: ctx.sessionId, role: ctx.role, mode: ctx.mode, baseUrl: ctx.baseUrl, clientNav: ctx.clientNav, navHint: turn.node ?? null, journeyId: ctx.journeyId, journeyAdvance: turn.advance ?? false, personaPreamble: preamble, minConfidence, knowledgePriority }, runConfig);
   } catch (e: any) {
     emit({ type: 'message', side: 'ai', who: aiWho, role: 'VIN Demo', text: `(engine error: ${e?.message ?? e})`, uncertain: true });
@@ -223,6 +234,10 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
   });
 
   const top = out.retrieved?.[0];
+  // #18 (review HIGH): the secondary must INDEPENDENTLY clear the SAME trust gate as the primary (gateForVector
+  // only validated `top`) AND be a DISTINCT source (no near-duplicate restatement) — else there is no secondary.
+  const altRaw = out.retrieved?.[1];
+  const sourceAlt = (altRaw && chunkPassesGate(altRaw, minConfidence) && altRaw.source !== top?.source) ? altRaw : undefined;
   // Recency (days since last verified) — feeds the trust panel + the AI's recency-honest hedging (Phase B).
   const recencyDays = top?.last_verified ? Math.floor((Date.now() - Date.parse(top.last_verified)) / 86_400_000) : null;
   emit({
@@ -240,6 +255,12 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
   // Knowledge governance: the trust panel shows the source (operator transparency) when present + relevant.
   if (top && (!out.gated || navigated)) {
     emit({ type: 'cite', k: { title: top.source_title ?? String(top.content).slice(0, 64), content: top.content, source: top.source, conf: top.confidence, ver: String(top.product_version ?? '').replace(/^v/i, ''), status: top.validation_status, verified: top.last_verified, type: top.category ?? 'docs', lifecycle: top.lifecycle_state ?? null, owner: top.source_owner ?? null, validatedBy: top.validated_by ?? null, validatedAt: top.validated_at ?? null, recencyDays } });
+    // Wave C #18 (review): a secondary-grounded clause must be ATTRIBUTABLE too — surface the GATED secondary's
+    // provenance in the trust panel so no spoken fact is uncited.
+    if (hasSource && sourceAlt) {
+      const altAge = sourceAlt.last_verified ? Math.floor((Date.now() - Date.parse(sourceAlt.last_verified)) / 86_400_000) : null;
+      emit({ type: 'cite', k: { title: sourceAlt.source_title ?? String(sourceAlt.content).slice(0, 64), content: sourceAlt.content, source: sourceAlt.source, conf: sourceAlt.confidence, ver: String(sourceAlt.product_version ?? '').replace(/^v/i, ''), status: sourceAlt.validation_status, verified: sourceAlt.last_verified, type: sourceAlt.category ?? 'docs', lifecycle: sourceAlt.lifecycle_state ?? null, owner: sourceAlt.source_owner ?? null, validatedBy: sourceAlt.validated_by ?? null, validatedAt: sourceAlt.validated_at ?? null, recencyDays: altAge, secondary: true } });
+    }
   }
   if (out.navAction) {
     // RC-31: carry productId + intent so the desktop can report the LANDED url back for drift detection
@@ -306,6 +327,7 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
         intent: out.interpretation?.intent ?? turn.text,
         band,
         source: hasSource ? { content: top.content, source: top.source, version: top.product_version, confidence: top.confidence, owner: top.source_owner, validatedBy: top.validated_by, validatedAt: top.validated_at, sourceType: top.source_type, recencyDays } : null,
+        sourceAlternate: hasSource && sourceAlt ? { content: String(sourceAlt.content), source: String(sourceAlt.source) } : undefined, // Wave C #18: 2nd chunk for one extra grounded clause
         screen: navigated ? screen : undefined,
         screenFacts: out.screenFacts || undefined, // RC-06: the navigated screen's buttons/actions/required-fields → product-aware answer
         audience: room.audience || undefined,
