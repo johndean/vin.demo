@@ -78,6 +78,37 @@ export async function getNodeElements(nodeId: string): Promise<NodeElementRow[]>
   }));
 }
 
+/** RC-06: a COMPACT, demo-time read of a node's UX surface — the key buttons / actions / required fields /
+ *  permissions for the screen we just navigated to — so answerAs/narrate can speak from what's ACTUALLY on the
+ *  page (product-aware consultant) instead of only the doc chunk. Honesty markers (dead_ui/unwired/partial) are
+ *  surfaced, live elements only otherwise. Capped (~400 chars) so it never bloats the prompt. Null when the node
+ *  has no modeled elements (the in-code answerAs hint then simply doesn't fire). Never throws. */
+export async function screenFactsFor(nodeId: string): Promise<string | null> {
+  try {
+    const els = await getNodeElements(nodeId);
+    if (!els.length) return null;
+    const live = (t: ElementType) => els.filter((e) => e.elementType === t && e.implementationStatus === 'live').map((e) => e.label);
+    const buttons = live('button').concat(live('action'));               // what the user can DO here
+    const required = els.filter((e) => e.elementType === 'field' && e.detail?.required === true).map((e) => e.label);
+    const fields = required.length ? required : live('field');            // prefer required fields; else any fields
+    // Permissions: element-level visibleTo / role gating modeled in detail (RC-06 P1 — never SELECTed at runtime before).
+    const perms = Array.from(new Set(els.flatMap((e) => {
+      const v = e.detail?.visibleTo ?? e.detail?.roles ?? e.detail?.permission;
+      return Array.isArray(v) ? v.map(String) : v ? [String(v)] : [];
+    })));
+    const notLive = els.filter((e) => e.implementationStatus !== 'live').map((e) => `${e.label} (${e.implementationStatus})`);
+    const parts = [
+      buttons.length ? `actions: ${buttons.slice(0, 6).join(', ')}` : '',
+      fields.length ? `${required.length ? 'required fields' : 'fields'}: ${fields.slice(0, 6).join(', ')}` : '',
+      perms.length ? `requires: ${perms.slice(0, 3).join(', ')}` : '',
+      notLive.length ? `not live: ${notLive.slice(0, 3).join(', ')}` : '',
+    ].filter(Boolean);
+    if (!parts.length) return null;
+    const s = `On this screen — ${parts.join('; ')}.`;
+    return s.length > 400 ? s.slice(0, 397) + '...' : s;
+  } catch { return null; }
+}
+
 /** Soft-archive every element for a node (used when re-seeding to replace a page's surface cleanly). */
 export async function archiveNodeElements(nodeId: string, actor = 'system'): Promise<number> {
   const r = await db().query(`UPDATE demo_graph_node_elements SET archived_at=now(), archived_by=$2 WHERE node_id=$1 AND archived_at IS NULL`, [nodeId, actor]);

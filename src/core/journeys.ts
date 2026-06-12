@@ -98,7 +98,16 @@ export async function getJourneyById(journeyId: string): Promise<Journey | null>
 
 /** One entry the live loop drives at a time. A 'node' is a real screen to navigate to (by intent_label);
  *  a 'beat' is a narration-only moment (knowledge/note/tour step, or a workflow whose nodes don't resolve). */
-export interface WalkEntry { kind: 'node' | 'beat'; nodeLabel?: string; caption: string | null; stepKind: StoryStepKind; stepIndex: number }
+export interface WalkEntry { kind: 'node' | 'beat'; nodeLabel?: string; caption: string | null; stepKind: StoryStepKind; stepIndex: number;
+  // RC-16: for a `knowledge` step, the resolved chunk content — GROUNDING for the spoken narration so the
+  // voice walk paraphrases the verified source, not free-improvises product claims. Null = nothing to ground on.
+  sourceText?: string | null }
+
+// RC-16: light sanitize of a knowledge chunk before it becomes SPOKEN narration grounding — strip markdown/
+// bullets/backticks and cap length, so leaked formatting can't reach TTS and a long chunk can't crowd the line.
+function speakableSource(s: string): string {
+  return s.replace(/[*_`#>|]+/g, ' ').replace(/^[\s\-•·–—]+/gm, '').replace(/\s+/g, ' ').trim().slice(0, 600);
+}
 
 /** Expand a journey's story_flow into the ordered WALK PLAN the live loop drives one entry at a time:
  *  a `workflow` step → one 'node' entry per node in that workflow's `node_sequence` (the screens to show,
@@ -117,6 +126,13 @@ export async function journeyWalkPlan(journeyId: string): Promise<{ journey: Jou
       const seq = (wf && Array.isArray(wf.node_sequence) ? wf.node_sequence : []).map((s: any) => String(s)).filter(Boolean);
       if (seq.length) seq.forEach((label, k) => plan.push({ kind: 'node', nodeLabel: label, caption: k === 0 ? step.caption : null, stepKind: 'workflow', stepIndex: i }));
       else plan.push({ kind: 'beat', caption: step.caption, stepKind: 'workflow', stepIndex: i });
+    } else if (step.kind === 'knowledge' && step.refId && UUID_RE.test(step.refId)) {
+      // RC-16: resolve the referenced chunk's CONTENT (same product-scoped query resolveStoryFlow uses, but the
+      // full content — not the truncated label) so the narration beat can paraphrase a GROUNDED source, not invent.
+      const kc = (await db().query<{ content: string }>(
+        `SELECT kc.content FROM knowledge_chunks kc JOIN knowledge_bases kb ON kb.id = kc.knowledge_base_id
+          WHERE kc.id = $1 AND kb.product_id = $2 AND kc.archived_at IS NULL`, [step.refId, journey.productId])).rows[0];
+      plan.push({ kind: 'beat', caption: step.caption, stepKind: step.kind, stepIndex: i, sourceText: kc ? speakableSource(String(kc.content)) : null });
     } else {
       plan.push({ kind: 'beat', caption: step.caption, stepKind: step.kind, stepIndex: i });
     }

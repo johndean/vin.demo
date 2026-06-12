@@ -10,7 +10,7 @@
 import { readFile, mkdir } from 'node:fs/promises';
 import { buildGraph } from './graph.js';
 import { getLlm } from './llm.js';
-import { createDemoSession } from './session.js';
+import { createDemoSession, saveSessionState, loadSessionState } from './session.js';
 import { journeyWalkPlan, startJourneyRun, completeJourneyRun } from './journeys.js';
 import { beginCostSession, sessionCost } from './cost.js';
 import { db } from './db.js';
@@ -107,6 +107,22 @@ export async function bootSession(threadPrefix = 'live', target: SessionTarget =
   beginCostSession(session.id);
   const graph = buildGraph();
   const thread = { configurable: { thread_id: `${threadPrefix}-${session.id}` } };
+  // RC-30: cross-process resume. A brand-new session has no snapshot → this is a no-op and boot is
+  // unchanged. If a prior process persisted one (engine redeploy/crash mid-demo), SEED the in-process
+  // checkpointer for this thread so the first invoke resumes from the persisted position — we only restore
+  // REPLACE-reducer channels (journeyId/journeyStep/currentPosition/sessionStatus), so append channels
+  // (contextStack/trace) are NOT doubled. Best-effort: missing column / no snapshot / API error → boots as today.
+  try {
+    const snap = await loadSessionState(session.id);
+    if (snap && Object.keys(snap).length) {
+      const seed: Record<string, unknown> = {};
+      if (snap.journeyId !== undefined) seed.journeyId = snap.journeyId;
+      if (typeof snap.journeyStep === 'number') seed.journeyStep = snap.journeyStep;
+      if (snap.currentPosition !== undefined) seed.currentPosition = snap.currentPosition;
+      if (snap.sessionStatus) seed.sessionStatus = snap.sessionStatus;
+      if (Object.keys(seed).length) await graph.updateState(thread, seed);
+    }
+  } catch { /* best-effort: no snapshot / column absent / seed failed → unchanged boot behavior */ }
   const personaId = target.personaId?.trim() || null;
   return { productId, productName, role, mode, baseUrl, clientNav, sessionId: session.id, personaId, journeyId, journeyGoal, graph, thread };
 }
@@ -172,6 +188,17 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
     return { journeyStep: null };
   }
 
+  // RC-30: the invoke SUCCEEDED — persist a small resumable snapshot of `out` so a NEW process (after an
+  // engine redeploy/crash) can re-seed this thread's checkpointer and resume coherently. Only the
+  // REPLACE-reducer, serializable channels that matter for resume (NOT append channels like contextStack/trace,
+  // which would double on rehydrate). Best-effort: missing column (0029 not yet applied) → silent no-op.
+  await saveSessionState(ctx.sessionId, {
+    journeyId: ctx.journeyId,
+    journeyStep: typeof out.journeyStep === 'number' ? out.journeyStep : undefined,
+    currentPosition: out.currentPosition ?? null,
+    sessionStatus: out.sessionStatus,
+  });
+
   const top = out.retrieved?.[0];
   // Recency (days since last verified) — feeds the trust panel + the AI's recency-honest hedging (Phase B).
   const recencyDays = top?.last_verified ? Math.floor((Date.now() - Date.parse(top.last_verified)) / 86_400_000) : null;
@@ -230,6 +257,7 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
         band,
         source: hasSource ? { content: top.content, source: top.source, version: top.product_version, confidence: top.confidence, owner: top.source_owner, validatedBy: top.validated_by, validatedAt: top.validated_at, sourceType: top.source_type, recencyDays } : null,
         screen: navigated ? screen : undefined,
+        screenFacts: out.screenFacts || undefined, // RC-06: the navigated screen's buttons/actions/required-fields → product-aware answer
         audience: room.audience || undefined,
         priorContext: room.priorContext || undefined,
         cite: shouldCite(persona?.citationPolicy, band, hasSource),

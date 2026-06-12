@@ -62,3 +62,34 @@ export async function updateSessionStatus(
 ): Promise<void> {
   await db().query(`UPDATE demo_sessions SET status = $2 WHERE id = $1`, [sessionId, status]);
 }
+
+/** RC-30: a small resumable slice of the LangGraph DemoState — ONLY the REPLACE-reducer, serializable
+ *  channels that matter for cross-process resume. Append-reducer channels (contextStack/trace) are
+ *  deliberately excluded: re-seeding them would double on rehydrate. */
+export interface SessionStateSnapshot {
+  journeyId?: string | null;
+  journeyStep?: number;
+  currentPosition?: { intent: string; url: string; answer: string | null } | null;
+  sessionStatus?: 'active' | 'paused' | 'stopped' | 'done';
+}
+
+/** RC-30: best-effort persist of a resumable snapshot to demo_sessions.state_snapshot. Wrapped so a
+ *  missing column (migration 0029 not yet applied) is a SILENT no-op and NEVER breaks a turn. */
+export async function saveSessionState(sessionId: string | null, snapshot: SessionStateSnapshot): Promise<void> {
+  if (!sessionId) return;
+  try {
+    await db().query(`UPDATE demo_sessions SET state_snapshot = $2 WHERE id = $1`, [sessionId, JSON.stringify(snapshot)]);
+  } catch { /* column may not exist until 0029 is applied — best-effort, never blocks a turn */ }
+}
+
+/** RC-30: best-effort read of the persisted snapshot for cross-process resume. Returns null on a missing
+ *  column / no row / no snapshot (brand-new session) so boot is unchanged when there is nothing to resume. */
+export async function loadSessionState(sessionId: string | null): Promise<SessionStateSnapshot | null> {
+  if (!sessionId) return null;
+  try {
+    const r = await db().query<{ state_snapshot: SessionStateSnapshot | null }>(
+      `SELECT state_snapshot FROM demo_sessions WHERE id = $1`, [sessionId],
+    );
+    return r.rows[0]?.state_snapshot ?? null;
+  } catch { return null; } // column may not exist until 0029 is applied — boot exactly as today
+}

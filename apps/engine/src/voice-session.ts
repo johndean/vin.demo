@@ -13,7 +13,9 @@ import type { WebSocket } from 'ws';
 import { bootSession, runTurn, LOOP, type SessionCtx, type SessionTarget } from '../../../src/core/live-session.js';
 import { googleSTT } from './voice/stt-google.js';
 import { googleTTS } from './voice/tts-google.js';
+import { elevenLabsTTS } from './voice/tts-elevenlabs.js';
 import { splitSentences } from './voice/segmenter.js';
+import type { TTSProvider } from './voice/providers.js';
 import { profileById, DEFAULT_PROFILE, VOICE_PROFILES } from './voice/profiles.js';
 import type { STTStream, VoiceProfile } from './voice/providers.js';
 import { loadPersona } from '../../../src/core/persona.js';
@@ -21,6 +23,14 @@ import { beginCostSession, recordVoice } from '../../../src/core/cost.js';
 import { journeyWalkPlan, startJourneyRun, completeJourneyRun } from '../../../src/core/journeys.js';
 
 const SAMPLE_RATE = 16000;
+
+// TTS vendor selection: ElevenLabs (more natural prosody) ONLY when its key is present, else Google
+// (the default). Evaluated per call so setting/unsetting the env key takes effect without a code change,
+// and with NO key behavior is byte-identical to today (Google). On any ElevenLabs error the caller's
+// speak() catch already degrades gracefully (text was already sent).
+function selectTTS(): TTSProvider {
+  return process.env.ELEVENLABS_API_KEY ? elevenLabsTTS : googleTTS;
+}
 
 export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {}): Promise<void> {
   const send = (o: Record<string, unknown>) => { try { ws.send(JSON.stringify(o)); } catch { /* socket closing */ } };
@@ -50,7 +60,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     for (const sentence of splitSentences(text)) {
       if (interrupted || myU !== utterance) return;
       try {
-        const { audio, mime } = await googleTTS.synthesize(sentence, profile);
+        const { audio, mime } = await selectTTS().synthesize(sentence, profile);
         void recordVoice('tts', sentence.length, { voice: profile.id }); // TTS billed by characters synthesized
         if (interrupted || myU !== utterance) return;
         if (audio.length) send({ type: 'audio', mime, data: audio.toString('base64') });

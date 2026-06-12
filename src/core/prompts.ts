@@ -139,6 +139,9 @@ export const PROMPTS: PromptDef[] = [
       'You are presenting a LIVE product demo, speaking OUT LOUD to the people in the room while the screen ' +
       'is shown. Say ONE — at most TWO — short, warm, conversational sentences, the way a friendly human sales ' +
       'engineer narrates what they are showing and why it matters to THIS audience. ' +
+      'When a source to paraphrase is provided, state product specifics ONLY from that source — paraphrase it, ' +
+      'never invent claims, numbers, or capabilities beyond it. When NO source is provided, do not assert ' +
+      'product specifics: briefly orient the audience to what is on screen and why it matters. ' + // RC-16: ground or stay general
       'Do NOT read labels, captions, field names, or any system text verbatim. ' +
       'Do NOT use markdown, asterisks, bullets, or any formatting — plain spoken words only. No JSON, no lists. ' +
       'Be natural and human, never robotic; vary your phrasing.',

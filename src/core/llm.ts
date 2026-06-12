@@ -63,6 +63,7 @@ export interface AnswerContext {
     sourceType?: string | null; recencyDays?: number | null;
   } | null;
   screen?: string;                // the live screen navigated to (context only)
+  screenFacts?: string;           // RC-06: a COMPACT read of the navigated screen's UX surface (key buttons/actions/required-fields/permissions, from the per-element model) so the answer speaks from what's ACTUALLY on the page, not just the doc chunk
   audience?: string;              // who's in the room (active speaker + stakeholder collection) — Phase 2
   priorContext?: string;          // prior concerns/objections/topics this session — Phase 2 relationship memory
   cite?: boolean;                 // citation policy (governance) — name the source inline when true
@@ -89,6 +90,9 @@ export interface NarrateContext {
   screen?: string | null;    // the screen now on display (node steps); null for a narration-only beat
   audience?: string | null;  // who's in the room (committee role/summary)
   outcome?: string | null;   // the business outcome this journey advances
+  // RC-16: GROUNDED source for a knowledge beat — the resolved chunk content. When present, the narration
+  // paraphrases ONLY this; when absent, the model orients to the screen rather than asserting product specifics.
+  sourceText?: string | null;
   // RC-03 (streaming voice): the voice-led WALK is the primary demo path — stream each completed sentence
   // here so its narration starts speaking on sentence 1 too (not after the whole line). Omitted → blocking.
   onDelta?: (sentence: string) => void;
@@ -106,6 +110,7 @@ export interface AgentStepContext {
   personaPreamble?: string; // active specialist overlay (system prompt + scope + hard limits), if handed off
   knownScreens?: { label: string; route: string | null }[]; // the product's VERIFIED demo-graph screens (the navigation authority) — prefer these (Phase 2 bridge)
   notices?: string[];      // RC-08: visible alerts/validation/toasts on screen now (so the agent can react to a failed submit, a success banner, etc.)
+  sessionGoal?: string | null; // RC-01: the session's pinned-journey business goal/outcome — light framing so the (otherwise stateless) drive loop keeps its actions aligned to the demo's purpose. Best-effort; absent → drives exactly as before.
 }
 /** The single next action the agent takes to drive the live demo (read-only: never commits). */
 export interface AgentStep {
@@ -180,6 +185,13 @@ export const sysAnswerAs = (ctx: AnswerContext): string => {
   const navHint = ctx.screen
     ? ` You have already navigated to "${ctx.screen}" and are looking at it together — you are demonstrating RIGHT NOW. Walk through the steps that are actually on this screen, in order and concisely; do NOT ask permission to demonstrate, and never offer to perform an action you are not actually taking.`
     : '';
+  // RC-06: ground the answer in the navigated screen's ACTUAL UX surface (its real buttons/actions/required
+  // fields/permissions). In-code wrapper (like navHint) — only appears when screenFacts is supplied, so the
+  // byte-identity eval cases (which set none) leave the golden unchanged. Turns the doc-bot into a product-aware
+  // consultant: reference only elements named here; never invent buttons or fields the screen does not have.
+  const screenFactsHint = ctx.screenFacts
+    ? ` ${ctx.screenFacts} Reference only the buttons, actions, and fields actually present here — never invent UI that isn't listed, and respect any noted permissions or not-live markers.`
+    : '';
   // RC-17: frame the answer against the buyer's outcome when there is one. In-code wrapper (like navHint), so it
   // only appears when an outcome is supplied — the byte-identity eval cases set none, so the golden is unchanged.
   const outcomeHint = ctx.outcome
@@ -190,7 +202,7 @@ export const sysAnswerAs = (ctx: AnswerContext): string => {
     (grounded
       ? rp('answerAs.grounded') + (ctx.cite ? rp('answerAs.cite') : rp('answerAs.noCite')) + rp('answerAs.provenance')
       : rp('answerAs.ungrounded')) +
-    rp('answerAs.style') + navHint + outcomeHint + rp('answerAs.closing');
+    rp('answerAs.style') + navHint + screenFactsHint + outcomeHint + rp('answerAs.closing');
 };
 export const sysNarrate = (ctx: NarrateContext): string => ctx.personaPreamble + '\n\n— — —\n' + rp('narrate');
 export const sysDiscover = (ctx: DiscoverContext): string =>
@@ -403,6 +415,9 @@ class ClaudeProvider implements LlmProvider {
         role: 'user',
         content:
           `Goal: ${JSON.stringify(ctx.goal)}\n` +
+          // RC-01: session awareness — frame the immediate goal against the pinned journey's business outcome so
+          // an otherwise-stateless drive step stays aligned to the demo's purpose. USER message only (no golden change).
+          (ctx.sessionGoal ? `This demo is in service of: ${JSON.stringify(ctx.sessionGoal)} — keep actions aligned to it.\n` : '') +
           `Driving as: ${ctx.role}\n` +
           `Current URL: ${ctx.url}\nTitle: ${ctx.title}\n` +
           `Headings: ${JSON.stringify(ctx.headings.slice(0, 12))}\n` +
@@ -508,6 +523,8 @@ class ClaudeProvider implements LlmProvider {
         content:
           `Now showing: ${ctx.screen ?? '(a narration moment — no screen change)'}\n` +
           (ctx.caption ? `Beat to convey (paraphrase naturally, do NOT read aloud): ${ctx.caption}\n` : '') +
+          // RC-16: the grounded source — paraphrase ONLY this; without it the system span keeps us off specifics.
+          (ctx.sourceText ? `Source to paraphrase (the ONLY product facts you may state; do NOT read verbatim): ${ctx.sourceText}\n` : '') +
           (ctx.outcome ? `Outcome this advances: ${ctx.outcome}\n` : '') +
           (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
           `\nSpeak the one or two sentence narration now.`,

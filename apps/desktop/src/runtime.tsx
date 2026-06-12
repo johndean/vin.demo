@@ -519,13 +519,28 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, speci
   }, [controlsRef]);
   // Operator switched product → load the new site (it carries its own persisted login).
   useEffect(() => { const wv = ref.current; if (wv && initialUrl && initialUrl !== lastBase.current) { lastBase.current = initialUrl; try { wv.loadURL(initialUrl); } catch { /* */ } } }, [initialUrl]);
-  // AI co-drive → the agent issued a nav instruction; perform it in the operator's live session:
-  // find the labeled element (or a CSS selector), highlight it, and click it. Falls back to loadURL.
+  // AI co-drive → the agent issued a nav instruction; perform it in the operator's live session.
+  // RC-31: when the node carries a verified screen_route (url), PREFER a direct route navigation (loadURL)
+  // over a guessed click — the route is the most authoritative target. A relative route ("/approvals") is
+  // resolved against the live webview's current origin (where the real base URL lives). RC-32: otherwise try
+  // the node's FULL ordered, verified locators IN ORDER, then fall back to a label match RANKED by
+  // role/nav-container (a[href], role=link/menuitem/tab, nav/aside) — not by shortest string length (which
+  // clicked "Approve" for "Approvals").
   useEffect(() => {
     const wv = ref.current;
     if (!wv || !navAction || navAction.seq === lastSeq.current) return;
     lastSeq.current = navAction.seq;
     const { label, selectors = [], url } = navAction;
+    // RC-31: route-preferred — resolve the route against the current origin and navigate directly. Only treat
+    // a route as preferred when it's absolute or ROOT-relative ("/approvals"); a slashless value would resolve
+    // against the current path segment and navigate to the wrong page, so fall through to the locator/label click.
+    if (url && (/^https?:/.test(url) || url.startsWith('/'))) {
+      try {
+        const abs = /^https?:/.test(url) ? url : new URL(url, wv.getURL() || undefined).href;
+        wv.loadURL(abs);
+        return;
+      } catch { /* relative resolve failed (no origin yet) → fall through to locator/label click below */ }
+    }
     if (label || selectors.length) {
       const code = `(function(){
         var label=${JSON.stringify(label ?? '')}, sels=${JSON.stringify(selectors)};
@@ -533,15 +548,27 @@ function LiveBrowser({ initialUrl, navAction, driving, picker, role, mode, speci
           var o=el.style.outline, off=el.style.outlineOffset; el.style.outline='3px solid #0861CE'; el.style.outlineOffset='2px';
           setTimeout(function(){ try{ el.click(); }catch(e){} }, 420);
           setTimeout(function(){ el.style.outline=o; el.style.outlineOffset=off; }, 2400); return true; }
+        // RC-32: try each verified ordered locator first; querySelector THROWS on non-CSS (Playwright
+        // text=/:has-text) — caught and skipped, so the verified-graph order is honored without breaking.
         for(var i=0;i<sels.length;i++){ try{ var e=document.querySelector(sels[i]); if(e&&e.offsetParent!==null) return act(e); }catch(x){} }
         if(label){ var lc=label.toLowerCase(),
-          els=[].slice.call(document.querySelectorAll('a,button,[role="button"],[role="menuitem"],nav a,aside a,li a,li')), best=null;
-          for(var j=0;j<els.length;j++){ var el=els[j], t=(el.textContent||'').trim(); if(t&&t.toLowerCase().indexOf(lc)>=0&&el.offsetParent!==null){ if(!best||t.length<(best.textContent||'').trim().length) best=el; } }
-          if(best) return act(best.closest('a,button,[role="button"],[role="menuitem"]')||best); }
+          els=[].slice.call(document.querySelectorAll('a,button,[role="button"],[role="menuitem"],[role="tab"],nav a,aside a,li a,li')), best=null, bestScore=-1;
+          // RC-32: rank label matches by role/nav-container corroboration, then prefer an EXACT/tighter text
+          // match — not arbitrary shortest-string. A nav/menu link to "Approvals" outranks a stray "Approve" button.
+          for(var j=0;j<els.length;j++){ var el=els[j], t=(el.textContent||'').trim(); if(!t||el.offsetParent===null) continue;
+            var tl=t.toLowerCase(); if(tl.indexOf(lc)<0) continue;
+            var score=0;
+            if(tl===lc) score+=100; // exact label text — strongest signal
+            else if(tl.indexOf(lc)===0) score+=20; // prefix match over mid-string
+            var rl=(el.getAttribute&&el.getAttribute('role'))||'';
+            if(el.tagName==='A'&&el.getAttribute('href')!=null) score+=40; // real nav link
+            if(rl==='link'||rl==='menuitem'||rl==='tab') score+=35;
+            try{ if(el.closest&&el.closest('nav,aside,[role="navigation"],[class*="sidebar" i],[class*="side-nav" i]')) score+=25; }catch(z){} // in a nav container
+            score-=Math.min(t.length,40)*0.1; // mild shortest-tiebreak only AFTER role/container ranking
+            if(score>bestScore){ bestScore=score; best=el; } }
+          if(best) return act(best.closest('a,button,[role="button"],[role="menuitem"],[role="tab"]')||best); }
         return false; })();`;
       try { wv.executeJavaScript(code, true).catch(() => {}); } catch { /* */ }
-    } else if (url && /^https?:/.test(url)) {
-      try { wv.loadURL(url); } catch { /* */ }
     }
   }, [navAction?.seq]); // eslint-disable-line react-hooks/exhaustive-deps
 

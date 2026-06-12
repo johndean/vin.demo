@@ -90,6 +90,10 @@ export const DemoState = Annotation.Root({
   // (The raw page scan stays local to driveTo, which derives blockedMutations from it; it was never read
   // off state, so the dead `actionScan` channel was removed. scanActions()/ActionScan remain — they're live.)
   blockedMutations: Annotation<string[]>({ reducer: (_, b) => b, default: () => [] }),
+  // RC-06: a COMPACT read of the navigated node's UX surface (key buttons/actions/required-fields/permissions,
+  // from the per-element model) so the answer is composed from what's ACTUALLY on the screen, not just the doc
+  // chunk. Per-turn output (reset by interpret), reducer=replace. null = no modeled elements / a non-nav turn.
+  screenFacts: Annotation<string | null>({ reducer: (_, b) => b, default: () => null }),
 
   // multi-turn: where we are, the breadcrumb stack for return-to-context, and explain output
   currentPosition: Annotation<Position | null>({ reducer: (_, b) => b, default: () => null }),

@@ -192,6 +192,8 @@ export class GeminiProvider implements LlmProvider {
       const user =
         `Now showing: ${ctx.screen ?? '(a narration moment — no screen change)'}\n` +
         (ctx.caption ? `Beat to convey (paraphrase naturally, do NOT read aloud): ${ctx.caption}\n` : '') +
+        // RC-16: grounded source — paraphrase ONLY this (provider parity with ClaudeProvider).
+        (ctx.sourceText ? `Source to paraphrase (the ONLY product facts you may state; do NOT read verbatim): ${ctx.sourceText}\n` : '') +
         (ctx.outcome ? `Outcome this advances: ${ctx.outcome}\n` : '') +
         (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
         `\nSpeak the one or two sentence narration now.`;

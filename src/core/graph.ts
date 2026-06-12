@@ -22,6 +22,7 @@ import { recordDiscovery } from './discovery.js';
 import { setActiveSpeaker, getActiveStakeholder, addOpenItem } from './stakeholders.js';
 import { retrieveAndGate } from './retrieval.js';
 import { selectNavigation, recordNavAttempt } from './graph-lifecycle.js';
+import { screenFactsFor } from './graph-elements.js'; // RC-06: read the navigated node's UX surface at demo time
 import { journeyWalkPlan } from './journeys.js';
 const EXPLAIN_TRACE_WINDOW = 16; // bound the cross-turn trace fed to explain (it grows unbounded)
 
@@ -60,6 +61,7 @@ async function interpret(state: DemoStateT): Promise<Partial<DemoStateT>> {
     navigation: null,
     navAction: null,
     blockedMutations: [],
+    screenFacts: null, // RC-06: per-turn — a turn that doesn't navigate must not answer from the PRIOR screen's surface
     retrieved: [],
     discoveryPrompt: null,
     trace: [`interpret: kind=${i.kind}${i.isMetaExplain ? ' [meta-explain]' : ''}${i.isResume ? ' [resume]' : ''} intent="${i.intent}"`],
@@ -82,7 +84,7 @@ async function retrieve(state: DemoStateT): Promise<Partial<DemoStateT>> {
 }
 
 // ── shared UI-driving used by navigate + resume ──────────────────────────────
-interface DriveOutcome { navigation: { ok: boolean; healedVia: string | null; url: string }; blockedMutations: string[]; opened: boolean; label: string; traceLines: string[]; navAction?: { label?: string; selectors?: string[]; url?: string }; noMatch?: boolean }
+interface DriveOutcome { navigation: { ok: boolean; healedVia: string | null; url: string }; blockedMutations: string[]; opened: boolean; label: string; traceLines: string[]; navAction?: { label?: string; selectors?: string[]; url?: string }; noMatch?: boolean; screenFacts?: string | null /* RC-06: the navigated node's compact UX surface (buttons/actions/required-fields/permissions) */ }
 
 async function driveTo(state: DemoStateT, intent: string, opts?: { targetLabel?: string | null }): Promise<DriveOutcome> {
   // Navigation (de-gated this session): the ACTIVE graph's NAVIGABLE nodes (verified + pending + draft, broken
@@ -116,21 +118,29 @@ async function driveTo(state: DemoStateT, intent: string, opts?: { targetLabel?:
   }
 
   // Client-driven nav (desktop embedded browser): don't drive a server browser — resolve the node to
-  // the role's on-screen label + any plain CSS selectors, and hand the click to the embedded pane.
+  // the role's on-screen label + its verified locators + screen route, and hand the click to the embedded pane.
   // The human is logged in there; the agent only navigates (read-only) within their own session.
   if (state.clientNav) {
     const label = node.persona_labels?.[state.role] ?? node.persona_labels?.['default'] ?? node.intent_label;
-    const selectors = (node.locator_strategies ?? [])
-      .map((s) => String(s.value).replaceAll('{label}', label))
-      .filter((v) => /^[#.]/.test(v)); // plain id/class only; the client matches the label text otherwise
+    // RC-32: pass the node's FULL ordered locator_strategies (with {label} resolved), NOT just id/class. The
+    // client tries these verified locators IN ORDER (skipping any that aren't valid querySelector CSS, e.g.
+    // Playwright text=/:has-text) BEFORE any label-text fallback — so the ordered, verified graph wins over a
+    // shortest-substring label guess (which clicked "Approve" for "Approvals").
+    const selectors = (node.locator_strategies ?? []).map((s) => String(s.value).replaceAll('{label}', label));
+    // RC-31: when the node has a verified screen_route, prefer a direct route navigation on the client (the
+    // route is the most authoritative locator — no DOM guessing). Passed as `url`; the client resolves it
+    // against the live webview origin and navigates there before trying click locators.
+    const route = node.screen_route || undefined;
     // Phase 2 telemetry: record the node SELECTION (client-driven → ok=NULL, the DOM outcome isn't observed
     // server-side, but the node + intent are real signal for the intent→node registry).
     await recordNavAttempt({ source: 'path-a', productId: state.productId, sessionId: state.sessionId, graphId: sel.graph.graphId, nodeId: node.id, intent, url: node.screen_route || '', ok: null, healedVia: null, selectorUsed: selectors[0] ?? label });
+    const screenFacts = await screenFactsFor(node.id); // RC-06: this node's modeled buttons/actions/required-fields → answerAs hint
     return {
       navigation: { ok: true, healedVia: null, url: '' },
       blockedMutations: [], opened: true, label,
-      traceLines: [truthLine, `drive (client-nav): instruct embedded browser → "${label}" as ${state.role}`],
-      navAction: { label, selectors, url: node.screen_route || undefined },
+      traceLines: [truthLine, `drive (client-nav): instruct embedded browser → "${label}" as ${state.role}${route ? ` (prefer route ${route})` : ''} · ${selectors.length} ordered locator(s)`],
+      navAction: { label, selectors, url: route },
+      screenFacts,
     };
   }
 
@@ -160,6 +170,7 @@ async function driveTo(state: DemoStateT, intent: string, opts?: { targetLabel?:
       const shotPath = process.env.CAPTURE_SHOTS ? 'tmp/live/last.png' : `tmp/demo-shots/${node.intent_label.replace(/\W+/g, '-')}.png`;
       await driver.screenshot?.(shotPath, false).catch(() => {});
     }
+    const screenFacts = nav.ok ? await screenFactsFor(node.id) : null; // RC-06: only when we actually landed on the screen
     return {
       navigation: nav,
       blockedMutations: confirmed,
@@ -170,6 +181,7 @@ async function driveTo(state: DemoStateT, intent: string, opts?: { targetLabel?:
         `drive: "${node.intent_label}" as ${state.role} → ${nav.ok ? nav.url : 'FAILED'}${nav.healedVia ? ` [self-heal via ${nav.healedVia}]` : ' [primary ok]'}`,
         `drive: mode=${state.mode}; PO ${opened ? 'opened' : 'not opened'}; ${scan.length === 0 ? 'no action panel' : `blocked ${confirmed.length} confirmed mutating${defensive ? ` (+${defensive} held)` : ''} of ${scan.length}`}`,
       ],
+      screenFacts,
     };
   } catch (e: any) {
     return { navigation: { ok: false, healedVia: null, url: '' }, blockedMutations: [], opened: false, label: node.intent_label, traceLines: [truthLine, `drive: ERROR — ${e?.message ?? e}`] };
@@ -213,6 +225,7 @@ async function navigateFreeRoam(state: DemoStateT): Promise<Partial<DemoStateT>>
     blockedMutations: d.blockedMutations,
     currentPosition: newPos,
     contextStack,
+    screenFacts: d.screenFacts ?? null, // RC-06: thread the navigated screen's UX surface to answerAs
     trace: [...(pivot ? [`pivot: pushed "${state.currentPosition!.intent}" onto the context stack (depth ${contextStack.length})`] : []), ...d.traceLines],
   };
 }
@@ -234,7 +247,9 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
   const onDelta = config?.configurable?.onDelta; // RC-03: stream this step's narration to TTS when the voice channel gave us a sink
   if (entry.kind === 'beat') {
     // Narration beat (knowledge/note/tour) — no navigation; compose ONE warm spoken line (clean fallback).
-    const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: null, audience, outcome: wp.journey.businessGoal, onDelta });
+    // RC-16: pass the resolved knowledge chunk (entry.sourceText) so a knowledge beat paraphrases a GROUNDED
+    // source instead of free-improvising product claims; null for note/tour beats → the span orients to context.
+    const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: null, audience, outcome: wp.journey.businessGoal, sourceText: entry.sourceText ?? null, onDelta });
     return { ...advance, navigation: null, navAction: null, blockedMutations: [], explanation: say, trace: [`journey: [${step + 1}/${total}] ${entry.stepKind} narration beat`] };
   }
   // 'node' — drive the live product to this exact screen, on the journey's rails (forced target label).
@@ -242,13 +257,14 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
   const ok = d.navigation.ok || !!d.navAction;
   const newPos: Position = { intent: entry.nodeLabel ?? 'journey step', url: d.navigation.url, answer: state.retrieved?.[0]?.content ?? null };
   // Warm, conversational narration spoken while this screen is shown (runTurn emits `explanation` as the voice line).
-  const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: entry.nodeLabel ?? null, audience, outcome: wp.journey.businessGoal, onDelta });
+  const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: entry.nodeLabel ?? null, audience, outcome: wp.journey.businessGoal, sourceText: entry.sourceText ?? null, onDelta }); // RC-16: thread grounded source (node entries carry none → screen-oriented)
   return {
     ...advance,
     navigation: d.navigation,
     navAction: d.navAction ?? null,
     blockedMutations: d.blockedMutations,
     currentPosition: ok ? newPos : state.currentPosition,
+    screenFacts: d.screenFacts ?? null, // RC-06: an off-script question on this walk-pinned session answers FROM this screen's surface
     explanation: say,
     // RC-26: a forced journey target that didn't resolve on the live product is a GAP — flag it in the operator
     // trace (surfaced as a beat) rather than letting the step glide past silently as if the screen were shown.

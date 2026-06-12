@@ -326,13 +326,27 @@ const server = http.createServer(async (req, res) => {
     const productId = typeof body?.productId === 'string' && body.productId.trim() ? body.productId.trim() : null;
     let knownScreens: { label: string; route: string | null }[] = [];
     if (productId) { try { knownScreens = (await selectNavigation(productId, role)).allVerified.slice(0, 30).map((n) => ({ label: n.intent_label, route: n.screen_route })); } catch { /* best-effort */ } }
+    // RC-01: minimal shared session context — load the session's pinned-journey business goal so the (stateless)
+    // drive loop is session-aware (it knows WHAT the demo is for, not just the immediate goal). Best-effort +
+    // null-safe: an ad-hoc session with no pinned journey leaves sessionGoal null and drives exactly as before.
+    let sessionGoal: string | null = null;
+    if (sessionId && productId) {
+      try {
+        const r = await db().query<{ business_goal: string | null }>(
+          'SELECT j.business_goal FROM journeys j JOIN demo_sessions s ON s.journey_id = j.id WHERE s.id = $1',
+          [sessionId],
+        );
+        const g = r.rows[0]?.business_goal;
+        if (typeof g === 'string' && g.trim()) sessionGoal = g.trim();
+      } catch { /* best-effort: no journey / not found → drive without session framing */ }
+    }
     // Active specialist (if handed off): its overlay focuses the agent + its prohibited actions tighten the gate.
     const persona = await loadPersona(typeof body?.personaId === 'string' ? body.personaId : null);
     // A governance block on this step (recorded below). layer/escalate drive the audit + escalation rows.
     let block: { control: string; layer: 'behavior' | 'execution'; reason: string; escalate: boolean } | null = null;
     try {
       const notices = Array.isArray(page?.notices) ? page.notices.slice(0, 6).map((n: any) => String(n).slice(0, 140)).filter(Boolean) : undefined;
-      let step = await getLlm().agentStep({ goal, url: String(page.url ?? ''), title: String(page.title ?? ''), headings: Array.isArray(page.headings) ? page.headings.slice(0, 12).map(String) : [], elements, history, role, mode, personaPreamble: personaPreamble(persona), knownScreens, notices });
+      let step = await getLlm().agentStep({ goal, url: String(page.url ?? ''), title: String(page.title ?? ''), headings: Array.isArray(page.headings) ? page.headings.slice(0, 12).map(String) : [], elements, history, role, mode, personaPreamble: personaPreamble(persona), knownScreens, notices, sessionGoal /* RC-01: session-aware drive */ });
       // A `click` commits via the control itself; a `select` commits via the CHOSEN OPTION. Both must pass the
       // gate — previously only `click` was classified, so a combobox/`select` committing a mutating option
       // (e.g. a Status dropdown set to "Void"/"Approve") executed with NO safety check in any mode. A `type`
