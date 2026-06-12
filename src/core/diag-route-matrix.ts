@@ -40,7 +40,7 @@ const MATRIX = [
 
 for (const m of MATRIX) {
   const intent = (await getLlm().interpret(m.u)).intent;
-  const picked = await getLlm().pickNode(intent, labels);
+  const picked = await getLlm().pickNode(intent, labels, true); // mirror the RUNTIME nav path (fast tier) so this diagnostic stays faithful (#5)
   console.log(`\nQ: ${m.u}`);
   console.log(`   expect : ${m.expect}`);
   console.log(`   intent : ${JSON.stringify(intent)}`);

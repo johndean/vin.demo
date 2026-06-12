@@ -120,7 +120,7 @@ export class GeminiProvider implements LlmProvider {
     return { intent: parsed.intent, kind: parsed.kind, isMetaExplain: !!parsed.isMetaExplain, isResume: !!parsed.isResume, control, reasoning: parsed.reasoning ?? '' };
   }
 
-  async pickNode(intent: string, labels: string[]): Promise<string> {
+  async pickNode(intent: string, labels: string[], _fast?: boolean): Promise<string> { // _fast: interface parity — Gemini has no separate fast tier
     if (labels.length === 0) return ''; // no candidates → nothing fits (1 candidate still gets a real fit-check)
     // Gemini rejects an empty-string enum value, so the "none fit" sentinel is 'NONE' (mapped back to '').
     // This is schema-only — the shared system prompt stays byte-identical to Claude's.

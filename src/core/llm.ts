@@ -8,7 +8,7 @@ import { config as loadEnv } from 'dotenv';
 import { record, currentSession } from './cost.js';
 import { db } from './db.js';
 import { rp } from './prompts.js';
-import { currentModel, providerForModel } from './settings.js';
+import { currentModel, fastModel, providerForModel } from './settings.js';
 import { GeminiProvider } from './llm-gemini.js';
 import type { ExecutionMode } from './safety.js';
 
@@ -137,8 +137,11 @@ export interface DerivedScreenElement { elementType: 'field' | 'button' | 'actio
 export interface LlmProvider {
   readonly id: string;
   interpret(utterance: string): Promise<Interpretation>;
-  /** Pick the best-matching demo target from candidate labels (or '' if none fit). */
-  pickNode(intent: string, labels: string[]): Promise<string>;
+  /** Pick the best-matching demo target from candidate labels (or '' if none fit).
+   *  `fast` (experience-audit #5): the RUNTIME nav path opts into the fast tier (fastModel) for this routing
+   *  pick; offline/maintenance callers omit it and stay on currentModel() — so destructive cleanup tools that
+   *  deliberately mirror the runtime keep using the flagship, not Haiku. */
+  pickNode(intent: string, labels: string[], fast?: boolean): Promise<string>;
   /** Explain, grounded in the trace, why the agent showed what it showed. */
   explainWhy(ctx: ExplainContext): Promise<string>;
   /** Active discovery (E): extract expressed pain/signal/objective and offer ONE question. */
@@ -190,7 +193,7 @@ export const sysAnswerAs = (ctx: AnswerContext): string => {
     ? ` This source was last verified ${ctx.source.recencyDays} days ago — if it bears on the answer, hedge honestly that it may be due for review.`
     : '';
   const navHint = ctx.screen
-    ? ` You have already navigated to "${ctx.screen}" and are looking at it together — you are demonstrating RIGHT NOW. Walk through the steps that are actually on this screen, in order and concisely; do NOT ask permission to demonstrate, and never offer to perform an action you are not actually taking.`
+    ? ` You have already navigated to "${ctx.screen}" and are looking at it together — you are demonstrating RIGHT NOW, so speak to what is actually on this screen (do NOT ask permission to demonstrate, and never offer to perform an action you are not actually taking). Reference only what is relevant to their question; do NOT tour the whole screen or walk through every element unless they explicitly asked to see it.`
     : '';
   // RC-06: ground the answer in the navigated screen's ACTUAL UX surface (its real buttons/actions/required
   // fields/permissions). In-code wrapper (like navHint) — only appears when screenFacts is supplied, so the
@@ -295,6 +298,10 @@ class ClaudeProvider implements LlmProvider {
   }
 
   async interpret(utterance: string): Promise<Interpretation> {
+    // Experience audit #5: interpret STAYS on currentModel() (the flagship). It distills the retrieval query, and
+    // phase1 showed Haiku's intent degraded retrieval RELEVANCE enough to relevance-GATE a core question ("I'm not
+    // certain") — the latency win isn't worth that routing regression. Only pickNode (a constrained label-pick that
+    // passed phase1's navigation check) runs on the fast tier (fastModel()).
     const MODEL = currentModel();
     const res = await this.client.messages.create({
       model: MODEL,
@@ -346,10 +353,12 @@ class ClaudeProvider implements LlmProvider {
     };
   }
 
-  async pickNode(intent: string, labels: string[]): Promise<string> {
+  async pickNode(intent: string, labels: string[], fast = false): Promise<string> {
     if (labels.length === 0) return ''; // no candidates → nothing fits. (1 candidate still gets a real fit-check
     // so an off-domain request to a single-screen product can correctly resolve to "" rather than force-mapping.)
-    const MODEL = currentModel();
+    // experience audit #5: the live nav path passes fast=true → fastModel() (Haiku) for snappy "which screen?"
+    // routing; offline/maintenance callers omit it → currentModel(), so they keep mirroring the flagship brain.
+    const MODEL = fast ? fastModel() : currentModel();
     const res = await this.client.messages.create({
       model: MODEL,
       max_tokens: 512,
@@ -484,22 +493,24 @@ class ClaudeProvider implements LlmProvider {
           (ctx.source!.validatedBy ? ` · validated by ${ctx.source!.validatedBy}${ctx.source!.validatedAt ? ` on ${String(ctx.source!.validatedAt).slice(0, 10)}` : ''}` : '') +
           (ctx.source!.recencyDays != null ? ` · last verified ${ctx.source!.recencyDays}d ago` : '')
         : `\n(No verified source is available for this question.)`);
-    // RC-04: adaptive thinking keeps the model's REASONING in (omitted) thinking blocks, not in the spoken
-    // answer text — we extract only the text block, so the spoken line is the clean final answer rather than
-    // a reasoning monologue. max_tokens is thinking+answer headroom; spoken LENGTH is governed by the concision
-    // span in the prompt, not by this ceiling.
-    const params = {
+    // Base request. The streaming (voice) and blocking (CLI/reel/interactive) paths differ ONLY in `thinking`
+    // (see each branch). max_tokens is headroom; spoken LENGTH is governed by the concision span, not this ceiling.
+    const baseParams = {
       model: MODEL,
       max_tokens: 1024,
-      thinking: { type: 'adaptive' as const },
       system: sysAnswerAs(ctx),
       messages: [{ role: 'user' as const, content: userContent }],
     };
     const REFUSAL = "I'd rather not guess here — let me show you the screen instead.";
     const EMPTY = "Let me show you on the screen rather than guess at the specifics.";
-    // RC-03: stream when the caller wants incremental speech (the voice path passes onDelta). Emit each
-    // completed sentence as it lands so TTS starts on sentence 1 instead of after the whole reply.
+    // RC-03 / experience-audit #4: stream when the caller wants incremental speech (the voice path passes onDelta),
+    // emitting each completed sentence so TTS starts on sentence 1. Crucially, NO adaptive thinking on this path:
+    // on Opus 4.8 the thinking block is emitted before any text delta, so it gates the first spoken word and
+    // re-serializes the very latency streaming exists to hide (multi-second pre-speech silence). Disabled here, the
+    // first sentence streams immediately; the final-answer-only instruction (answerAs.closing) keeps the model's
+    // reasoning out of the spoken text.
     if (ctx.onDelta) {
+      const params = { ...baseParams, thinking: { type: 'disabled' as const } };
       const stream = this.client.messages.stream(params);
       let acc = '', cursor = 0;
       stream.on('text', (delta: string) => { acc += delta; cursor = flushSentences(acc, cursor, ctx.onDelta!, false); });
@@ -512,6 +523,9 @@ class ClaudeProvider implements LlmProvider {
       const text = b && 'text' in b ? b.text.trim() : '';
       return text || EMPTY;
     }
+    // Blocking path (no live speech): keep adaptive thinking — latency isn't the constraint and the reasoning
+    // sharpens the answer; we extract only the text block, so the returned line is still the clean final answer.
+    const params = { ...baseParams, thinking: { type: 'adaptive' as const } };
     const res = await this.client.messages.create(params);
     await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'answerAs' });
     if (res.stop_reason === 'refusal') return REFUSAL;

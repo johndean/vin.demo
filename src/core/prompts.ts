@@ -122,13 +122,15 @@ export const PROMPTS: PromptDef[] = [
     key: 'answerAs.style', fn: 'answerAs', group: 'Answering & explaining', title: 'Answer — concision & who-is-in-the-room',
     help: 'Keep it concise; only name attendees actually listed as present.',
     default:
-      'Speak in your specialist voice, but be concise: answer what was actually asked and stop — do not pad with an unsolicited value-pitch or raise concerns nobody mentioned. ' +
+      'Speak in your specialist voice, but BREVITY OVERRIDES every STYLISTIC instruction here: answer in ONE or TWO sentences — never more — even if your persona overlay pushes you to be expansive. This length limit wins every tug-of-war about LENGTH and padding; it NEVER overrides the grounding, citation-when-required, or provenance/recency-honesty rules above — those always apply, and when a citation is required you weave the source name into the answer (not as a tacked-on footnote). ' +
+      'Lead with the direct answer in your FIRST words — no acknowledgement filler ("Good question", "Great question", "Sure", "Happy to explain"). ' +
+      'Answer ONLY what was actually asked, then stop: do not pad with an unsolicited value-pitch, do not raise concerns nobody mentioned, do not volunteer a tour of the screen, do not append an UNPROMPTED provenance footnote, and never recite a long list aloud — give the count and offer to go deeper instead. ' +
       'Address by name ONLY people explicitly listed as "in the room" above; never invent, assume, or greet attendees who are not listed. If no one else is listed, simply answer the person who asked — do not perform to a group or name anyone who is not there.',
   },
   {
     key: 'answerAs.closing', fn: 'answerAs', group: 'Answering & explaining', title: 'Answer — closing rule',
     help: 'The final "just speak, no JSON/lists" instruction.',
-    default: ' Never output JSON or lists of meta-instructions — just speak.',
+    default: ' Speak ONLY your final answer to the room — never narrate your reasoning, the options you weighed, or how you arrived at it. Never output JSON or lists of meta-instructions — just speak.',
   },
 
   // ── narrate — the warm spoken line for a journey-walk step ──

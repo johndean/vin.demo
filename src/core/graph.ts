@@ -108,7 +108,7 @@ async function driveTo(state: DemoStateT, intent: string, opts?: { targetLabel?:
   // first-label fallback. The old `|| labels[0]` / `?? candidates[0]` is exactly what mapped "capital of
   // france" → a random screen AND recorded it as a confident intent→node row. A journey targetLabel / navHint
   // always wins (the journey is on rails); free-roam respects "none fit".
-  const picked = hinted ?? (await getLlm().pickNode(intent, labels));
+  const picked = hinted ?? (await getLlm().pickNode(intent, labels, true)); // fast=true: runtime nav routing on the fast tier (#5)
   const node = picked ? sel.candidates.find((r) => r.intent_label === picked) : undefined;
   if (!node) {
     // No screen fits → don't navigate, and crucially DON'T recordNavAttempt (a no-match never enters the
@@ -253,11 +253,16 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
     return { ...advance, navigation: null, navAction: null, blockedMutations: [], explanation: say, trace: [`journey: [${step + 1}/${total}] ${entry.stepKind} narration beat`] };
   }
   // 'node' — drive the live product to this exact screen, on the journey's rails (forced target label).
-  const d = await driveTo(state, entry.caption ?? entry.nodeLabel ?? 'demonstrate', { targetLabel: entry.nodeLabel ?? null });
+  // Experience-audit #13: narrate ∥ driveTo. The narration depends only on the KNOWN node label/caption/source/
+  // outcome — NOT the live DOM — so SPEAK it while the screen navigates (talk-while-driving) instead of after the
+  // full nav resolves. Both are awaited together; on the streaming voice path the first narrated sentence is
+  // already going to TTS while driveTo is still settling the screen.
+  const [d, say] = await Promise.all([
+    driveTo(state, entry.caption ?? entry.nodeLabel ?? 'demonstrate', { targetLabel: entry.nodeLabel ?? null }),
+    getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: entry.nodeLabel ?? null, audience, outcome: wp.journey.businessGoal, sourceText: entry.sourceText ?? null, onDelta }), // RC-16: node entries carry no sourceText → screen-oriented
+  ]);
   const ok = d.navigation.ok || !!d.navAction;
   const newPos: Position = { intent: entry.nodeLabel ?? 'journey step', url: d.navigation.url, answer: state.retrieved?.[0]?.content ?? null };
-  // Warm, conversational narration spoken while this screen is shown (runTurn emits `explanation` as the voice line).
-  const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: entry.nodeLabel ?? null, audience, outcome: wp.journey.businessGoal, sourceText: entry.sourceText ?? null, onDelta }); // RC-16: thread grounded source (node entries carry none → screen-oriented)
   return {
     ...advance,
     navigation: d.navigation,

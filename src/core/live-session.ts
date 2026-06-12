@@ -250,6 +250,13 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
   } else {
     // ALLOWED → grounded composition in the active voice; citation policy decides inline citing.
     const room = await gatherRoom(ctx.sessionId, out.activeStakeholder);
+    // #1 / RC-17 (undo the regression): the pinned outcome should FRAME an answer only on a genuinely value-relevant
+    // turn — an objection, a stated business objective, or value-seeking curiosity (e.g. an ROI/payback question) —
+    // NOT every turn (passing it on plain 'question'/'clarification' turns is what padded every answer). The
+    // outcomeHint span still self-gates ("when genuinely relevant... never force it"), so this only narrows WHEN it
+    // can appear; it never forces it.
+    const k = out.interpretation?.kind;
+    const valueRelevant = k === 'objection' || k === 'business_objective' || k === 'curiosity';
     let text: string;
     try {
       text = await getLlm().answerAs({
@@ -263,7 +270,7 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
         audience: room.audience || undefined,
         priorContext: room.priorContext || undefined,
         cite: shouldCite(persona?.citationPolicy, band, hasSource),
-        outcome: ctx.journeyGoal || undefined, // RC-17: frame the answer against the buyer's pinned outcome when relevant
+        outcome: valueRelevant && ctx.journeyGoal ? ctx.journeyGoal : undefined, // #1/RC-17: frame against the outcome ONLY on a value/objection turn — not every turn (that padded every answer)
 
         // RC-03: when the caller is the voice channel (turn.stream), stream completed sentences out as
         // `say_chunk` events so TTS starts on sentence 1. The interactive/reel/CLI paths leave it off (blocking).

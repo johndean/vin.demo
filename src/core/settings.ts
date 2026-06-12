@@ -43,6 +43,15 @@ let cachedModel: string | null = null;
 export function currentModel(): string { return cachedModel && VALID.has(cachedModel) ? cachedModel : DEFAULT_MODEL; }
 export function modelSource(): 'override' | 'default' { return cachedModel && VALID.has(cachedModel) ? 'override' : 'default'; }
 
+// The FAST tier for INTERNAL routing calls only — interpret + pickNode (classify the utterance / "which screen?").
+// Experience audit #5: those were serial Opus round-trips that gated time-to-first-word; routing this plumbing to
+// Haiku removes them from the slow path WITHOUT downgrading the SPOKEN brain (answerAs/narrate/agentStep/explainWhy
+// stay on currentModel()). Claude-tier by design (used inside ClaudeProvider); env FAST_MODEL overrides, falling
+// back to Haiku unless the override is a known, available Claude model. Could become AI-Control-switchable later.
+const FAST_ENV = process.env.FAST_MODEL;
+const FAST_DEFAULT = FAST_ENV && VALID.has(FAST_ENV) && providerForModel(FAST_ENV) === 'claude' ? FAST_ENV : 'claude-haiku-4-5-20251001';
+export function fastModel(): string { return FAST_DEFAULT; }
+
 /** Load the persisted model setting into the cache (best-effort — never fail a demo over a settings read). */
 export async function loadSettings(): Promise<void> {
   try {

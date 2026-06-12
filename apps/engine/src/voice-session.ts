@@ -62,6 +62,10 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
   let sttBytes = 0;               // LINEAR16 @16kHz mono bytes for the current utterance → STT audio seconds
   let wsTts: ElevenWsHandle | null = null; // RC-31: the OPEN ElevenLabs WS for the current turn (null unless gated on + open)
   let wsTtsU = -1;                // RC-31: which utterance owns wsTts — a stale handle from a superseded turn is ignored/closed
+  // Experience-audit #14: the per-turn WS open runs CONCURRENTLY with the brain turn (not awaited before it). This
+  // promise resolves to whether the WS opened; the say_chunk handler awaits it before the FIRST feed, so the whole
+  // turn commits to ONE transport (all-WS or all-per-sentence) in order — never interleaving the two.
+  let wsReady: Promise<boolean> = Promise.resolve(false);
   const speaker = 'Procurement';
 
   send({ type: 'start', product: ctx.productName, scenario: 'Voice', mode: ctx.mode, loop: LOOP, sessionId: ctx.sessionId, interactive: true, voice: profile.id, profiles: voiceCatalog().map((p) => ({ id: p.id, label: p.label })) });
@@ -129,11 +133,20 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     if (ev.type === 'say_chunk' && typeof ev.text === 'string') {
       if (!interrupted) {
         streamedThisTurn = true;
-        // RC-31: with the WS open for this turn, feed the sentence into it (continuous word-level audio out);
-        // otherwise the UNCHANGED per-sentence synthesize path. If the WS died mid-turn (wsTts cleared by
-        // onError), this naturally falls back to speak() for the remaining sentences — never silent.
-        if (wsTts && wsTtsU === utterance) wsTts.feed(ev.text as string);
-        else ttsChain = ttsChain.then(() => speak(ev.text as string));
+        const text = ev.text;
+        const myU = utterance;
+        // #14: serialize EVERY chunk through ttsChain and gate the first on the concurrently-opening WS (wsReady),
+        // so (a) the brain turn never blocks ~6s on the WS open, and (b) the turn commits to ONE transport in order
+        // — all WS feeds (continuous word-level audio) OR all per-sentence speak(), never interleaved (which could
+        // overlap WS audio with speak() audio). If the WS died mid-turn (onError cleared wsTts), it falls back to
+        // speak() for the remaining sentences — never silent.
+        ttsChain = ttsChain.then(async () => {
+          if (interrupted || myU !== utterance) return;
+          const open = await wsReady;
+          if (interrupted || myU !== utterance) return;
+          if (open && wsTts && wsTtsU === utterance) wsTts.feed(text);
+          else await speak(text);
+        });
       }
       return;
     }
@@ -151,14 +164,16 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     if (!q) return;
     if (answering) { send({ type: 'busy', message: 'One moment — still answering.' }); return; }
     answering = true; interrupted = false; streamedThisTurn = false;
-    await openTurnWs(); // RC-31: best-effort open the word-level WS for this turn (no-op/false unless gated on)
+    wsReady = openTurnWs(); // #14: open the word-level WS CONCURRENTLY with the brain turn (don't block ~6s on it)
     try {
       await runTurn(ctx, { speaker, text: q, stream: true }, voiceEmit); // RC-03: stream the spoken answer to TTS
+      await wsReady; // #14: ensure the concurrent open has settled (wsTts set or not) before we drain + close
       await ttsChain; // let queued TTS finish before signaling the turn is done
       await closeTurnWs(); // RC-31: EOS + drain the WS (no-op if it wasn't open) so its audio finishes too
     } catch (e: any) {
       send({ type: 'error', message: String(e?.message ?? e) });
     } finally {
+      await wsReady.catch(() => {}); // #14: if runTurn rejected we skipped the success-path await — reconcile the in-flight WS open NOW so the abort below actually closes it (no leaked socket / post-turn audio)
       try { wsTts?.abort(); } catch { /* */ } wsTts = null; // RC-31: ensure no WS lingers past the turn (covers the catch path)
       answering = false;
       send({ type: 'turn_done' });
@@ -187,10 +202,11 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     if (walkStep >= walkPlan.length) { send({ type: 'journey_complete', steps: walkPlan.length }); return; }
     const idx = walkStep;
     answering = true; interrupted = false; streamedThisTurn = false;
-    await openTurnWs(); // RC-31: best-effort open the word-level WS for this walk step (no-op/false unless gated on)
+    wsReady = openTurnWs(); // #14: open the word-level WS CONCURRENTLY with the walk step (don't block ~6s on it)
     try {
       send({ type: 'journey_step', index: idx, total: walkPlan.length, kind: walkPlan[idx].stepKind, node: walkPlan[idx].nodeLabel ?? null });
       const r = await runTurn(ctx, { speaker: 'Presenter', text: walkPlan[idx].caption ?? 'next', advance: true, stream: true }, voiceEmit); // RC-03: stream the walk narration to TTS
+      await wsReady; // #14: ensure the concurrent open settled before draining + closing
       await ttsChain;
       await closeTurnWs(); // RC-31: EOS + drain the WS (no-op if it wasn't open)
       // RC-02: SYNC the walk position to the GRAPH's authoritative journeyStep (the single owner) rather than
@@ -201,6 +217,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     } catch (e: any) {
       send({ type: 'error', message: String(e?.message ?? e) });
     } finally {
+      await wsReady.catch(() => {}); // #14: if runTurn rejected we skipped the success-path await — reconcile the in-flight WS open NOW so the abort below actually closes it (no leaked socket / post-turn audio)
       try { wsTts?.abort(); } catch { /* */ } wsTts = null; // RC-31: never let a WS linger past the walk step
       answering = false; send({ type: 'turn_done' });
     }
