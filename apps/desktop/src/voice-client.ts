@@ -28,6 +28,7 @@ export class VoiceClient {
       if (ev.type === 'ready') this.onState('ready');
       else if (ev.type === 'listening') this.onState('listening');
       else if (ev.type === 'audio') { this.onState('speaking'); void this.play(ev.data); }
+      else if (ev.type === 'flush') { this.stopPlayback(); return; } // RC-11: barge-in — drop queued/playing audio now (don't forward)
       else if (ev.type === 'turn_done') this.onState('ready');
       this.onEvent(ev);
     };

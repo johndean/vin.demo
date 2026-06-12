@@ -10,7 +10,7 @@ import { db } from './db.js';
 import { recordEvalRun } from './eval-record.js';
 import { assembleJourney } from './journey-assembler.js';
 import { journeyWalkPlan } from './journeys.js';
-import { bootSession, walkJourney } from './live-session.js';
+import { bootSession, walkJourney, runTurn } from './live-session.js';
 
 const productId = process.env.PO_VIN_PRODUCT_ID;
 if (!productId) throw new Error('PO_VIN_PRODUCT_ID not set — run `npm run seed`.');
@@ -48,6 +48,23 @@ ok('journey_step fires for every step IN ORDER (the journey set the order)', ste
 ok('the journey drove one navigation per screen step (not free-roam)', navs.length === nodeEntries.length, `${navs.length} navs vs ${nodeEntries.length} screen steps`);
 const dirty = aiMsgs.filter((m) => /\*\*|`|[•·]/.test(String(m.text ?? '')));
 ok('spoken narration is clean — no "**"/markdown reaches the voice', aiMsgs.length > 0 && dirty.length === 0, `${aiMsgs.length} lines, ${dirty.length} dirty${dirty[0] ? `: "${String(dirty[0].text).slice(0, 48)}"` : ''}`);
+
+// ── RC-02 / RC-12: the GRAPH is the single owner of the journey position. Drive the SHIPPED per-turn
+// semantics (runTurn advance — the same path the voice walk uses) with an OFF-SCRIPT question interleaved,
+// and assert the position advances monotonically AND an off-script turn does NOT consume a step. This is the
+// exact desync the old dual-counter (walkStep vs state.journeyStep) caused; it now mirrors the graph.
+if (plan.length >= 2) {
+  const sink = () => {};
+  const ctx2 = await bootSession('eval-walk-interleave', { productId, journeyId: res.journeyId, clientNav: true, seedRoom: false });
+  if (ctx2) {
+    const r0 = await runTurn(ctx2, { speaker: 'Presenter', text: plan[0].caption ?? 'next', advance: true }, sink);
+    const off = await runTurn(ctx2, { speaker: 'Buyer', text: 'Quick aside — who else on my team would use this?', advance: false }, sink);
+    const r1 = await runTurn(ctx2, { speaker: 'Presenter', text: plan[1].caption ?? 'next', advance: true }, sink);
+    ok('walk turn advances the graph-owned journey position (0→1)', r0.journeyStep === 1, `journeyStep=${r0.journeyStep}`);
+    ok('an off-script question does NOT consume a journey step (position holds)', off.journeyStep === 1, `off-script journeyStep=${off.journeyStep}`);
+    ok('the next walk turn resumes correctly (1→2) — no desync', r1.journeyStep === 2, `journeyStep=${r1.journeyStep}`);
+  }
+}
 
 // ── CLEANUP — remove the assembled test journey + its gaps/events/runs (sessions auto-null via FK) ──
 await db().query(`DELETE FROM gap_records WHERE journey_id = $1`, [res.journeyId]).catch(() => {});

@@ -200,12 +200,15 @@ export const PROMPTS: PromptDef[] = [
       'For a DATE/TIME field (kind date, datetime-local, month, week, or time) use `type` with any reasonable near-future value — ' +
       'the demo automatically fills a valid FUTURE date in the exact format the field needs, so you NEVER click a date field to open a ' +
       'calendar widget and NEVER return done because of a date field. ' +
-      'Some dropdowns keep their input visually EMPTY after a value is chosen — if your step history shows you already ' +
-      'selected a value for a field, treat that field as filled and move on; never re-select it or loop on it. ' +
+      'A field shown as `filled` (often with its chosen value, e.g. filled="FA104") is already set — do NOT select or ' +
+      'type into it again; move on. Some custom dropdowns keep their text box visually empty after a choice, so trust the ' +
+      '`filled` marker (and your step history) over an empty-looking box; never re-select or loop on a field already set. ' +
       'Do not repeat an action that already ran ' +
       '(if a field still shows EMPTY after you tried, it likely needs a different approach). If you genuinely cannot complete a ' +
       'required field, return done and say which field the human should set so you can continue — NEVER loop on the same step.\n' +
-      'Always narrate `say` in ONE concise, friendly sentence grounded ONLY in what is on screen — never invent. ' +
+      'Narrate in `say` ONLY when it adds value for the buyer — when you reach a result, change direction, or hit a ' +
+      'blocker — in ONE concise, friendly sentence grounded ONLY in what is on screen (never invent). For routine ' +
+      'navigation and form-filling steps, leave `say` empty rather than narrating the obvious click. ' +
       'Prefer the most direct path to the goal; do not wander.',
   },
 

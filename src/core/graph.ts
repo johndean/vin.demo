@@ -25,6 +25,10 @@ import { selectNavigation, recordNavAttempt } from './graph-lifecycle.js';
 import { journeyWalkPlan } from './journeys.js';
 const EXPLAIN_TRACE_WINDOW = 16; // bound the cross-turn trace fed to explain (it grows unbounded)
 
+// Per-invoke LangGraph config (NOT checkpointed): carries a streaming sink so a node can stream spoken
+// sentences out to TTS as they generate (RC-03). thread_id rides here too via ctx.thread.configurable.
+type GraphRunConfig = { configurable?: { thread_id?: string; onDelta?: (sentence: string) => void } };
+
 // ── whoSpeaks (multi-stakeholder, P2.3 / Gap F) — resolve the active speaker ───
 async function whoSpeaks(state: DemoStateT): Promise<Partial<DemoStateT>> {
   if (!state.sessionId) return {};
@@ -217,7 +221,7 @@ async function navigateFreeRoam(state: DemoStateT): Promise<Partial<DemoStateT>>
 // When state.journeyId is set, ignore free-roam pickNode and walk the journey's ordered plan one entry per
 // turn: a 'node' entry drives the live product to that exact verified screen; a 'beat' is a narration moment
 // (the voice layer composes the words in P3). journeyStep advances + persists via the thread checkpointer.
-async function navigateJourneyStep(state: DemoStateT): Promise<Partial<DemoStateT>> {
+async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): Promise<Partial<DemoStateT>> {
   const wp = state.journeyId ? await journeyWalkPlan(state.journeyId).catch(() => null) : null;
   if (!wp || !wp.plan.length) return await navigateFreeRoam(state); // nothing to walk → honest free-roam fallback
   const step = state.journeyStep ?? 0;
@@ -227,9 +231,10 @@ async function navigateJourneyStep(state: DemoStateT): Promise<Partial<DemoState
   const entry = wp.plan[step];
   const advance = { journeyStep: step + 1 };
   const audience = state.activeStakeholder?.role ?? null;
+  const onDelta = config?.configurable?.onDelta; // RC-03: stream this step's narration to TTS when the voice channel gave us a sink
   if (entry.kind === 'beat') {
     // Narration beat (knowledge/note/tour) — no navigation; compose ONE warm spoken line (clean fallback).
-    const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: null, audience, outcome: wp.journey.businessGoal });
+    const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: null, audience, outcome: wp.journey.businessGoal, onDelta });
     return { ...advance, navigation: null, navAction: null, blockedMutations: [], explanation: say, trace: [`journey: [${step + 1}/${total}] ${entry.stepKind} narration beat`] };
   }
   // 'node' — drive the live product to this exact screen, on the journey's rails (forced target label).
@@ -237,7 +242,7 @@ async function navigateJourneyStep(state: DemoStateT): Promise<Partial<DemoState
   const ok = d.navigation.ok || !!d.navAction;
   const newPos: Position = { intent: entry.nodeLabel ?? 'journey step', url: d.navigation.url, answer: state.retrieved?.[0]?.content ?? null };
   // Warm, conversational narration spoken while this screen is shown (runTurn emits `explanation` as the voice line).
-  const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: entry.nodeLabel ?? null, audience, outcome: wp.journey.businessGoal });
+  const say = await getLlm().narrate({ personaPreamble: state.personaPreamble, stepKind: entry.stepKind, caption: entry.caption, screen: entry.nodeLabel ?? null, audience, outcome: wp.journey.businessGoal, onDelta });
   return {
     ...advance,
     navigation: d.navigation,
@@ -245,16 +250,18 @@ async function navigateJourneyStep(state: DemoStateT): Promise<Partial<DemoState
     blockedMutations: d.blockedMutations,
     currentPosition: ok ? newPos : state.currentPosition,
     explanation: say,
-    trace: [`journey: [${step + 1}/${total}] → "${entry.nodeLabel}"`, ...d.traceLines],
+    // RC-26: a forced journey target that didn't resolve on the live product is a GAP — flag it in the operator
+    // trace (surfaced as a beat) rather than letting the step glide past silently as if the screen were shown.
+    trace: [ok ? `journey: [${step + 1}/${total}] → "${entry.nodeLabel}"` : `journey: [${step + 1}/${total}] GAP — "${entry.nodeLabel}" did not resolve on the live product (degraded — narrated without the screen)`, ...d.traceLines],
   };
 }
 
 // ── navigate: dispatcher — walk the pinned journey, else free-roam (intent-driven default) ────
-async function navigate(state: DemoStateT): Promise<Partial<DemoStateT>> {
+async function navigate(state: DemoStateT, config?: GraphRunConfig): Promise<Partial<DemoStateT>> {
   if (!state.productId) return { trace: ['navigate: skipped (no productId)'] };
   // Walk a journey step ONLY on an explicit walk turn (journeyAdvance). An off-script question on a
   // journey-pinned session is answered normally (free-roam) and does NOT consume a journey step.
-  if (state.journeyId && state.journeyAdvance) return await navigateJourneyStep(state);
+  if (state.journeyId && state.journeyAdvance) return await navigateJourneyStep(state, config);
   return await navigateFreeRoam(state);
 }
 

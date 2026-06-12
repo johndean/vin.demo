@@ -263,24 +263,28 @@ const PAGE_SNAPSHOT_JS = `(function(){
     if(tag==='select'){
       item.options=[].slice.call(el.options||[]).map(function(o){return (o.text||'').trim();}).filter(Boolean).slice(0,25);
       item.filled = el.selectedIndex>0 && !!el.value;            // option 0 is usually the empty placeholder
+      if(item.filled){ var so=el.options[el.selectedIndex]; item.value=((so&&so.text)||'').trim().slice(0,80); } // RC-08: report the CHOSEN value so the model sees it's set, and to WHAT — not just a boolean (this is what ends the dropdown loop)
     } else if(tag==='input'){
       var t=(el.getAttribute('type')||'text').toLowerCase();
       item.filled = (t==='checkbox'||t==='radio') ? !!el.checked : !!el.value;
+      if(item.filled && t!=='checkbox' && t!=='radio') item.value=(el.value||'').trim().slice(0,80); // RC-08: surface what's actually typed
       if(!item.filled && t!=='checkbox' && t!=='radio'){ // custom combobox: the chosen value often renders in a sibling node while the input itself stays empty
         try{ var cb=el.closest('[role="combobox"]')||el.closest('[class*="select"],[class*="Select"],[class*="combobox"],[class*="Combobox"],[class*="autocomplete"],[class*="Autocomplete"]');
           if(cb){ var sv=cb.querySelector('[class*="singleValue"],[class*="single-value"],[class*="multiValue"],[class*="multi-value"],[class*="-value"],[class*="Value"],[class*="selected"],[class*="Selected"],[class*="chosen"],[aria-selected="true"]');
-            if(sv && (sv.textContent||'').trim()){ item.filled=true; }
+            if(sv && (sv.textContent||'').trim()){ item.filled=true; item.value=(sv.textContent||'').trim().slice(0,80); } // RC-08: the chosen value lives in the sibling node — read it so the model knows it's set
             else { // last resort — the container shows chosen text that is neither the placeholder nor the (empty) input
               var ph=(el.getAttribute('placeholder')||'').trim(); var ival=(el.value||'').trim();
               var ctext=(cb.textContent||'').replace(/\\s+/g,' ').trim();
-              if(ctext && ctext.length<80 && ctext!==ph && ctext!==ival && !/^(search|select|choose|type to search|— *none *—)/i.test(ctext)) item.filled=true;
+              if(ctext && ctext.length<80 && ctext!==ph && ctext!==ival && !/^(search|select|choose|type to search|— *none *—)/i.test(ctext)){ item.filled=true; item.value=ctext.slice(0,80); }
             }
           } }catch(e){}
       }
-    } else if(tag==='textarea'){ item.filled = !!el.value; }
+    } else if(tag==='textarea'){ item.filled = !!el.value; if(item.filled) item.value=(el.value||'').trim().slice(0,80); }
     out.push(item); ref++; }
   var heads=[].slice.call(document.querySelectorAll('h1,h2,h3')).filter(vis).map(function(h){return (h.innerText||'').trim().replace(/\\s+/g,' ').slice(0,100);}).filter(Boolean).slice(0,12);
-  return { url: location.href, title: document.title, headings: heads, elements: out };
+  // RC-08: visible alerts / validation / toasts the model otherwise can't see (so it can react to "Submit failed: …", success banners, etc.).
+  var notices=[].slice.call(document.querySelectorAll('[role="alert"],[class*="error"],[class*="Error"],[class*="toast"],[class*="Toast"],[class*="alert"],[class*="banner"]')).filter(vis).map(function(n){return (n.innerText||'').trim().replace(/\\s+/g,' ').slice(0,140);}).filter(function(t){return t && t.length>2;}).filter(function(t,i,a){return a.indexOf(t)===i;}).slice(0,6);
+  return { url: location.href, title: document.title, headings: heads, notices: notices, elements: out };
 })()`;
 // Robustly set a native temporal input (<input type=date|datetime-local|month|week|time>) to a FUTURE
 // value, coercing whatever the agent typed (ISO, dd/mm/yyyy, "June 16", "next week", "ASAP", or NOTHING)
@@ -369,12 +373,12 @@ const COMBO_FN = `
     var tiers=['[role="option"]','[role="listbox"] li','[role="menu"] [role="menuitem"]','[role="menuitem"]','[aria-selected]'];
     var found=[]; for(var i=0;i<tiers.length && !found.length;i++){ try{ found=[].slice.call(document.querySelectorAll(tiers[i])).filter(__vinVis); }catch(e){} }
     if(!found.length){ try{ found=[].slice.call(document.querySelectorAll('[class*="option"],[class*="-option"],[id*="-option-"],[class*="menu-item"],[class*="MenuItem"],[data-option-index],[class*="autocomplete"] li,[class*="Autocomplete"] li')).filter(__vinVis); }catch(e){} }
-    return found.filter(function(o){ var t=(o.textContent||'').trim(); return o!==input && t && t.length<160 && !/^(no .*(result|match|option|account|item)|type to search|start typing|loading|searching)/i.test(t) && (!o.getAttribute||o.getAttribute('aria-disabled')!=='true'); }).slice(0,80);
+    return found.filter(function(o){ var t=(o.textContent||'').trim(); return o!==input && t && t.length<160 && !/^(no .*(result|match|option|account|item)|type to search|start typing|loading|searching)/i.test(t) && (!o.getAttribute||o.getAttribute('aria-disabled')!=='true'); }).slice(0,200); // RC-20: a long GL/account list can render many rows — collect more before matching (filter-by-token still narrows it first)
   }
   async function __vinWaitOpts(input,tries){ var o=[]; for(var i=0;i<(tries||16);i++){ o=__vinCollect(input); if(o.length) return o; await __vinSleep(90); } return o; }
   function __vinCode(s){ var m=(''+s).toLowerCase().match(/[a-z]{1,6}[-\\s]?\\d{2,6}(?:\\.\\d+)?|\\d{3,6}(?:\\.\\d+)?/); return m?m[0].replace(/\\s/g,''):''; }
   function __vinChoose(opts,want){ if(!opts.length) return null; var w=(want||'').toLowerCase().trim();
-    if(!w) return opts[0];                                                      // no specific want → any option is fine
+    if(!w) return null;                                                         // RC-15: no specific want → do NOT commit an arbitrary option (a bare click just opens the dropdown; the model re-perceives and picks a real value)
     function tx(o){ return (o.textContent||'').toLowerCase().trim(); }
     for(var i=0;i<opts.length;i++){ if(tx(opts[i])===w) return opts[i]; }       // 1) exact
     var code=__vinCode(w);                                                      // 2) account/code token (e.g. "FA104") — match it as a whole token, NOT a loose substring
@@ -389,7 +393,7 @@ const COMBO_FN = `
   function __vinNative(el,want){ var opts=[].slice.call(el.options), pick=-1, w=(want||'').toLowerCase().trim();
     for(var i=0;i<opts.length;i++){ var t=(opts[i].text||'').toLowerCase().trim(), v=(opts[i].value||'').toLowerCase().trim(); if(w&&(t===w||v===w)){pick=i;break;} }
     if(pick<0&&w) for(var j=0;j<opts.length;j++){ if((opts[j].text||'').toLowerCase().indexOf(w)>=0){pick=j;break;} }
-    if(pick<0) for(var k=0;k<opts.length;k++){ if(opts[k].value && !opts[k].disabled){pick=k;break;} }
+    if(pick<0 && !w) for(var k=0;k<opts.length;k++){ if(opts[k].value && !opts[k].disabled){pick=k;break;} } // RC-15: only auto-pick the first option when NO value was wanted — a SPECIFIC unmatched want must NOT fall back to an arbitrary option
     if(pick<0) return {ok:false}; el.selectedIndex=pick; __vinFire(el,'input'); __vinFire(el,'change'); return {ok:true,picked:(opts[pick].text||'').trim().slice(0,60)}; }
   async function __vinClickOpt(pick){ try{ pick.scrollIntoView({block:'nearest'}); }catch(e){} __vinFire(pick,'mousedown'); __vinFire(pick,'mouseup'); try{ pick.click(); }catch(e){} __vinFire(pick,'click'); await __vinSleep(140); }
   async function __vinCombo(el,want){
@@ -403,11 +407,13 @@ const COMBO_FN = `
     var isText = input.tagName==='INPUT' && /^(text|search|email|tel|url|)$/.test((input.getAttribute('type')||'').toLowerCase());
     if(isText && want){ var fq=__vinCode(want)||want; __vinSetVal(input,fq); __vinFire(input,'input'); __vinFire(input,'keyup'); }   // type a CONCISE filter token (e.g. just "FA104", not the whole phrase) so the right rows render
     var opts = await __vinWaitOpts(input,16);
-    if(!opts.length && isText && input.value){ __vinSetVal(input,''); __vinFire(input,'input'); opts = await __vinWaitOpts(input,12); } // query matched nothing → clear, take any option
+    if(!opts.length && isText && input.value){ __vinSetVal(input,''); __vinFire(input,'input'); opts = await __vinWaitOpts(input,12); } // RC-42: the filter token matched nothing → clear it and re-collect the FULL list, then match the want against it (__vinChoose still returns null if the want isn't there — we never "take any option")
     if(!opts.length){ __vinKey(input,'ArrowDown'); opts = await __vinWaitOpts(input,12); }                                              // some lists only open on ArrowDown
     if(!opts.length){ __vinKey(input,'Enter'); await __vinSleep(120); return { ok: !!input.value, picked: input.value||'', reason: 'no-options' }; }
     var pick = __vinChoose(opts,want); if(!pick) return { ok:false, reason:'no-match' };
     var ptext=(pick.textContent||'').trim().slice(0,60);
+    var wcode=__vinCode(want); // RC-20: a coded want (e.g. "FA104") MUST resolve to an option containing that code — never commit a wrong-coded row from a loose name/word match
+    if(wcode && ptext.toLowerCase().replace(/\\s/g,'').indexOf(wcode)<0) return { ok:false, reason:'code-mismatch', picked: ptext };
     await __vinClickOpt(pick);
     if(input.value==='' && isText && ptext){ __vinKey(input,'Enter'); }   // keyboard fallback for libs that commit on Enter
     return { ok:true, picked: ptext };
@@ -420,7 +426,7 @@ const clickRefJs = (ref: number) => `(async function(){ ${INJECT}
   var el=document.querySelector('[data-vin-ref="'+${ref}+'"]'); if(!el) return false;
   el.scrollIntoView({behavior:'smooth',block:'center'}); ${HILITE}
   if(__vinIsTemporal(el)){ __vinSetTemporal(el, ''); return true; } // a click on a date field opens an unclickable native calendar → fill a future date instead
-  if(__vinIsCombo(el)){ return await __vinCombo(el, ''); }          // a click on a dropdown → open + select the first real option (no dead-end)
+  if(__vinIsCombo(el)){ return await __vinCombo(el, ''); }          // RC-15/42: a click on a dropdown OPENS it (no value wanted → __vinChoose returns null, so it commits NOTHING arbitrary); the model re-perceives the options and selects a real value
   setTimeout(function(){ try{ el.click(); }catch(e){} }, 400); return true; })()`;
 // Resolve a dropdown (native <select>, ARIA combobox, or searchable typeahead) to the wanted option in ONE call.
 const comboPickJs = (ref: number, val: string) => `(async function(){ ${INJECT}
@@ -1209,6 +1215,9 @@ function StartExperience({ products, target, onApply, onLaunch }: { products: Re
   // Click a journey → pin the product + journey on the target and start the voice-led walk. The engine logs
   // into the live product (adapter.open) and walks the journey's story_flow, narrating each step.
   const launch = (p: RealProduct, j: RealJourney) => {
+    // RC-27: a journey with broken steps silently degrades to free navigation for those steps. Don't launch
+    // one into a buyer demo without an explicit operator confirmation.
+    if (j.missingCount > 0 && !window.confirm(`“${j.name}” has ${j.missingCount} broken step${j.missingCount > 1 ? 's' : ''} — VIN will fall back to free navigation for those. Launch anyway?`)) return;
     onApply({ productId: p.id, host: p.domain, mk: p.mk, color: p.color, role: target?.role ?? 'admin', mode: p.defaultMode ?? target?.mode ?? 'read-only', url: '', scenario: '', journeyId: j.id });
     onLaunch('talk');
   };
@@ -1477,14 +1486,19 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
         }
         const res = await api.agentStep({ goal, page, history, role: target?.role, mode: target?.mode, personaId: activePersona?.id, sessionId: live.sessionId ?? undefined, productId: target?.productId });
         if (!res) { say('Lost the connection to the engine for a moment — try again.', true); finished = true; break; }
-        if (res.say) { say(res.say, res.action === 'done' && i === 0 ? false : undefined); history.push(res.say); }
+        // RC-29: detect a repeated action BEFORE narrating, so an action that didn't visibly take (e.g. a custom
+        // dropdown re-read as empty) is retried quietly instead of re-narrated to the buyer ("set it to Asset
+        // once more"×N). The 'done' hand-back is always spoken.
+        const tgt = Array.isArray(page.elements) ? page.elements.find((e: any) => e.ref === res.ref) : null;
+        const sig = `${res.action}:${tgt?.text ?? res.ref}:${res.value ?? ''}`; // RC-22: key stuck-detection on the element's stable TEXT (refs are re-stamped every snapshot), not the volatile ref
+        const repeated = sig === lastSig;
+        if (res.say && (!repeated || res.action === 'done')) { say(res.say, res.action === 'done' && i === 0 ? false : undefined); history.push(res.say); }
         if (res.action === 'done') { finished = true; break; }
         // Date/time fields: a native calendar popup isn't DOM-clickable, so the executor (typeInto/clickRef)
         // coerces the value into a valid FUTURE date and fills it directly. Because that ALWAYS makes the
         // field non-empty on the next snapshot, route any action on a temporal target to the filler AND
         // exempt it from stuck-detection so a repeated value never trips the "I've gone as far as I can"
         // hand-back. This is the fix for the date-picker stall.
-        const tgt = Array.isArray(page.elements) ? page.elements.find((e: any) => e.ref === res.ref) : null;
         const tKind = String(tgt?.kind || ''), tRole = String(tgt?.role || '');
         const temporal = /^(date|datetime-local|month|week|time)$/.test(tKind);
         // A dropdown the resolver should handle: native <select>, an ARIA combobox/listbox, or anything the
@@ -1494,8 +1508,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
         const dropdown = tKind === 'select' || tRole === 'combobox' || tRole === 'listbox' || (Array.isArray(tgt?.options) && tgt.options.length > 0);
         // Never freeze: a repeated NON-resolving action is stuck — hand the wheel back gracefully. Temporal,
         // dropdowns, and any `select` are exempt (they always make progress on the real control).
-        const sig = `${res.action}:${res.ref}:${res.value ?? ''}`;
-        repeats = sig === lastSig ? repeats + 1 : 0;
+        repeats = repeated ? repeats + 1 : 0;
         lastSig = sig;
         // Never freeze, never loop forever. A non-resolving REPEAT hands the wheel back. Temporal always makes
         // progress (exempt). Dropdowns/`select` get ONE extra pass (a custom control can need a second try) but
@@ -1504,8 +1517,12 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
           say("I've set what I can on that field — could you confirm it, then tell me to continue? I'll pick it right back up.", true); finished = true; break;
         }
         if (temporal) await ctl.typeInto(res.ref, res.value ?? '').catch(() => {});                 // click/type/select on a date field → future-date filler
-        else if (res.action === 'select') await ctl.comboPick(res.ref, res.value ?? '').catch(() => {}); // any dropdown → open + filter + pick, in one shot
-        else if (dropdown && res.action === 'click') await ctl.comboPick(res.ref, res.value ?? '').catch(() => {}); // model clicked a dropdown → resolve it
+        else if (res.action === 'select' || (dropdown && res.action === 'click')) {                 // any dropdown → open + filter + pick, in one shot
+          const r = await ctl.comboPick(res.ref, res.value ?? '').catch(() => null);
+          // RC-25: act on the executor's VERIFIED result — if the resolver genuinely found no matching option,
+          // tell the model so it stops re-issuing the same value (don't wait for stuck-detection to catch it).
+          if (r && r.ok === false && (r.reason === 'no-match' || r.reason === 'code-mismatch')) history.push(`(Note: "${res.value}" was not found in that list — pick a different value or hand off; do not repeat it.)`);
+        }
         else if (res.action === 'click') await ctl.clickRef(res.ref).catch(() => {});               // (clickRef itself resolves a typeahead it detects live)
         else if (res.action === 'type') await ctl.typeInto(res.ref, res.value ?? '').catch(() => {});
         await new Promise((r) => setTimeout(r, 1500)); // let the page settle before the next perception
@@ -1551,7 +1568,15 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
             </label>
             <button disabled={live.journeyDone || voiceState !== 'ready'} onClick={advanceWalk} style={{ padding: '5px 14px', borderRadius: 7, border: 'none', background: (live.journeyDone || voiceState !== 'ready') ? 'rgba(255,255,255,.12)' : '#0097A9', color: '#fff', fontWeight: 700, fontSize: 12.5, cursor: (live.journeyDone || voiceState !== 'ready') ? 'default' : 'pointer' }}>{live.journeyDone ? '✓ Done' : 'Next ▶'}</button>
           </> : <>
-            <span style={{ fontSize: 12.5, color: '#e8a33d' }}>{live.error ?? 'Preparing the journey…'}</span>
+            {/* RC-28: surface the connect → login → prepare PHASE instead of a static label, so the multi-second
+                live-product login isn't silent dead-air in front of the buyer. */}
+            <span style={{ fontSize: 12.5, color: voiceState === 'error' ? '#ff9b9b' : '#e8a33d' }}>
+              {live.error ? live.error
+                : voiceState === 'connecting' ? 'Connecting to the engine…'
+                : voiceState === 'error' ? 'Voice connection failed — check mic/network and relaunch.'
+                : voiceState === 'ready' ? 'Logging into the live product…'
+                : 'Preparing the journey…'}
+            </span>
             <div style={{ flex: 1 }} />
           </>}
           <button onClick={() => { stopVoice(); setMode('start'); }} title="Back to the launcher" style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid rgba(255,255,255,.2)', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer' }}>Exit</button>

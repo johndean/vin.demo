@@ -310,6 +310,7 @@ const server = http.createServer(async (req, res) => {
           role: e?.role ? String(e.role) : undefined, kind: e?.kind ? String(e.kind) : undefined,
           options: Array.isArray(e?.options) ? e.options.slice(0, 25).map((o: any) => String(o).slice(0, 60)) : undefined,
           required: e?.required === true || undefined, filled: e?.filled === true || undefined,
+          value: typeof e?.value === 'string' && e.value ? String(e.value).slice(0, 80) : undefined, // RC-08: the chosen/typed value
         })).filter((e: any) => Number.isInteger(e.ref))
       : [];
     if (!goal) { res.writeHead(400, { 'content-type': 'application/json', ...cors }); res.end(JSON.stringify({ error: 'no goal' })); return; }
@@ -330,35 +331,46 @@ const server = http.createServer(async (req, res) => {
     // A governance block on this step (recorded below). layer/escalate drive the audit + escalation rows.
     let block: { control: string; layer: 'behavior' | 'execution'; reason: string; escalate: boolean } | null = null;
     try {
-      let step = await getLlm().agentStep({ goal, url: String(page.url ?? ''), title: String(page.title ?? ''), headings: Array.isArray(page.headings) ? page.headings.slice(0, 12).map(String) : [], elements, history, role, mode, personaPreamble: personaPreamble(persona), knownScreens });
-      if (step.action === 'click') {
+      const notices = Array.isArray(page?.notices) ? page.notices.slice(0, 6).map((n: any) => String(n).slice(0, 140)).filter(Boolean) : undefined;
+      let step = await getLlm().agentStep({ goal, url: String(page.url ?? ''), title: String(page.title ?? ''), headings: Array.isArray(page.headings) ? page.headings.slice(0, 12).map(String) : [], elements, history, role, mode, personaPreamble: personaPreamble(persona), knownScreens, notices });
+      // A `click` commits via the control itself; a `select` commits via the CHOSEN OPTION. Both must pass the
+      // gate — previously only `click` was classified, so a combobox/`select` committing a mutating option
+      // (e.g. a Status dropdown set to "Void"/"Approve") executed with NO safety check in any mode. A `type`
+      // only fills text (the commit is a separate click/select that IS gated), so it stays navigation-safe.
+      if (step.action === 'click' || step.action === 'select') {
         const el = elements.find((e: any) => e.ref === step.ref);
         if (!el) {
           step = { action: 'done', ref: -1, value: '', say: step.say || 'That control is no longer on screen — take over if you like.' };
         } else {
+          // For a `select`, classify the chosen OPTION TEXT (the value being committed), not the field label —
+          // "Asset"/"FA104" are benign form values (fail-closed-but-not-confident → allowed), while "Void"/
+          // "Approve as final" carry a confident mutating verb → blocked outside execution mode.
+          const subject = step.action === 'select' ? (String(step.value ?? '').trim() || el.text) : el.text;
           // Persona guardrail (enforced, not just prompted): if the active specialist's prohibited-actions
           // list forbids this control, hand back regardless of mode — a specialist can't be talked around it.
-          const forbidden = personaForbids(persona, el.text);
+          const forbidden = personaForbids(persona, subject);
           if (forbidden) {
-            step = { action: 'done', ref: -1, value: '', say: `As the ${persona!.name}, “${el.text}” is outside my remit (“${forbidden}”). I'll hand back to the lead consultant or a human to handle that.` };
-            block = { control: el.text, layer: 'behavior', reason: `prohibited action "${forbidden}"`, escalate: true };
+            step = { action: 'done', ref: -1, value: '', say: `As the ${persona!.name}, “${subject}” is outside my remit (“${forbidden}”). I'll hand back to the lead consultant or a human to handle that.` };
+            block = { control: subject, layer: 'behavior', reason: `prohibited action "${forbidden}"`, escalate: true };
           } else {
             // Hard guarantee (classifier decides, not the LLM), mode-aware: a CONFIRMED commit (clear mutating
             // verb) is blocked UNLESS the operator chose execution mode (permits mutating). Opening forms,
-            // walking wizard steps, filtering, tabs, and unrecognized buttons (fail-closed but NOT confident)
-            // are safe navigation in every mode. So read-only/safe/approval → navigate only; execution → may save.
-            const cand = { tag: el.kind === 'link' ? 'a' : (el.kind === 'input' || el.kind === 'select' || el.kind === 'textarea') ? 'input' : 'button', text: el.text, role: el.role ?? null, type: null, href: el.kind === 'link' ? '#' : null, ariaLabel: null, title: null, className: null, inNav: false };
+            // walking wizard steps, filtering, tabs, choosing benign field values, and unrecognized buttons
+            // (fail-closed but NOT confident) are safe in every mode. read-only/safe/approval → no commits.
+            const cand = step.action === 'select'
+              ? { tag: 'button', text: subject, role: null, type: null, href: null, ariaLabel: el.text, title: null, className: null, inNav: false }
+              : { tag: el.kind === 'link' ? 'a' : (el.kind === 'input' || el.kind === 'select' || el.kind === 'textarea') ? 'input' : 'button', text: el.text, role: el.role ?? null, type: null, href: el.kind === 'link' ? '#' : null, ariaLabel: null, title: null, className: null, inNav: false };
             const { cls, confident } = classifyAction(cand);
             // Execution governance: a confirmed mutating action must be permitted by BOTH the session mode
             // AND the persona's permissions. allowedActions is a whitelist (when non-empty); prohibited is
             // already enforced above. Empty allowedActions ⇒ no whitelist (governed by mode alone).
-            const personaPermits = personaPermitsAction(persona, el.text);
+            const personaPermits = personaPermitsAction(persona, subject);
             if (cls === 'mutating' && confident && !permits(cls, mode).permitted) {
-              step = { action: 'done', ref: -1, value: '', say: `The next step — “${el.text}” — commits a change. In ${mode} mode I'll stop here; switch to Execution (or click it yourself) to complete it.` };
-              block = { control: el.text, layer: 'execution', reason: `${mode} mode forbids a confirmed mutating action`, escalate: false };
+              step = { action: 'done', ref: -1, value: '', say: `The next step — “${subject}” — commits a change. In ${mode} mode I'll stop here; switch to Execution (or do it yourself) to complete it.` };
+              block = { control: subject, layer: 'execution', reason: `${mode} mode forbids a confirmed mutating action`, escalate: false };
             } else if (cls === 'mutating' && confident && !personaPermits) {
-              step = { action: 'done', ref: -1, value: '', say: `As the ${persona!.name}, “${el.text}” isn't in my permitted actions — I'll hand back rather than act outside my remit.` };
-              block = { control: el.text, layer: 'execution', reason: `outside ${persona!.name} permitted actions`, escalate: true };
+              step = { action: 'done', ref: -1, value: '', say: `As the ${persona!.name}, “${subject}” isn't in my permitted actions — I'll hand back rather than act outside my remit.` };
+              block = { control: subject, layer: 'execution', reason: `outside ${persona!.name} permitted actions`, escalate: true };
             }
           }
         }

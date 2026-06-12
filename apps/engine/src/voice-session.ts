@@ -35,6 +35,8 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
   let stt: STTStream | null = null;
   let answering = false;
   let interrupted = false;        // barge-in flag: stop emitting TTS for the current answer
+  let streamedThisTurn = false;   // RC-03: did we already speak this turn's answer sentence-by-sentence (streamed)?
+  let utterance = 0;              // RC-11: monotonic id, bumped on barge-in so stale TTS from a prior turn bails
   let ttsChain: Promise<void> = Promise.resolve();
   let sttBytes = 0;               // LINEAR16 @16kHz mono bytes for the current utterance → STT audio seconds
   const speaker = 'Procurement';
@@ -44,12 +46,13 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
 
   // Speak one answer: synthesize sentence-by-sentence so audio starts on the first sentence.
   const speak = async (text: string) => {
+    const myU = utterance; // RC-11: bail the moment a newer utterance supersedes this one (barge-in)
     for (const sentence of splitSentences(text)) {
-      if (interrupted) return;
+      if (interrupted || myU !== utterance) return;
       try {
         const { audio, mime } = await googleTTS.synthesize(sentence, profile);
         void recordVoice('tts', sentence.length, { voice: profile.id }); // TTS billed by characters synthesized
-        if (interrupted) return;
+        if (interrupted || myU !== utterance) return;
         if (audio.length) send({ type: 'audio', mime, data: audio.toString('base64') });
       } catch (e: any) {
         send({ type: 'tts_error', message: String(e?.message ?? e) }); // degrade gracefully — text was already sent
@@ -59,8 +62,18 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
 
   // Forward every brain event to the client; when the consultant SAYS something, also speak it.
   const voiceEmit = (ev: Record<string, unknown>) => {
+    // RC-03: a streamed sentence (say_chunk) is spoken IMMEDIATELY and NOT forwarded to the client — it's a
+    // server-internal TTS signal (the full `message` still arrives for the chat panel). Speaking each sentence
+    // as the answer streams is what lets audio start on sentence 1 instead of after the whole reply.
+    if (ev.type === 'say_chunk' && typeof ev.text === 'string') {
+      if (!interrupted) { streamedThisTurn = true; ttsChain = ttsChain.then(() => speak(ev.text as string)); }
+      return;
+    }
     send(ev);
-    if (ev.type === 'message' && ev.side === 'ai' && typeof ev.text === 'string' && !interrupted) {
+    // Speak a full AI message ONLY if it was not already streamed sentence-by-sentence this turn (no double
+    // speech). Non-streamed lines — walk narration, explanations, compliance — are still spoken; and a
+    // non-streaming provider (Gemini) emits no say_chunk → streamedThisTurn stays false → spoken here.
+    if (ev.type === 'message' && ev.side === 'ai' && typeof ev.text === 'string' && !interrupted && !streamedThisTurn) {
       ttsChain = ttsChain.then(() => speak(ev.text as string)); // serialize so audio stays in order
     }
   };
@@ -69,9 +82,9 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     const q = (text || '').trim();
     if (!q) return;
     if (answering) { send({ type: 'busy', message: 'One moment — still answering.' }); return; }
-    answering = true; interrupted = false;
+    answering = true; interrupted = false; streamedThisTurn = false;
     try {
-      await runTurn(ctx, { speaker, text: q }, voiceEmit);
+      await runTurn(ctx, { speaker, text: q, stream: true }, voiceEmit); // RC-03: stream the spoken answer to TTS
       await ttsChain; // let queued TTS finish before signaling the turn is done
     } catch (e: any) {
       send({ type: 'error', message: String(e?.message ?? e) });
@@ -89,7 +102,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
   // on the same thread — walk steps and questions are serialized by `answering`.
   const walk = ctx.journeyId ? await journeyWalkPlan(ctx.journeyId).catch(() => null) : null;
   const walkPlan = walk?.plan ?? [];
-  let walkStep = 0;
+  let walkStep = 0;               // RC-02: a MIRROR of the graph's authoritative journeyStep (re-synced from runTurn each walk turn), not an independent counter that can desync
   let walkRun: { runId: string } | null = null;
   if (ctx.journeyId && walkPlan.length) {
     send({ type: 'journey_start', journey: walk!.journey.name, goal: walk!.journey.businessGoal ?? '', steps: walkPlan.length, sessionId: ctx.sessionId });
@@ -102,12 +115,15 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     if (answering) { send({ type: 'busy', message: 'One moment — finishing this step.' }); return; }
     if (walkStep >= walkPlan.length) { send({ type: 'journey_complete', steps: walkPlan.length }); return; }
     const idx = walkStep;
-    answering = true; interrupted = false;
+    answering = true; interrupted = false; streamedThisTurn = false;
     try {
       send({ type: 'journey_step', index: idx, total: walkPlan.length, kind: walkPlan[idx].stepKind, node: walkPlan[idx].nodeLabel ?? null });
-      await runTurn(ctx, { speaker: 'Presenter', text: walkPlan[idx].caption ?? 'next', advance: true }, voiceEmit);
+      const r = await runTurn(ctx, { speaker: 'Presenter', text: walkPlan[idx].caption ?? 'next', advance: true, stream: true }, voiceEmit); // RC-03: stream the walk narration to TTS
       await ttsChain;
-      walkStep = idx + 1;
+      // RC-02: SYNC the walk position to the GRAPH's authoritative journeyStep (the single owner) rather than
+      // incrementing our own counter — so the spoken caption and the driven screen can never drift apart after
+      // an off-script question or a mid-turn error. Fall back to idx+1 only if the graph didn't report a step.
+      walkStep = (r && typeof r.journeyStep === 'number') ? r.journeyStep : idx + 1;
       if (walkStep >= walkPlan.length) { if (walkRun) await completeJourneyRun(walkRun.runId, 'completed').catch(() => {}); send({ type: 'journey_complete', steps: walkPlan.length }); }
     } catch (e: any) {
       send({ type: 'error', message: String(e?.message ?? e) });
@@ -126,7 +142,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     let msg: any; try { msg = JSON.parse(data.toString()); } catch { return; }
     switch (msg?.type) {
       case 'mic_start':
-        interrupted = true; // user is talking → cut off any current TTS (barge-in)
+        interrupted = true; utterance++; send({ type: 'flush' }); // RC-11: barge-in — cut current TTS + tell the client to drop queued audio
         if (stt) { try { stt.end(); } catch { /* */ } }
         sttBytes = 0; // meter this utterance's audio for STT cost
         stt = googleSTT.open({
@@ -141,7 +157,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
         if (stt) { try { stt.end(); } catch { /* */ } } // end-of-utterance → STT emits final → turn
         break;
       case 'interrupt':
-        interrupted = true;
+        interrupted = true; utterance++; send({ type: 'flush' });
         break;
       case 'voice':
         profile = profileById(msg.id);

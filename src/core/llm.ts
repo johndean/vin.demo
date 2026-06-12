@@ -66,6 +66,11 @@ export interface AnswerContext {
   audience?: string;              // who's in the room (active speaker + stakeholder collection) — Phase 2
   priorContext?: string;          // prior concerns/objections/topics this session — Phase 2 relationship memory
   cite?: boolean;                 // citation policy (governance) — name the source inline when true
+  outcome?: string;               // RC-17: the buyer's business outcome to FRAME the answer against (when relevant) — turns a doc-bot answer into a consultant one
+  // RC-03 (streaming voice): when set, the answer is STREAMED and each completed sentence is delivered here
+  // as it arrives, so the voice channel can start TTS on sentence 1 instead of waiting for the whole reply.
+  // Omitted (interactive/reel/CLI) → the existing blocking call. Claude only; Gemini answers blocking.
+  onDelta?: (sentence: string) => void;
 }
 
 export interface DiscoverResult {
@@ -76,7 +81,7 @@ export interface DiscoverResult {
 }
 
 /** One element on the live page the agent can act on (perceived from the embedded browser's DOM). */
-export interface PageElement { ref: number; text: string; role?: string; kind?: string; options?: string[]; required?: boolean; filled?: boolean; }
+export interface PageElement { ref: number; text: string; role?: string; kind?: string; options?: string[]; required?: boolean; filled?: boolean; value?: string; /* RC-08: the CHOSEN/typed value (dropdowns, inputs) so the model sees what a field is set to, not just that it's filled */ }
 export interface NarrateContext {
   personaPreamble: string;
   stepKind: 'workflow' | 'tour' | 'knowledge' | 'note';
@@ -84,6 +89,9 @@ export interface NarrateContext {
   screen?: string | null;    // the screen now on display (node steps); null for a narration-only beat
   audience?: string | null;  // who's in the room (committee role/summary)
   outcome?: string | null;   // the business outcome this journey advances
+  // RC-03 (streaming voice): the voice-led WALK is the primary demo path — stream each completed sentence
+  // here so its narration starts speaking on sentence 1 too (not after the whole line). Omitted → blocking.
+  onDelta?: (sentence: string) => void;
 }
 
 export interface AgentStepContext {
@@ -97,6 +105,7 @@ export interface AgentStepContext {
   mode: ExecutionMode;     // read-only/safe/approval → never commit; execution → may save/submit
   personaPreamble?: string; // active specialist overlay (system prompt + scope + hard limits), if handed off
   knownScreens?: { label: string; route: string | null }[]; // the product's VERIFIED demo-graph screens (the navigation authority) — prefer these (Phase 2 bridge)
+  notices?: string[];      // RC-08: visible alerts/validation/toasts on screen now (so the agent can react to a failed submit, a success banner, etc.)
 }
 /** The single next action the agent takes to drive the live demo (read-only: never commits). */
 export interface AgentStep {
@@ -171,12 +180,17 @@ export const sysAnswerAs = (ctx: AnswerContext): string => {
   const navHint = ctx.screen
     ? ` You have already navigated to "${ctx.screen}" and are looking at it together — you are demonstrating RIGHT NOW. Walk through the steps that are actually on this screen, in order and concisely; do NOT ask permission to demonstrate, and never offer to perform an action you are not actually taking.`
     : '';
+  // RC-17: frame the answer against the buyer's outcome when there is one. In-code wrapper (like navHint), so it
+  // only appears when an outcome is supplied — the byte-identity eval cases set none, so the golden is unchanged.
+  const outcomeHint = ctx.outcome
+    ? ` When it is genuinely relevant, connect your answer to the buyer's goal — ${ctx.outcome} — in one natural phrase; never force it, pad with it, or repeat it.`
+    : '';
   return ctx.personaPreamble + '\n\n— — —\n' +
     rp('answerAs.opening') + bandPosture(ctx.band) + recencyHint + '\n' +
     (grounded
       ? rp('answerAs.grounded') + (ctx.cite ? rp('answerAs.cite') : rp('answerAs.noCite')) + rp('answerAs.provenance')
       : rp('answerAs.ungrounded')) +
-    rp('answerAs.style') + navHint + rp('answerAs.closing');
+    rp('answerAs.style') + navHint + outcomeHint + rp('answerAs.closing');
 };
 export const sysNarrate = (ctx: NarrateContext): string => ctx.personaPreamble + '\n\n— — —\n' + rp('narrate');
 export const sysDiscover = (ctx: DiscoverContext): string =>
@@ -209,6 +223,25 @@ const FN_SIG: [string, string][] = [
 export function detectFn(systemPrompt: string): string {
   for (const [sig, fn] of FN_SIG) if (systemPrompt.includes(sig)) return fn;
   return 'llm';
+}
+
+// RC-03 (streaming voice): emit COMPLETED sentences from a growing buffer so TTS can start on sentence 1.
+// Returns the new cursor (chars already emitted). `flushAll` (end of stream) emits the trailing remainder
+// even without a terminator. Kept dependency-free (core must not import the engine's voice segmenter).
+export function flushSentences(buf: string, cursor: number, onText: (s: string) => void, flushAll: boolean): number {
+  const region = buf.slice(cursor);
+  if (!region) return cursor;
+  let upto = region.length;
+  if (!flushAll) {
+    const SENT = /[.!?…](?:["'”’)\]]+)?(?:\s|$)/g;
+    let last = -1, m: RegExpExecArray | null;
+    while ((m = SENT.exec(region)) !== null) last = m.index + m[0].length;
+    if (last < 0) return cursor; // no complete sentence yet — wait for more
+    upto = last;
+  }
+  const piece = region.slice(0, upto).trim();
+  if (piece) onText(piece);
+  return cursor + upto;
 }
 
 class ClaudeProvider implements LlmProvider {
@@ -354,7 +387,10 @@ class ClaudeProvider implements LlmProvider {
   async agentStep(ctx: AgentStepContext): Promise<AgentStep> {
     const done = (say: string): AgentStep => ({ action: 'done', ref: -1, value: '', say });
     const elementList = ctx.elements.map((e) => {
-      const flags = [e.required ? 'REQUIRED' : '', e.filled ? 'filled' : (e.kind && /text|select|textarea|email|number|tel|date|password|search/.test(e.kind) ? 'EMPTY' : '')].filter(Boolean).join(',');
+      // RC-08: show the CHOSEN value of a filled field (e.g. filled="FA104 — Fixed Assets") so the model can
+      // tell a dropdown is already set, and to what — the fix for re-selecting / looping on a set field.
+      const filledFlag = e.filled ? (e.value ? `filled=${JSON.stringify(e.value)}` : 'filled') : (e.kind && /text|select|textarea|email|number|tel|date|password|search/.test(e.kind) ? 'EMPTY' : '');
+      const flags = [e.required ? 'REQUIRED' : '', filledFlag].filter(Boolean).join(',');
       const opts = e.options && e.options.length ? ` options=[${e.options.slice(0, 25).map((o) => JSON.stringify(o)).join(', ')}]` : '';
       return `[${e.ref}] ${e.kind ?? e.role ?? 'el'}: ${JSON.stringify(e.text)}${flags ? ` (${flags})` : ''}${opts}`;
     }).join('\n');
@@ -372,6 +408,7 @@ class ClaudeProvider implements LlmProvider {
           `Headings: ${JSON.stringify(ctx.headings.slice(0, 12))}\n` +
           `Steps already taken this turn:\n${ctx.history.length ? ctx.history.map((h, i) => `${i + 1}. ${h}`).join('\n') : '(none yet)'}\n\n` +
           (ctx.knownScreens?.length ? `Verified demo-graph screens for this product (the navigation AUTHORITY — when the goal matches one of these, prefer reaching it by its name/route): ${ctx.knownScreens.map((s) => (s.route ? `${s.label} (${s.route})` : s.label)).join(' · ')}\n\n` : '') +
+          (ctx.notices?.length ? `Notices on screen now (alerts/validation/toasts — react to these): ${ctx.notices.map((n) => JSON.stringify(n)).join(' · ')}\n\n` : '') +
           `Interactive elements on screen:\n${elementList || '(none detected)'}`,
       }],
       output_config: {
@@ -407,53 +444,92 @@ class ClaudeProvider implements LlmProvider {
   async answerAs(ctx: AnswerContext): Promise<string> {
     const grounded = ctx.band !== 'very_low' && ctx.source?.content; // also gates the SOURCE block in the user content below
     const MODEL = currentModel();
-    const res = await this.client.messages.create({
+    const userContent =
+      `Question: ${JSON.stringify(ctx.question)}\n` +
+      `Detected intent: ${ctx.intent}\n` +
+      (ctx.screen ? `Live screen now: ${ctx.screen}\n` : '') +
+      (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
+      (ctx.priorContext ? `Earlier in this session: ${ctx.priorContext}\n` : '') +
+      (grounded
+        ? `\nSOURCE (the only facts you may state — verbatim from the product knowledge base):\n"""\n${ctx.source!.content}\n"""\n` +
+          `Provenance: ${ctx.source!.source}` +
+          (ctx.source!.version ? ` · ${ctx.source!.version}` : '') +
+          (ctx.source!.owner ? ` · owned by ${ctx.source!.owner}` : '') +
+          (ctx.source!.validatedBy ? ` · validated by ${ctx.source!.validatedBy}${ctx.source!.validatedAt ? ` on ${String(ctx.source!.validatedAt).slice(0, 10)}` : ''}` : '') +
+          (ctx.source!.recencyDays != null ? ` · last verified ${ctx.source!.recencyDays}d ago` : '')
+        : `\n(No verified source is available for this question.)`);
+    // RC-04: adaptive thinking keeps the model's REASONING in (omitted) thinking blocks, not in the spoken
+    // answer text — we extract only the text block, so the spoken line is the clean final answer rather than
+    // a reasoning monologue. max_tokens is thinking+answer headroom; spoken LENGTH is governed by the concision
+    // span in the prompt, not by this ceiling.
+    const params = {
       model: MODEL,
-      max_tokens: 900,
+      max_tokens: 1024,
+      thinking: { type: 'adaptive' as const },
       system: sysAnswerAs(ctx),
-      messages: [{
-        role: 'user',
-        content:
-          `Question: ${JSON.stringify(ctx.question)}\n` +
-          `Detected intent: ${ctx.intent}\n` +
-          (ctx.screen ? `Live screen now: ${ctx.screen}\n` : '') +
-          (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
-          (ctx.priorContext ? `Earlier in this session: ${ctx.priorContext}\n` : '') +
-          (grounded
-            ? `\nSOURCE (the only facts you may state — verbatim from the product knowledge base):\n"""\n${ctx.source!.content}\n"""\n` +
-              `Provenance: ${ctx.source!.source}` +
-              (ctx.source!.version ? ` · ${ctx.source!.version}` : '') +
-              (ctx.source!.owner ? ` · owned by ${ctx.source!.owner}` : '') +
-              (ctx.source!.validatedBy ? ` · validated by ${ctx.source!.validatedBy}${ctx.source!.validatedAt ? ` on ${String(ctx.source!.validatedAt).slice(0, 10)}` : ''}` : '') +
-              (ctx.source!.recencyDays != null ? ` · last verified ${ctx.source!.recencyDays}d ago` : '')
-            : `\n(No verified source is available for this question.)`),
-      }],
-    });
+      messages: [{ role: 'user' as const, content: userContent }],
+    };
+    const REFUSAL = "I'd rather not guess here — let me show you the screen instead.";
+    const EMPTY = "Let me show you on the screen rather than guess at the specifics.";
+    // RC-03: stream when the caller wants incremental speech (the voice path passes onDelta). Emit each
+    // completed sentence as it lands so TTS starts on sentence 1 instead of after the whole reply.
+    if (ctx.onDelta) {
+      const stream = this.client.messages.stream(params);
+      let acc = '', cursor = 0;
+      stream.on('text', (delta: string) => { acc += delta; cursor = flushSentences(acc, cursor, ctx.onDelta!, false); });
+      const msg = await stream.finalMessage();
+      void this.logAiCall(params, msg); // the create()-wrapper doesn't see stream() — log this call explicitly
+      await record('llm', MODEL, { input: msg.usage?.input_tokens, output: msg.usage?.output_tokens }, { node: 'answerAs' });
+      flushSentences(acc, cursor, ctx.onDelta, true); // speak any trailing partial sentence
+      if (msg.stop_reason === 'refusal') return REFUSAL;
+      const b = msg.content.find((x) => x.type === 'text');
+      const text = b && 'text' in b ? b.text.trim() : '';
+      return text || EMPTY;
+    }
+    const res = await this.client.messages.create(params);
     await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'answerAs' });
-    if (res.stop_reason === 'refusal') return "I'd rather not guess here — let me show you the screen instead.";
+    if (res.stop_reason === 'refusal') return REFUSAL;
     const b = res.content.find((x) => x.type === 'text');
     const text = b && 'text' in b ? b.text.trim() : '';
-    return text || "Let me show you on the screen rather than guess at the specifics.";
+    return text || EMPTY;
   }
 
   async narrate(ctx: NarrateContext): Promise<string> {
     const fallback = (ctx.caption?.trim()) || (ctx.screen ? `Here's the ${ctx.screen}.` : 'Let me walk you through this.');
+    const MODEL = currentModel();
+    // No thinking on narrate: a 1-2 sentence paraphrase must start INSTANTLY (the walk is the primary path) —
+    // adaptive thinking would add silence before speech here, and at 160 tokens could even starve the line.
+    const params = {
+      model: MODEL,
+      max_tokens: 160,
+      system: sysNarrate(ctx),
+      messages: [{
+        role: 'user' as const,
+        content:
+          `Now showing: ${ctx.screen ?? '(a narration moment — no screen change)'}\n` +
+          (ctx.caption ? `Beat to convey (paraphrase naturally, do NOT read aloud): ${ctx.caption}\n` : '') +
+          (ctx.outcome ? `Outcome this advances: ${ctx.outcome}\n` : '') +
+          (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
+          `\nSpeak the one or two sentence narration now.`,
+      }],
+    };
     try {
-      const MODEL = currentModel();
-      const res = await this.client.messages.create({
-        model: MODEL,
-        max_tokens: 160,
-        system: sysNarrate(ctx),
-        messages: [{
-          role: 'user',
-          content:
-            `Now showing: ${ctx.screen ?? '(a narration moment — no screen change)'}\n` +
-            (ctx.caption ? `Beat to convey (paraphrase naturally, do NOT read aloud): ${ctx.caption}\n` : '') +
-            (ctx.outcome ? `Outcome this advances: ${ctx.outcome}\n` : '') +
-            (ctx.audience ? `In the room: ${ctx.audience}\n` : '') +
-            `\nSpeak the one or two sentence narration now.`,
-        }],
-      });
+      // RC-03: stream the walk narration to TTS sentence-by-sentence so the spoken line starts the moment the
+      // first clause lands. Falls back cleanly on any failure (the demo never goes silent on a narration beat).
+      if (ctx.onDelta) {
+        const stream = this.client.messages.stream(params);
+        let acc = '', cursor = 0;
+        stream.on('text', (delta: string) => { acc += delta; cursor = flushSentences(acc, cursor, ctx.onDelta!, false); });
+        const msg = await stream.finalMessage();
+        void this.logAiCall(params, msg); // stream() bypasses the create()-wrapper — log explicitly
+        await record('llm', MODEL, { input: msg.usage?.input_tokens, output: msg.usage?.output_tokens }, { node: 'narrate' });
+        flushSentences(acc, cursor, ctx.onDelta, true);
+        if (msg.stop_reason === 'refusal') return fallback;
+        const b = msg.content.find((x) => x.type === 'text');
+        const text = b && 'text' in b ? b.text.trim() : '';
+        return text || fallback;
+      }
+      const res = await this.client.messages.create(params);
       await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'narrate' });
       if (res.stop_reason === 'refusal') return fallback;
       const b = res.content.find((x) => x.type === 'text');

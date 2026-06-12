@@ -9,8 +9,8 @@ export const VOICE_PROFILES: VoiceProfile[] = [
   // (Studio voices were tried as a "warmer" tier but aren't enabled here → synthesis returned no audio and the
   //  demo went silent; restored to Neural2 so speech always plays. Revisit Studio only once it's confirmed
   //  available end-to-end on the engine's GCP project.)
-  { id: 'consultant-f', label: 'Consultant · Female', languageCode: 'en-US', name: 'en-US-Neural2-F', rate: 1.0, pitch: 0 },
-  { id: 'consultant-m', label: 'Consultant · Male', languageCode: 'en-US', name: 'en-US-Neural2-D', rate: 1.0, pitch: 0 },
+  { id: 'consultant-f', label: 'Consultant · Female', languageCode: 'en-US', name: 'en-US-Neural2-F', rate: 1.05, pitch: 0 }, // RC-37: a touch brisker — 1.0 read slow for a live demo
+  { id: 'consultant-m', label: 'Consultant · Male', languageCode: 'en-US', name: 'en-US-Neural2-D', rate: 1.05, pitch: 0 },
   { id: 'professional-f', label: 'Professional · Female', languageCode: 'en-US', name: 'en-US-Neural2-C', rate: 1.02, pitch: 0.5 },
   { id: 'professional-m', label: 'Professional · Male', languageCode: 'en-US', name: 'en-US-Neural2-J', rate: 1.02, pitch: 0 },
   { id: 'executive-f', label: 'Executive · Female', languageCode: 'en-US', name: 'en-US-Neural2-E', rate: 0.96, pitch: -1 },

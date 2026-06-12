@@ -55,6 +55,7 @@ export interface SessionCtx {
   // specialist's overlay/voice/gate). null = the lead consultant (no overlay; default behavior).
   personaId: string | null;
   journeyId: string | null; // pinned journey the loop walks (null = off-script / intent-driven default)
+  journeyGoal: string | null; // RC-17: the pinned journey's business outcome — answers are FRAMED against it
   graph: ReturnType<typeof buildGraph>;
   thread: { configurable: { thread_id: string } };
 }
@@ -98,12 +99,16 @@ export async function bootSession(threadPrefix = 'live', target: SessionTarget =
   // Default OFF for bootSession callers: interactive + voice are LIVE single-operator sessions where a
   // fabricated audience made the AI address fictional attendees. The reel opts back in (scripted showcase).
   const journeyId = target.journeyId?.trim() || null;
+  // RC-17: load the pinned journey's business outcome once at boot, so off-script answers can be FRAMED
+  // against the buyer's outcome (consultant) instead of answered in isolation (doc bot). Best-effort.
+  let journeyGoal: string | null = null;
+  if (journeyId) { try { journeyGoal = (await db().query<{ business_goal: string | null }>('SELECT business_goal FROM journeys WHERE id = $1', [journeyId])).rows[0]?.business_goal ?? null; } catch { /* best-effort */ } }
   const session = await createDemoSession(productId, mode, target.seedRoom ?? false, journeyId);
   beginCostSession(session.id);
   const graph = buildGraph();
   const thread = { configurable: { thread_id: `${threadPrefix}-${session.id}` } };
   const personaId = target.personaId?.trim() || null;
-  return { productId, productName, role, mode, baseUrl, clientNav, sessionId: session.id, personaId, journeyId, graph, thread };
+  return { productId, productName, role, mode, baseUrl, clientNav, sessionId: session.id, personaId, journeyId, journeyGoal, graph, thread };
 }
 
 /** Stakeholder intelligence + relationship memory (REUSES the existing session stakeholder collection +
@@ -140,7 +145,7 @@ async function gatherRoom(sessionId: string | null, active: Stakeholder | null |
 
 /** Run ONE turn through the brain and emit its events. Same logic whether the utterance came from the
  *  reel, a typed message, or speech — that's how voice/text stay a thin channel over one brain. */
-export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: string; loop?: number; node?: string; advance?: boolean }, emit: Emit): Promise<void> {
+export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: string; loop?: number; node?: string; advance?: boolean; stream?: boolean }, emit: Emit): Promise<{ journeyStep: number | null }> {
   emit({ type: 'message', side: 'them', who: turn.speaker, role: turn.speaker, text: turn.text, tag: 'question' });
   emit({ type: 'beat', loopIdx: 0, phase: 'Understand intent', brain: `Parsing the question and planning the demo.`, sub: 'interpret' });
 
@@ -156,10 +161,15 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
 
   let out: any;
   try {
-    out = await ctx.graph.invoke({ utterance: turn.text, speaker: turn.speaker, productId: ctx.productId, sessionId: ctx.sessionId, role: ctx.role, mode: ctx.mode, baseUrl: ctx.baseUrl, clientNav: ctx.clientNav, navHint: turn.node ?? null, journeyId: ctx.journeyId, journeyAdvance: turn.advance ?? false, personaPreamble: preamble, minConfidence, knowledgePriority }, ctx.thread);
+    // RC-03: on a streaming (voice) turn, ride a TTS sink through the LangGraph config (NOT state — config
+    // isn't checkpointed) so navigateJourneyStep's narrate streams the WALK narration out sentence-by-sentence.
+    const runConfig = turn.stream
+      ? { configurable: { ...ctx.thread.configurable, onDelta: (s: string) => emit({ type: 'say_chunk', text: s }) } }
+      : ctx.thread;
+    out = await ctx.graph.invoke({ utterance: turn.text, speaker: turn.speaker, productId: ctx.productId, sessionId: ctx.sessionId, role: ctx.role, mode: ctx.mode, baseUrl: ctx.baseUrl, clientNav: ctx.clientNav, navHint: turn.node ?? null, journeyId: ctx.journeyId, journeyAdvance: turn.advance ?? false, personaPreamble: preamble, minConfidence, knowledgePriority }, runConfig);
   } catch (e: any) {
     emit({ type: 'message', side: 'ai', who: aiWho, role: 'VIN Demo', text: `(engine error: ${e?.message ?? e})`, uncertain: true });
-    return;
+    return { journeyStep: null };
   }
 
   const top = out.retrieved?.[0];
@@ -223,6 +233,11 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
         audience: room.audience || undefined,
         priorContext: room.priorContext || undefined,
         cite: shouldCite(persona?.citationPolicy, band, hasSource),
+        outcome: ctx.journeyGoal || undefined, // RC-17: frame the answer against the buyer's pinned outcome when relevant
+
+        // RC-03: when the caller is the voice channel (turn.stream), stream completed sentences out as
+        // `say_chunk` events so TTS starts on sentence 1. The interactive/reel/CLI paths leave it off (blocking).
+        onDelta: turn.stream ? (s) => emit({ type: 'say_chunk', text: s }) : undefined,
       });
     } catch {
       text = hasSource ? String(top.content) : "Let me show you on the screen rather than guess at the specifics.";
@@ -256,6 +271,10 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
     actionsConsidered: out.blockedMutations ?? [], actionsRejected: out.blockedMutations ?? [],
     handoff: handoffSuggestion, escalation, compliance,
   });
+  // RC-02: the GRAPH owns the journey position (state.journeyStep, persisted via the checkpointer). Return it
+  // so the voice walk MIRRORS it instead of keeping its own counter that can silently desync after an off-script
+  // question. journeyStep is the NEXT step index (navigateJourneyStep advances it); null on a non-walk turn.
+  return { journeyStep: typeof out.journeyStep === 'number' ? out.journeyStep : null };
 }
 
 // REEL→node re-model (Phase 4): each scripted turn DECLARES the node it targets (`node` = a verified node's
