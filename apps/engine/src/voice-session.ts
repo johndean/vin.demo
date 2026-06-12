@@ -223,9 +223,27 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     }
   };
 
+  // Experience-audit #15: COLD-START SPOKEN BRIDGE. The first walk step is several seconds of silence in front
+  // of the buyer (DB boot + the first narration's LLM call + nav + TTS). Speak a cheap, cached, TEMPLATED opener
+  // the instant the walk launches — no LLM, no extra latency — so the buyer hears a warm human voice immediately
+  // while the real first beat is prepared. It's queued on ttsChain BEFORE runWalkStep, so it plays first and the
+  // first narration follows in order (never overlapping); a barge-in bails it like any other utterance. Honest:
+  // it only states what we're about to do + that it's loading — no product claims, no fabricated numbers.
+  const speakColdStartBridge = () => {
+    const jn = walk?.journey?.name?.trim();
+    const who = bootPersona?.name ?? 'Consultant';
+    const bridge = `Let me bring up ${ctx.productName}${jn ? ` and walk you through ${jn}` : ''} — give me just a moment while it loads.`;
+    voiceEmit({ type: 'message', side: 'ai', who, role: 'VIN Demo', text: bridge });
+  };
+
   // Open the demo: a pinned journey AUTO-plays its first step (voice-led); otherwise an operator-set
   // opening scenario is asked. Subsequent steps are driven by the client's {type:'journey_next'}.
-  if (ctx.journeyId && walkPlan.length) void runWalkStep();
+  // KNOWN FOLLOW-ON (review L-2, NOT changed here): runWalkStep sets answering=true before its first await, so a
+  // barge-in DURING step 0 (now more likely, since the bridge speaks into that window) hits runVoiceTurn's busy
+  // guard and the question is dropped. This is the pre-existing walk-step concurrency model — a real fix (stash the
+  // barge-in transcript and run it when the step settles, or let first-step mic_start abort runWalkStep) belongs
+  // with the #19 single-walk-driver/interruption work, not this cold-start pass.
+  if (ctx.journeyId && walkPlan.length) { speakColdStartBridge(); void runWalkStep(); }
   else if (target.scenario?.trim()) void runVoiceTurn(target.scenario.trim());
 
   ws.on('message', (data: any, isBinary: boolean) => {

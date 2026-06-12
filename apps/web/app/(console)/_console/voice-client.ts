@@ -14,11 +14,22 @@ export class VoiceClient {
   private queue: AudioBufferSourceNode[] = [];
   private nextAt = 0;
   private listening = false;
+  private audioFailed = false; // L-3: surface a dead audio path ONCE per session, not per dropped chunk
 
   constructor(private url: string, private onEvent: (ev: any) => void, private onState: (s: VoiceState) => void) {}
 
+  // #15 warm the AudioContext early (and keep it RUNNING): created + resumed on connect so the FIRST audio frame
+  // plays without the suspended-context cold start, and so a voice WALK (no mic → startMic never runs) is never
+  // left stuck in 'suspended'. Idempotent; tolerant of a browser that defers resume() to a user gesture.
+  private ensureAc(): AudioContext | null {
+    try { this.ac ??= new AudioContext(); } catch { return null; }
+    if (this.ac.state === 'suspended') void this.ac.resume().catch(() => {});
+    return this.ac;
+  }
+
   connect() {
     this.onState('connecting');
+    this.ensureAc(); // #15: warm the audio path now so the cold-start bridge / first narration plays instantly
     const ws = new WebSocket(this.url);
     ws.binaryType = 'arraybuffer';
     this.ws = ws;
@@ -76,8 +87,10 @@ export class VoiceClient {
 
   private async play(b64: string) {
     if (!b64) return;
-    this.ac ??= new AudioContext();
-    const ac = this.ac;
+    const ac = this.ensureAc(); // #15: guarantees a RUNNING context (resumes if suspended) before scheduling
+    // L-3: if the context can't even be CREATED (constructor threw), every frame would be silently dropped and the
+    // consultant goes mute with no signal. Surface it once so the operator knows why — but don't kill the session.
+    if (!ac) { if (!this.audioFailed) { this.audioFailed = true; this.onEvent({ type: 'error', message: 'Audio is unavailable in this environment — the consultant can’t be heard.' }); } return; }
     try {
       const bin = atob(b64);
       const bytes = new Uint8Array(bin.length);

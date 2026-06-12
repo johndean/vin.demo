@@ -1493,10 +1493,14 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
     // Dwell on whatever was JUST spoken, including a hedged/low-confidence line (L-3: don't skip past it). Use the
     // step's arc/narration ONLY when the just-finished turn was a walk step — after an off-script answer
     // (lastTurnWalk=false) fall back to neutral length-only pacing so a stale prior-step arc can't mis-time it (L-2).
-    const lastSaid = [...live.messages].reverse().find((m) => m.side === 'ai')?.text ?? '';
+    const aiSaid = live.messages.filter((m) => m.side === 'ai');
+    const lastSaid = aiSaid[aiSaid.length - 1]?.text ?? '';
     const arc = live.lastTurnWalk ? live.journeyArc : null;
     const narrated = live.lastTurnWalk ? live.journeyNarrated : true;
-    const len = (arc === 'transit' || !narrated) ? 0 : lastSaid.length;
+    // L-1 (#15 follow-up): on the OPEN beat the cold-start bridge was spoken just BEFORE this narration and is
+    // still draining client-side when turn_done fires, so count it too — otherwise auto-advance rushes the opener.
+    const openBridge = (arc === 'open' && aiSaid.length >= 2) ? (aiSaid[aiSaid.length - 2]?.text?.length ?? 0) : 0;
+    const len = (arc === 'transit' || !narrated) ? 0 : lastSaid.length + openBridge;
     const mult = (arc === 'open' || arc === 'close') ? 1.5 : 1;
     const dwell = len === 0 ? 1100 : Math.min(6500, Math.max(1700, Math.round((1100 + len * 14) * mult)));
     const t = setTimeout(() => vcRef.current?.next(), dwell);
