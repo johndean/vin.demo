@@ -243,6 +243,10 @@ export async function runTurn(ctx: SessionCtx, turn: { speaker: string; text: st
     journeyStep: typeof out.journeyStep === 'number' ? out.journeyStep : undefined,
     currentPosition: out.currentPosition ?? null,
     sessionStatus: out.sessionStatus,
+    // P3: the facilitator channel (captured concerns/phase) is INTENTIONALLY not in this cross-process snapshot —
+    // the in-process MemorySaver persists it across turns (the live case); on a rare engine-redeploy-mid-demo it
+    // resets to the sequential index walk, which is harmless while the walk is sequential (re-rank is P4). When P4
+    // makes concerns actionable, add `facilitator: out.facilitator ?? null` here + restore it in bootSession.
   });
 
   const top = out.retrieved?.[0];

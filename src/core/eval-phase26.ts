@@ -8,7 +8,7 @@
  *   - a buyer signal is captured without advancing; re-ranking prefers the grounded proof the buyer cares about.
  * Run: npm run eval:phase26
  */
-import { initialFacilitatorState, transition, toFacilitationBeats, type FacilitationBeat } from './facilitator.js';
+import { initialFacilitatorState, transition, toFacilitationBeats, advanceWalk, noteConcern, type FacilitationBeat } from './facilitator.js';
 
 const checks: { name: string; pass: boolean; detail: string }[] = [];
 const ok = (name: string, pass: boolean, detail = '') => checks.push({ name, pass, detail });
@@ -77,6 +77,31 @@ ok('adapt: a knowledge beat WITH sourceText → proof + grounded', fb[3].phase =
 ok('adapt: an unsourced note → show + NOT grounded (cannot answer an objection)', fb[4].phase === 'show' && fb[4].grounded === false);
 ok('adapt: close beat → close phase', fb[5].phase === 'close');
 ok('adapt: branchKey carries the caption keywords (for overlap re-rank)', fb[3].branchKey === 'answers the CFO control concern' && fb[2].branchKey === null);
+
+// ── P3 WIRE helpers (graph.ts ↔ facilitator): advanceWalk bridges the graph's journeyStep (NEXT beat to surface)
+// onto a facilitator ADVANCE; noteConcern records an off-script concern. These are the EXACT functions graph.ts calls
+// behind the FACILITATOR flag — the off-by-one seam, tested with no I/O. KEY P3 SCOPE: advanceWalk drives the walk
+// SEQUENTIALLY (it CAPTURES concerns/signals as persistent context but does NOT re-order the forward cursor — the
+// re-rank is P4, which needs a visited/resume cursor so a late proof can't collapse the linear walk). ──
+const a0 = advanceWalk(null, beats, 0);
+ok('wire: advanceWalk(null, …, journeyStep=0) surfaces beat 0 (no off-by-one skip of the open beat)', a0.beatIndex === 0, `beat=${a0.beatIndex}`);
+const a1 = advanceWalk(a0.state, beats, 1);
+ok('wire: advanceWalk(…, journeyStep=1) surfaces beat 1 (sequential — == today’s index walk)', a1.beatIndex === 1, `beat=${a1.beatIndex}`);
+// advanceWalk returns exactly journeyStep for EVERY step → FACILITATOR-on is byte-identical to the index walk.
+ok('wire: advanceWalk == the index walk for every step', [0,1,2,3,4,5].every((js) => advanceWalk(initialFacilitatorState(), beats, js).beatIndex === js), 'all steps sequential');
+// CRITICAL P3 GUARANTEE: even WITH an open concern, advanceWalk stays SEQUENTIAL (beat 2, not the proof at 3) — it
+// does NOT jump the cursor (that's the walk-collapse failure mode P4 avoids), but it CARRIES the concern forward.
+const withConcern = advanceWalk({ ...initialFacilitatorState(), openConcerns: ['cfo cost control budget priorities'] }, beats, 2);
+ok('wire: with an open concern, advanceWalk stays SEQUENTIAL (beat 2 — no cursor jump; re-rank is P4)', withConcern.beatIndex === 2, `beat=${withConcern.beatIndex}`);
+ok('wire: advanceWalk CARRIES the recorded concern forward on the persisted state (captured for P4)', withConcern.state.openConcerns.includes('cfo cost control budget priorities'));
+ok('wire: advanceWalk past the last beat (journeyStep=total) → complete (beatIndex null)', advanceWalk(initialFacilitatorState(), beats, beats.length).beatIndex === null);
+// done-hygiene: a successful advance resets done:false, so a rewound walk (journeyStep→0 with the same channel) is consistent.
+ok('wire: advanceWalk resets done:false on a successful advance (rewind-safe)', advanceWalk({ ...initialFacilitatorState(), done: true }, beats, 0).state.done === false);
+// noteConcern: append (dedup, no-op on empty/duplicate — returns the SAME ref so the graph can cheaply detect a no-op).
+const nc1 = noteConcern(null, 'cfo budget cost control');
+ok('wire: noteConcern(null, concern) records the concern (captured; advanceWalk then carries it, still sequential)', nc1.openConcerns.includes('cfo budget cost control') && advanceWalk(nc1, beats, 2).beatIndex === 2 && advanceWalk(nc1, beats, 2).state.openConcerns.includes('cfo budget cost control'), `concerns=${JSON.stringify(nc1.openConcerns)}`);
+ok('wire: noteConcern is a NO-OP on a duplicate concern (same ref returned)', noteConcern(nc1, 'cfo budget cost control') === nc1);
+ok('wire: noteConcern is a NO-OP on empty text (same ref returned)', noteConcern(nc1, '   ') === nc1);
 
 console.log('\n══ Phase 26 — facilitator state machine (P3; deterministic) ══');
 for (const c of checks) console.log(`  ${c.pass ? '✅' : '❌'} ${c.name}  (${c.detail})`);

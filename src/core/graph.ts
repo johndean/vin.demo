@@ -24,6 +24,7 @@ import { retrieveAndGate } from './retrieval.js';
 import { selectNavigation, recordNavAttempt } from './graph-lifecycle.js';
 import { screenFactsFor, nodeNarrationFacts } from './graph-elements.js'; // RC-06: read the navigated node's UX surface at demo time; #8/#35: static screenName/purpose/facts for narration
 import { journeyWalkPlan } from './journeys.js';
+import { facilitatorEnabled, toFacilitationBeats, advanceWalk, noteConcern } from './facilitator.js'; // P3: the executable facilitation arc (flag-gated; OFF = today's index walk)
 const EXPLAIN_TRACE_WINDOW = 16; // bound the cross-turn trace fed to explain (it grows unbounded)
 
 // Per-invoke LangGraph config (NOT checkpointed): carries a streaming sink so a node can stream spoken
@@ -73,7 +74,19 @@ async function retrieve(state: DemoStateT): Promise<Partial<DemoStateT>> {
   const query = state.interpretation?.intent ?? state.utterance;
   // An active specialist persona can demand a stricter confidence bar + re-rank by its knowledge hierarchy.
   const r = await retrieveAndGate(query, state.productId, state.minConfidence, state.knowledgePriority);
+  // P3 (FACILITATOR flag; default OFF): CAPTURE a journey-pinned OFF-SCRIPT objection's concern HERE — retrieve
+  // ALWAYS runs, before the retrieve→END gate that drops a gated-and-non-navigable objection — so the concern is
+  // never silently lost. It's persisted onto the facilitator channel for P4's re-rank; the off-script answer itself
+  // is unchanged. Walk turns (journeyAdvance) are skipped (a synthetic caption isn't a buyer objection). noteConcern
+  // returns the same ref on empty/duplicate → no-op. OFF / non-objection → adds nothing (byte-identical).
+  let facCapture: Partial<DemoStateT> = {};
+  if (facilitatorEnabled() && state.journeyId && !state.journeyAdvance && state.interpretation?.kind === 'objection') {
+    const concern = (state.interpretation?.intent || state.utterance || '').trim();
+    const updated = noteConcern(state.facilitator, concern);
+    if (updated !== state.facilitator) facCapture = { facilitator: updated };
+  }
   return {
+    ...facCapture,
     retrieved: r.rows,
     gated: r.gated,
     navigable: r.navigable,
@@ -239,16 +252,30 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
   if (!wp || !wp.plan.length) return await navigateFreeRoam(state); // nothing to walk → honest free-roam fallback
   const step = state.journeyStep ?? 0;
   const total = wp.plan.length;
-  // Walk complete (the run lifecycle is owned by walkJourney in live-session.ts, not per-node).
-  if (step >= total) return { journeyStep: step, navigation: null, navAction: null, explanation: null, trace: [`journey: walk complete — "${wp.journey.name}" (${total} steps)`] };
-  const entry = wp.plan[step];
-  const advance = { journeyStep: step + 1 };
+  // P3 (FACILITATOR flag; default OFF): the facilitation state machine drives the walk. advanceWalk returns the next
+  // SEQUENTIAL beat (the facilitator threads phase + the captured buyer concerns/signals as persistent facilitation
+  // context across turns); re-ordering the cursor toward a grounded proof the buyer cares about is P4 (it needs a
+  // visited/resume cursor to do so without collapsing the linear walk). OFF → exactly today's index walk; ON → the
+  // SAME beat sequence + persisting the `facilitator` channel (so chosen === step; no output change vs. OFF).
+  let chosen = step;
+  let facUpdate: Partial<DemoStateT> = {};
+  if (facilitatorEnabled()) {
+    const r = advanceWalk(state.facilitator, toFacilitationBeats(wp.plan), step);
+    if (r.beatIndex == null) return { journeyStep: step, facilitator: r.state, navigation: null, navAction: null, explanation: null, trace: [`journey: walk complete — "${wp.journey.name}" (${total} steps) [facilitator]`] };
+    chosen = r.beatIndex;
+    facUpdate = { facilitator: r.state };
+  } else if (step >= total) {
+    // Walk complete (the run lifecycle is owned by walkJourney in live-session.ts, not per-node).
+    return { journeyStep: step, navigation: null, navAction: null, explanation: null, trace: [`journey: walk complete — "${wp.journey.name}" (${total} steps)`] };
+  }
+  const entry = wp.plan[chosen];
+  const advance = { journeyStep: chosen + 1, ...facUpdate };
   const audience = state.activeStakeholder?.role ?? null;
   const onDelta = config?.configurable?.onDelta; // RC-03: stream this step's narration to TTS when the voice channel gave us a sink
   // Wave C #17: frame the OPENING beat for the committee this journey targets (role-level; distinct from the
   // in-the-room `audience`). Null on every other beat so the framing lands once, at the open.
   const framedFor = entry.arcRole === 'open' ? (config?.configurable?.framedFor ?? null) : null;
-  const stepNum = step + 1;
+  const stepNum = chosen + 1; // the beat actually surfaced (== step unless the facilitator re-ranked to a proof)
   const recent = state.recentNarrations ?? []; // #2: the last few spoken lines, threaded for anti-repetition
   // #2: the OUTCOME frames only the bookend beats (open/close); injecting it on every step is the chief cause of
   // 97%-repetitive narration. Elsewhere it's null so the beat advances the story instead of restating the goal.
@@ -312,6 +339,8 @@ async function navigate(state: DemoStateT, config?: GraphRunConfig): Promise<Par
   // Walk a journey step ONLY on an explicit walk turn (journeyAdvance). An off-script question on a
   // journey-pinned session is answered normally (free-roam) and does NOT consume a journey step.
   if (state.journeyId && state.journeyAdvance) return await navigateJourneyStep(state, config);
+  // (P3: an off-script objection's concern is CAPTURED in retrieve() — which always runs, before the gate — not
+  // here, so a gated-and-non-navigable objection that never reaches navigate() still records its concern.)
   return await navigateFreeRoam(state);
 }
 

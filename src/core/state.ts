@@ -7,6 +7,7 @@ import type { NavResult } from './driver.js';
 import type { ExecutionMode } from './safety.js';
 import type { Stakeholder } from './stakeholders.js';
 import type { ConfidenceBand } from './retrieval.js';
+import type { FacilitatorState } from './facilitator.js';
 
 // Experience-audit #2/#16: how many recent spoken journey-narration lines to keep for anti-repetition.
 const RECENT_NARRATIONS_MAX = 4;
@@ -55,6 +56,11 @@ export const DemoState = Annotation.Root({
   // journey-pinned session leaves this false → it's answered normally (free-roam) and consumes NO journey step.
   // Always passed explicitly per turn (never omitted) so it can't retain a stale `true` via the checkpointer.
   journeyAdvance: Annotation<boolean>({ reducer: (_, b) => b, default: () => false }),
+  // AI-consultant runtime P3 (behind the FACILITATOR flag): the facilitation state machine's persisted state —
+  // phase, resume position, open buyer concerns, captured signals. Threaded across turns (checkpointer) so a buyer
+  // objection re-prioritizes WHICH grounded proof the walk shows next (the committee/proof reaching the WALK, not
+  // just off-script). null = facilitator OFF / not yet started → the index walk is byte-identical to today.
+  facilitator: Annotation<FacilitatorState | null>({ reducer: (_, b) => b, default: () => null }),
   // Per-session URL override (operator picked a product but pointed its adapter at a different host,
   // e.g. a staging URL). null → use the product's configured baseUrl. The driver merges it over the
   // resolved ProductWebConfig; everything else (login, selectors, knowledge) is unchanged.

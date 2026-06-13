@@ -48,6 +48,13 @@ export function initialFacilitatorState(): FacilitatorState {
   return { phase: 'open', stepIndex: 0, resumeIndex: null, openConcerns: [], buyerSignals: [], done: false };
 }
 
+/** Is the facilitator wired into the live walk? Engine env flag, OFF by default (mirrors speechDriverEnabled /
+ *  ELEVENLABS_WS): with it OFF, graph.ts runs the unchanged index walk — byte-identical to today. P3 reads this. */
+export function facilitatorEnabled(): boolean {
+  const f = process.env.FACILITATOR;
+  return !!(f && f !== '0' && f.toLowerCase() !== 'false');
+}
+
 /** Adapt the EXISTING walk plan (journeys.ts WalkEntry[]) into the facilitator's input WITHOUT changing the plan
  *  itself — additive + pure. Maps the positional arcRole to a facilitation phase, derives `grounded` (a verified
  *  SCREEN node, or a knowledge beat with resolved sourceText — the things the trust gate stands behind), and uses
@@ -94,6 +101,12 @@ function selectNext(beats: FacilitationBeat[], state: FacilitatorState): number 
  *    none exists), remembering where to resume. Does NOT consume the walk's forward position (resumeIndex holds it).
  *  - signal{signal}: DISCOVER captured a buyer signal → record it (biases future selection); no phase change.
  *  - resume: an objection was answered → return to the held position/phase.
+ *
+ * WIRING STATUS: the live graph (P3-WIRE) drives this through ONLY `advance` (via advanceWalk, which holds concerns
+ * aside → a SEQUENTIAL walk) + the lightweight noteConcern capture. The `objection`/`signal`/`resume` events and the
+ * `mustGround` flag + `resumeIndex` interject-and-return machinery are the P4 surface — the discovery router will use
+ * them to re-prioritize the next grounded proof WITHOUT collapsing the linear walk. Until then they live here +
+ * eval:phase26 only (built ahead, deliberately not yet on the live path).
  */
 export function transition(state: FacilitatorState, beats: FacilitationBeat[], event:
   | { kind: 'advance' }
@@ -131,7 +144,42 @@ export function transition(state: FacilitatorState, beats: FacilitationBeat[], e
       // answering a concern by advancing onto its proof clears it from the open set
       const cleared = beats.find((b) => b.index === next)?.branchKey;
       const openConcerns = cleared ? state.openConcerns.filter((c) => !answers(cleared, c)) : state.openConcerns;
-      return { state: { ...state, phase, stepIndex: next, openConcerns }, beatIndex: next, mustGround: false };
+      // Reset done:false on a successful advance — done is only ever set true at completion, so resetting it here
+      // keeps the persisted channel internally consistent if the walk is rewound (operator restarts / journeyStep→0).
+      return { state: { ...state, phase, stepIndex: next, openConcerns, done: false }, beatIndex: next, mustGround: false };
     }
   }
+}
+
+// ── P3 WIRE helpers (graph.ts ↔ facilitator). Pure; keep the graph thin + the seam math deterministically
+// testable (eval:phase26). The graph owns `journeyStep` (the NEXT beat to surface — RC-02); the facilitator's
+// `stepIndex` models the LAST surfaced beat. These two helpers bridge that off-by-one and the off-script path. ──
+
+/** Map the graph's `journeyStep` (NEXT beat to surface) onto a facilitator ADVANCE and return the beat to surface
+ *  + the new persisted state. We seed stepIndex = journeyStep-1 so `advance` lands ON journeyStep's beat (not past
+ *  it); beatIndex==null means the walk is complete (past the last beat).
+ *
+ *  SCOPE (P3 vs P4): P3-WIRE drives the walk SEQUENTIALLY — the facilitator threads phase + the CAPTURED concerns/
+ *  signals as persistent facilitation context, but does NOT re-order the forward cursor. So we run the advance with
+ *  openConcerns held ASIDE for the selection (→ always the next sequential beat == today's index walk, byte-identical
+ *  whether the flag is on or off), then carry the recorded concerns/signals forward on the returned state. Re-ranking
+ *  the cursor toward the grounded proof a buyer cares about is P4's discovery router — it needs a visited/resume
+ *  cursor to do so WITHOUT collapsing or skipping the linear walk (a plain forward-cursor jump to a late proof would
+ *  end the walk early and skip intervening beats — the failure mode this deliberately avoids). */
+export function advanceWalk(prior: FacilitatorState | null, beats: FacilitationBeat[], journeyStep: number): FacilitatorStep {
+  const base = prior ?? initialFacilitatorState();
+  const r = transition({ ...base, stepIndex: journeyStep - 1, openConcerns: [] }, beats, { kind: 'advance' });
+  // Preserve the recorded concerns/signals (the captured intelligence P4 will act on) on the persisted state.
+  return { ...r, state: { ...r.state, openConcerns: base.openConcerns, buyerSignals: base.buyerSignals } };
+}
+
+/** Record an OFF-SCRIPT objection's concern WITHOUT moving the walk position or surfacing a beat — so the NEXT
+ *  advanceWalk re-ranks toward the grounded proof that answers it (the off-script answer itself is composed
+ *  elsewhere, with committee+ROI). Pure: appends to openConcerns (dedup); returns the SAME ref when nothing changed
+ *  (empty/duplicate concern) so the caller can cheaply detect a no-op. */
+export function noteConcern(prior: FacilitatorState | null, concern: string): FacilitatorState {
+  const base = prior ?? initialFacilitatorState();
+  const c = concern.trim();
+  if (!c || base.openConcerns.includes(c)) return base;
+  return { ...base, openConcerns: [...base.openConcerns, c] };
 }
