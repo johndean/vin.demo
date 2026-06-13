@@ -48,6 +48,22 @@ export function initialFacilitatorState(): FacilitatorState {
   return { phase: 'open', stepIndex: 0, resumeIndex: null, openConcerns: [], buyerSignals: [], done: false };
 }
 
+/** Adapt the EXISTING walk plan (journeys.ts WalkEntry[]) into the facilitator's input WITHOUT changing the plan
+ *  itself — additive + pure. Maps the positional arcRole to a facilitation phase, derives `grounded` (a verified
+ *  SCREEN node, or a knowledge beat with resolved sourceText — the things the trust gate stands behind), and uses
+ *  the caption as the branchKey (its objection/criterion keywords are what the re-rank/objection overlap matches).
+ *  Typed structurally (not importing WalkEntry) so facilitator.ts stays dependency-free + node-unit-testable. */
+export function toFacilitationBeats(plan: { arcRole: 'open' | 'show' | 'transit' | 'close'; kind: 'node' | 'beat'; stepKind: string; sourceText?: string | null; caption: string | null }[]): FacilitationBeat[] {
+  return plan.map((e, index) => {
+    const phase: FacilitationPhase = e.arcRole === 'open' ? 'open'
+      : e.arcRole === 'close' ? 'close'
+      : (e.kind === 'beat' && e.stepKind === 'knowledge' && !!e.sourceText) ? 'proof' // a grounded knowledge beat IS proof
+      : 'show';
+    const grounded = e.kind === 'node' || !!e.sourceText; // a verified screen, or a resolved (trust-gated) chunk
+    return { index, phase, branchKey: e.caption ?? null, grounded };
+  });
+}
+
 /** Case-insensitive token overlap (≥2 shared significant words) — the SAME grounding test the assembler uses to
  *  bind a proof to an objection. A concern only "matches" a beat's branchKey when the words genuinely echo. */
 function answers(branchKey: string | null | undefined, concern: string): boolean {

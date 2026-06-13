@@ -8,7 +8,7 @@
  *   - a buyer signal is captured without advancing; re-ranking prefers the grounded proof the buyer cares about.
  * Run: npm run eval:phase26
  */
-import { initialFacilitatorState, transition, type FacilitationBeat } from './facilitator.js';
+import { initialFacilitatorState, transition, toFacilitationBeats, type FacilitationBeat } from './facilitator.js';
 
 const checks: { name: string; pass: boolean; detail: string }[] = [];
 const ok = (name: string, pass: boolean, detail = '') => checks.push({ name, pass, detail });
@@ -61,6 +61,22 @@ ok('re-rank stays within the grounded plan set (never out of range / never ungro
 let e = { ...initialFacilitatorState(), stepIndex: 5, phase: 'close' as const };
 const end = transition(e, beats, { kind: 'advance' });
 ok('advance past the last beat → close + done', end.state.phase === 'close' && end.state.done === true && end.beatIndex === null);
+
+// ── toFacilitationBeats: adapt the existing walk plan → facilitator input (arc→phase, grounded, branchKey) ──
+const fb = toFacilitationBeats([
+  { arcRole: 'open', kind: 'beat', stepKind: 'note', sourceText: null, caption: 'The gap behind faster approvals' },
+  { arcRole: 'show', kind: 'node', stepKind: 'workflow', sourceText: null, caption: 'Approvals queue' },
+  { arcRole: 'transit', kind: 'node', stepKind: 'workflow', sourceText: null, caption: null },
+  { arcRole: 'show', kind: 'beat', stepKind: 'knowledge', sourceText: 'Delegation routes to a backup approver within SLA.', caption: 'answers the CFO control concern' },
+  { arcRole: 'show', kind: 'beat', stepKind: 'note', sourceText: null, caption: 'an unsourced aside' },
+  { arcRole: 'close', kind: 'beat', stepKind: 'note', sourceText: null, caption: 'The measurable result' },
+]);
+ok('adapt: open beat → open phase', fb[0].phase === 'open');
+ok('adapt: a verified SCREEN node → show + grounded', fb[1].phase === 'show' && fb[1].grounded === true);
+ok('adapt: a knowledge beat WITH sourceText → proof + grounded', fb[3].phase === 'proof' && fb[3].grounded === true);
+ok('adapt: an unsourced note → show + NOT grounded (cannot answer an objection)', fb[4].phase === 'show' && fb[4].grounded === false);
+ok('adapt: close beat → close phase', fb[5].phase === 'close');
+ok('adapt: branchKey carries the caption keywords (for overlap re-rank)', fb[3].branchKey === 'answers the CFO control concern' && fb[2].branchKey === null);
 
 console.log('\n══ Phase 26 — facilitator state machine (P3; deterministic) ══');
 for (const c of checks) console.log(`  ${c.pass ? '✅' : '❌'} ${c.name}  (${c.detail})`);
