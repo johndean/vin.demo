@@ -1408,7 +1408,10 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   const [driveActive, setDriveActive] = useState(false);
   const [voiceState, setVoiceState] = useState<string>('idle');
   const [listening, setListening] = useState(false);
-  const [autoWalk, setAutoWalk] = useState(false); // V5 voice-walk: auto-advance vs operator-paced (Next ▶)
+  // ROOT-CAUSE FIX (stop-the-bleed): the journey walk is a GUIDED experience — it must flow on its own, not stall
+  // after step 0 waiting for an operator click the buyer can't see. Auto-advance is now the DEFAULT (content-aware
+  // dwell paces it; a mic barge-in pauses it; the operator can still uncheck to pace manually with Next ▶).
+  const [autoWalk, setAutoWalk] = useState(true); // V5 voice-walk: auto-advance is the default (was operator-paced — the "speaks one paragraph then stops" bug)
   const [modeMenu, setModeMenu] = useState(false);  // demo-mode picker tucked behind the gear
   const startVoice = async (t?: TargetParams) => {
     reset(); setVoiceState('connecting'); setListening(false);
@@ -1508,6 +1511,16 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
     return () => clearTimeout(t);
   }, [isJourneyWalk, autoWalk, live.journeyName, live.journeyDone, live.turnSeq, listening]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ROOT-CAUSE FIX (stop-the-bleed): on a journey WALK the live product is the star — collapse the chat panel so the
+  // stage is full-bleed and the experience reads as "watch the product + a consultant speaking", not a chat transcript
+  // beside a webview. ONE-SHOT per distinct journey (keyed on journeyId) so the operator's re-open STICKS even across a
+  // talk→ask→talk mode detour (review LOW-1). Essential controls (mic, kill, next) live in the always-visible walk
+  // header below, so a closed panel never strands them (review HIGH-2/MEDIUM).
+  const collapsedFor = useRef<string | null>(null);
+  useEffect(() => {
+    if (isJourneyWalk && target?.journeyId && collapsedFor.current !== target.journeyId) { setPanelOpen(false); collapsedFor.current = target.journeyId; }
+  }, [isJourneyWalk, target?.journeyId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Scripted autoplay (scripted mode only).
   useEffect(() => {
     if (!isLive && playing) {
@@ -1536,6 +1549,12 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
   const liveBeat: Beat = { loopIdx: live.loopIdx, planIdx: Math.min(Math.max(live.loopIdx, 0), PLAN.length - 1), phase: live.phase, brain: live.brain, sub: live.sub, screen: 'dashboard', conf: live.conf, activeStk: 's1', cost: live.cost, cite: null, loopDone: live.done, push: [] };
   const beat = engine ? liveBeat : scriptedBeat;
   const messages = engine ? live.messages : [...SEED, ...BEATS.slice(1, idx + 1).flatMap((b) => b.push || [])];
+  // ROOT-CAUSE FIX (stop-the-bleed): the CURRENT beat's caption, for an ephemeral read-along OVER the product so the
+  // spoken word is the channel and text merely supports it (never a chat transcript). Sourced from live.journeyCaption
+  // (the beat the consultant is on NOW — it tracks journey_step synchronously and is null on a silent transit), NOT
+  // the raw message log, which is append-only and would paint the PRIOR step's text over the next screen during the
+  // drive/transit/handoff/cold-start windows (review HIGH-1).
+  const liveCaption = isJourneyWalk && !live.journeyDone ? (live.journeyCaption ?? '') : '';
   const typing = engine ? (live.running || driveActive) : (playing && idx > 0 && idx < BEATS.length - 1);
   const canAsk = runtime === 'ask' ? (live.ready && !live.running && !driveActive)
     : runtime === 'talk' ? (voiceState === 'ready' && !listening && !driveActive) : false;
@@ -1706,6 +1725,13 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
               {live.voices.map((v) => <option key={v.id} value={v.id} style={{ color: '#000' }}>{v.label}</option>)}
             </select>
           )}
+          {/* ROOT-CAUSE FIX (stop-the-bleed): with the chat panel collapsed for the full-bleed walk, the operator's
+              essential live controls must live HERE in the always-visible header — push-to-talk (barge in for the
+              buyer; opening the mic also PAUSES auto-advance) and a hard KILL (execution mode is on during demos). */}
+          <button onClick={toggleMic} disabled={voiceState !== 'ready'} title="Push to talk — ask VIN a question (pauses the walk while the mic is open)"
+            style={{ padding: '5px 12px', borderRadius: 7, border: '1px solid rgba(255,255,255,.2)', background: listening ? '#C0392B' : 'rgba(255,255,255,.08)', color: '#fff', fontWeight: 700, fontSize: 12, cursor: voiceState !== 'ready' ? 'default' : 'pointer', opacity: voiceState !== 'ready' ? 0.5 : 1 }}>{listening ? '● Listening…' : '🎤 Ask'}</button>
+          <button onClick={stop} title="Hard kill — stop the agent immediately"
+            style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid rgba(255,90,90,.5)', background: 'transparent', color: '#ff9b9b', fontWeight: 700, fontSize: 12, cursor: 'pointer' }}>■ Kill</button>
           <button onClick={() => { stopVoice(); setMode('start'); }} title="Back to the launcher" style={{ padding: '5px 10px', borderRadius: 7, border: '1px solid rgba(255,255,255,.2)', background: 'transparent', color: '#fff', fontSize: 12, cursor: 'pointer' }}>Exit</button>
         </div>
         {/* #34 operator teleprompter — the beat the consultant is on NOW (caption + arc) and a peek at what's
@@ -1734,7 +1760,7 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
       <div className="cr-body">
         {startMode ? <StartExperience products={products} target={target} onApply={setTarget} onLaunch={setMode} />
         : scriptedMode ? <TourRunner products={products} target={target} onApplyTarget={setTarget} /> : <>
-        <div className="cr-stagearea">
+        <div className="cr-stagearea" style={{ position: 'relative' }}>
           <Stage beat={beat} onResolve={() => setIdx((i) => Math.min(i + 1, BEATS.length - 1))}
             screenshot={engine ? live.screenshot : null} blocked={engine ? live.blocked : undefined} url={engine ? live.url : undefined}
             browser={engine && target && browserUrl
@@ -1742,6 +1768,14 @@ export default function ControlRoom({ onLogout }: { onLogout?: () => void } = {}
                   picker={(liveUrl) => <TargetPicker products={products} target={target} liveUrl={liveUrl} onApply={setTarget} />}
                   specialist={<SpecialistSelect personas={specialists} activeId={activePersona?.id ?? null} onSelect={handoffSpecialist} />} />
               : undefined} />
+          {/* ROOT-CAUSE FIX (stop-the-bleed): an ephemeral read-along subtitle of what the consultant is saying RIGHT
+              NOW, over the live product — the buyer WATCHES the product and LISTENS, with a light caption (not a chat
+              transcript) supporting the voice. pointerEvents:none so it never intercepts a click on the product. */}
+          {liveCaption && (
+            <div style={{ position: 'absolute', left: 0, right: 0, bottom: 0, padding: '20px 8% 26px', pointerEvents: 'none', background: 'linear-gradient(to top, rgba(0,8,20,.66), rgba(0,8,20,0))', display: 'flex', justifyContent: 'center', zIndex: 20 }}>
+              <div style={{ maxWidth: 940, textAlign: 'center', color: '#fff', fontSize: 19, lineHeight: 1.42, fontWeight: 600, textShadow: '0 1px 8px rgba(0,0,0,.8)', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{liveCaption}</div>
+            </div>
+          )}
         </div>
         <RightPanel beat={beat} mode={mode} open={panelOpen} setOpen={setPanelOpen} tab={tab} setTab={setTab} messages={messages} typing={typing}
           onAsk={(runtime === 'ask' || runtime === 'talk') ? onAsk : undefined} canAsk={canAsk}
