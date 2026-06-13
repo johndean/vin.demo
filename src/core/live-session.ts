@@ -99,44 +99,53 @@ export async function bootSession(threadPrefix = 'live', target: SessionTarget =
   const baseUrl = target.baseUrl?.trim() || null;
   const clientNav = !!target.clientNav;
 
-  // Resolve (and validate) the product — its real name drives the adapter registry + the start event.
-  const p = await db().query<{ name: string }>('SELECT name FROM products WHERE id = $1', [productId]);
-  const productName = p.rows[0]?.name;
-  if (!productName) return null; // unknown product id (operator picked something not in this workspace)
-
   // Default OFF for bootSession callers: interactive + voice are LIVE single-operator sessions where a
   // fabricated audience made the AI address fictional attendees. The reel opts back in (scripted showcase).
   const journeyId = target.journeyId?.trim() || null;
+
   // RC-17 / Wave C #10+#9: load the pinned journey's full business OUTCOME (metric/baseline/target — for a spoken
   // ROI number) AND its buying COMMITTEE (objections + decision criteria — to answer executives head-on) once at
   // boot. This authored intelligence was mute; this is where it reaches the spoken layer. Best-effort throughout.
-  let journeyGoal: string | null = null;
-  let outcomeMetric: string | null = null, outcomeBaseline: string | null = null, outcomeTarget: string | null = null;
-  let committee: { role: string; objections: string[]; decisionCriteria: string[] }[] = [];
-  let framedFor: string | null = null;
-  if (journeyId) {
+  // P2 (parallel boot): the journey-data load (journey → outcome + committee) is INDEPENDENT of the product lookup
+  // — both keyed on inputs — so this runs CONCURRENTLY with the product query below (Promise.all), collapsing the
+  // boot DB cascade's two longest legs into one round-trip group to cut first-response latency. The RESULT is
+  // identical (same queries, same gating); createDemoSession still waits for the product validation, so no session
+  // is created for an unknown product. (In the rare unknown-product case the journey reads run but are discarded.)
+  type JourneyData = { journeyGoal: string | null; outcomeMetric: string | null; outcomeBaseline: string | null; outcomeTarget: string | null; committee: { role: string; objections: string[]; decisionCriteria: string[] }[]; framedFor: string | null };
+  const EMPTY_JOURNEY_DATA: JourneyData = { journeyGoal: null, outcomeMetric: null, outcomeBaseline: null, outcomeTarget: null, committee: [], framedFor: null };
+  const loadJourneyData = async (): Promise<JourneyData> => {
+    if (!journeyId) return EMPTY_JOURNEY_DATA;
     try {
       const j = await getJourneyById(journeyId);
-      if (j) {
-        journeyGoal = j.businessGoal;
-        outcomeMetric = j.outcomeMetric ?? null; outcomeBaseline = j.outcomeBaseline ?? null; outcomeTarget = j.outcomeTarget ?? null;
-        // #9: resolve the journey's stakeholder_refs to the registry rows that carry objections + decision
-        // criteria; fall back to the product's full committee when the journey names none. Keep only members WITH
-        // authored objections/criteria (no empty noise), keyed by ROLE (never a fabricated person name).
-        const reg = await getStakeholderRegistry(productId);
-        const refSet = new Set(j.stakeholderRefs.map((r) => r.toLowerCase())); // case-insensitive UUID ref match
-        const scoped = j.stakeholderRefs.length ? reg.filter((s) => refSet.has(s.id.toLowerCase())) : reg;
-        // Keep members WITH authored objections — the #9 answer channel matches on objections; criteria ride along.
-        committee = scoped.filter((s) => s.objections?.length).map((s) => ({ role: s.role ?? s.name ?? 'a stakeholder', objections: s.objections ?? [], decisionCriteria: s.decisionCriteria ?? [] }));
-        // Wave C #17: a role-level framing summary from the FULL journey committee (roles + their top concerns) for
-        // the walk's opening beat — framed by role, never claiming presence. Sanitized + capped.
-        const san = (s: string) => s.replace(/[·•|*`]+/g, ';').replace(/\s+/g, ' ').trim();
-        const fRoles = Array.from(new Set(scoped.map((s) => s.role).filter((r): r is string => !!r).map((r) => san(r).slice(0, 40)))).slice(0, 4);
-        const fConcerns = Array.from(new Set(scoped.flatMap((s) => s.decisionCriteria ?? []).filter(Boolean).map((c) => san(c).slice(0, 70)))).slice(0, 2);
-        framedFor = fRoles.length ? `the ${fRoles.join(', ')}${fConcerns.length ? `, who evaluate on ${fConcerns.join('; ')}` : ''}`.slice(0, 240) : null;
-      }
-    } catch { /* best-effort: a missing journey / outcome / committee degrades to nulls, never blocks the demo */ }
-  }
+      if (!j) return EMPTY_JOURNEY_DATA;
+      // #9: resolve the journey's stakeholder_refs to the registry rows that carry objections + decision
+      // criteria; fall back to the product's full committee when the journey names none. Keep only members WITH
+      // authored objections/criteria (no empty noise), keyed by ROLE (never a fabricated person name).
+      const reg = await getStakeholderRegistry(productId);
+      const refSet = new Set(j.stakeholderRefs.map((r) => r.toLowerCase())); // case-insensitive UUID ref match
+      const scoped = j.stakeholderRefs.length ? reg.filter((s) => refSet.has(s.id.toLowerCase())) : reg;
+      // Keep members WITH authored objections — the #9 answer channel matches on objections; criteria ride along.
+      const committee = scoped.filter((s) => s.objections?.length).map((s) => ({ role: s.role ?? s.name ?? 'a stakeholder', objections: s.objections ?? [], decisionCriteria: s.decisionCriteria ?? [] }));
+      // Wave C #17: a role-level framing summary from the FULL journey committee (roles + their top concerns) for
+      // the walk's opening beat — framed by role, never claiming presence. Sanitized + capped.
+      const san = (s: string) => s.replace(/[·•|*`]+/g, ';').replace(/\s+/g, ' ').trim();
+      const fRoles = Array.from(new Set(scoped.map((s) => s.role).filter((r): r is string => !!r).map((r) => san(r).slice(0, 40)))).slice(0, 4);
+      const fConcerns = Array.from(new Set(scoped.flatMap((s) => s.decisionCriteria ?? []).filter(Boolean).map((c) => san(c).slice(0, 70)))).slice(0, 2);
+      const framedFor = fRoles.length ? `the ${fRoles.join(', ')}${fConcerns.length ? `, who evaluate on ${fConcerns.join('; ')}` : ''}`.slice(0, 240) : null;
+      return { journeyGoal: j.businessGoal, outcomeMetric: j.outcomeMetric ?? null, outcomeBaseline: j.outcomeBaseline ?? null, outcomeTarget: j.outcomeTarget ?? null, committee, framedFor };
+    } catch { return EMPTY_JOURNEY_DATA; /* best-effort: a missing journey / outcome / committee degrades to nulls, never blocks the demo */ }
+  };
+
+  // Resolve (and validate) the product — its real name drives the adapter registry + the start event — CONCURRENTLY
+  // with the journey-data load (the two longest, independent boot legs overlap instead of serializing).
+  const [p, journeyData] = await Promise.all([
+    db().query<{ name: string }>('SELECT name FROM products WHERE id = $1', [productId]),
+    loadJourneyData(),
+  ]);
+  const productName = p.rows[0]?.name;
+  if (!productName) return null; // unknown product id (operator picked something not in this workspace)
+  const { journeyGoal, outcomeMetric, outcomeBaseline, outcomeTarget, committee, framedFor } = journeyData;
+
   const session = await createDemoSession(productId, mode, target.seedRoom ?? false, journeyId);
   beginCostSession(session.id);
   const graph = buildGraph();
