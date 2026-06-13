@@ -59,6 +59,7 @@
     "eval:phase23": "tsx src/core/eval-phase23.ts",
     "eval:phase24": "tsx src/core/eval-phase24.ts",
     "eval:followons": "tsx src/core/eval-followons.ts",
+    "eval:phase25": "tsx src/core/eval-phase25.ts",
     "graph:autogen": "tsx src/core/graph-autogen.ts",
     "graph:verify": "tsx src/core/graph-verify.ts",
     "graph:show": "tsx src/core/graph-show.ts",
