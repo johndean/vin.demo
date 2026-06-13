@@ -25,6 +25,8 @@ export interface FacilitationBeat {
   phase: FacilitationPhase;
   branchKey?: string | null;  // the concern this beat answers (used to re-prioritize on an objection/signal)
   grounded: boolean;          // has a trust-gated source — an objection/proof beat MUST be grounded to be surfaced
+  navigable?: boolean;        // is a real SCREEN we can drive to (a 'node' beat) — P4 routes a buyer to a navigable
+                              // proof; a grounded KNOWLEDGE beat answers but has no screen, so it is not navigable
 }
 
 export interface FacilitatorState {
@@ -67,7 +69,7 @@ export function toFacilitationBeats(plan: { arcRole: 'open' | 'show' | 'transit'
       : (e.kind === 'beat' && e.stepKind === 'knowledge' && !!e.sourceText) ? 'proof' // a grounded knowledge beat IS proof
       : 'show';
     const grounded = e.kind === 'node' || !!e.sourceText; // a verified screen, or a resolved (trust-gated) chunk
-    return { index, phase, branchKey: e.caption ?? null, grounded };
+    return { index, phase, branchKey: e.caption ?? null, grounded, navigable: e.kind === 'node' };
   });
 }
 
@@ -79,6 +81,27 @@ function answers(branchKey: string | null | undefined, concern: string): boolean
   const a = sig(branchKey), b = sig(concern);
   let n = 0; for (const w of b) if (a.has(w)) n++;
   return n >= 2;
+}
+
+/** The index of the GROUNDED beat that answers a concern (≥2-token overlap on its branchKey), or null. The single
+ *  zero-gap selector both the 'objection' transition and the P4 off-script interjection share — it NEVER returns an
+ *  ungrounded beat, so any proof shown to answer a concern is always trust-gated. */
+function groundedProofIndex(beats: FacilitationBeat[], concern: string): number | null {
+  const hit = beats.find((b) => b.grounded && answers(b.branchKey, concern));
+  return hit ? hit.index : null;
+}
+
+/** P4 (live discovery router / off-script interjection): the grounded proof beat that answers a buyer's concern, as
+ *  a PURE READ — it does NOT mutate the walk phase/position (an off-script objection is answered IN PLACE; the walk
+ *  cursor is untouched, so it consumes no journey step). mustGround is true when NO grounded proof answers the
+ *  concern → the caller degrades honestly (free-roam / "I'm not certain"), NEVER fabricates.
+ *  `navigableOnly` (graph.ts proofNodeFor) restricts the match to a real SCREEN ('node') proof — so a grounded
+ *  KNOWLEDGE beat at an earlier index does NOT shadow a navigable node proof for the same concern (the demo can
+ *  actually SHOW the screen). graph.ts maps a non-null beatIndex → the WalkEntry's nodeLabel to navigate there. */
+export function selectProof(beats: FacilitationBeat[], concern: string, opts?: { navigableOnly?: boolean }): { beatIndex: number | null; mustGround: boolean } {
+  const c = (concern ?? '').trim();
+  const hit = beats.find((b) => b.grounded && (!opts?.navigableOnly || b.navigable === true) && answers(b.branchKey, c));
+  return { beatIndex: hit ? hit.index : null, mustGround: !hit };
 }
 
 /** Pick the next beat to surface: prefer the next UNVISITED, GROUNDED beat whose branchKey answers an OPEN concern
@@ -123,10 +146,10 @@ export function transition(state: FacilitatorState, beats: FacilitationBeat[], e
     case 'objection': {
       const concern = event.concern.trim();
       const openConcerns = concern && !state.openConcerns.includes(concern) ? [...state.openConcerns, concern] : state.openConcerns;
-      // find a GROUNDED beat that answers THIS concern (never an ungrounded one — zero-gap)
-      const hit = beats.find((b) => b.grounded && answers(b.branchKey, concern));
+      // find a GROUNDED beat that answers THIS concern (never an ungrounded one — zero-gap; shared selector)
+      const hitIdx = groundedProofIndex(beats, concern);
       const resumeIndex = state.resumeIndex ?? state.stepIndex; // hold the forward position across the interjection
-      if (hit) return { state: { ...state, phase: 'objection', openConcerns, resumeIndex, stepIndex: hit.index }, beatIndex: hit.index, mustGround: false };
+      if (hitIdx != null) return { state: { ...state, phase: 'objection', openConcerns, resumeIndex, stepIndex: hitIdx }, beatIndex: hitIdx, mustGround: false };
       // no grounded beat answers it → answer AS the role but trust-gated/declined; the walk position is untouched.
       return { state: { ...state, phase: 'objection', openConcerns, resumeIndex }, beatIndex: null, mustGround: true };
     }

@@ -24,7 +24,7 @@ import { retrieveAndGate } from './retrieval.js';
 import { selectNavigation, recordNavAttempt } from './graph-lifecycle.js';
 import { screenFactsFor, nodeNarrationFacts } from './graph-elements.js'; // RC-06: read the navigated node's UX surface at demo time; #8/#35: static screenName/purpose/facts for narration
 import { journeyWalkPlan } from './journeys.js';
-import { facilitatorEnabled, toFacilitationBeats, advanceWalk, noteConcern } from './facilitator.js'; // P3: the executable facilitation arc (flag-gated; OFF = today's index walk)
+import { facilitatorEnabled, toFacilitationBeats, advanceWalk, noteConcern, selectProof } from './facilitator.js'; // P3/P4: the executable facilitation arc + off-script proof interjection (flag-gated; OFF = today's index walk)
 const EXPLAIN_TRACE_WINDOW = 16; // bound the cross-turn trace fed to explain (it grows unbounded)
 
 // Per-invoke LangGraph config (NOT checkpointed): carries a streaming sink so a node can stream spoken
@@ -204,9 +204,11 @@ async function driveTo(state: DemoStateT, intent: string, opts?: { targetLabel?:
 }
 
 // ── navigate: free-roam (intent-driven; no pinned journey) — with mid-flight pivot push ───────
-async function navigateFreeRoam(state: DemoStateT): Promise<Partial<DemoStateT>> {
+async function navigateFreeRoam(state: DemoStateT, opts?: { targetLabel?: string | null }): Promise<Partial<DemoStateT>> {
   const intent = state.interpretation?.intent ?? state.utterance;
-  const d = await driveTo(state, intent);
+  // opts.targetLabel (P4 interjection) FORCES a specific node (driveTo selects over ALL navigable nodes, no
+  // stakeholder-role workflow filter) — the same on-rails semantics the journey walk uses; absent → intent-driven.
+  const d = await driveTo(state, intent, opts);
   if (d.noMatch) {
     // No product screen fits this request (off-domain / out of scope). Don't navigate, clear any pending nav
     // action, leave the breadcrumb where it is; the confidence-gated answer responds honestly. No intent→node
@@ -333,14 +335,52 @@ async function navigateJourneyStep(state: DemoStateT, config?: GraphRunConfig): 
   };
 }
 
+// ── P4 (live discovery router): the GROUNDED PROOF screen that answers an off-script concern ───
+// Resolve the pinned journey's walk plan, ask the facilitator which grounded beat answers the concern, and return
+// that beat's nodeLabel IFF it's a navigable 'node' (a real verified screen). Returns null when no grounded proof
+// matches OR the matching proof is a knowledge/note 'beat' (nothing to navigate to) → the caller degrades to
+// free-roam. PURE w.r.t. fabrication: selectProof never returns an ungrounded beat (zero-gap). Best-effort DB read.
+// Exported so eval:phase27 verifies the real DB+selector path deterministically (no interpreter/LLM in the loop).
+export async function proofNodeFor(journeyId: string, concern: string): Promise<string | null> {
+  if (!concern) return null;
+  const wp = await journeyWalkPlan(journeyId).catch(() => null);
+  if (!wp || !wp.plan.length) return null;
+  // navigableOnly: select the first grounded NODE proof answering the concern (a grounded knowledge beat answers but
+  // has no screen → it must NOT shadow a navigable node proof, else the router forfeits the screen it exists to show).
+  const { beatIndex } = selectProof(toFacilitationBeats(wp.plan), concern, { navigableOnly: true });
+  if (beatIndex == null) return null;
+  return wp.plan[beatIndex].nodeLabel ?? null; // navigableOnly guarantees a 'node' beat (always has a nodeLabel)
+}
+
 // ── navigate: dispatcher — walk the pinned journey, else free-roam (intent-driven default) ────
 async function navigate(state: DemoStateT, config?: GraphRunConfig): Promise<Partial<DemoStateT>> {
   if (!state.productId) return { trace: ['navigate: skipped (no productId)'] };
   // Walk a journey step ONLY on an explicit walk turn (journeyAdvance). An off-script question on a
   // journey-pinned session is answered normally (free-roam) and does NOT consume a journey step.
   if (state.journeyId && state.journeyAdvance) return await navigateJourneyStep(state, config);
-  // (P3: an off-script objection's concern is CAPTURED in retrieve() — which always runs, before the gate — not
-  // here, so a gated-and-non-navigable objection that never reaches navigate() still records its concern.)
+  // P4 (FACILITATOR flag; default OFF): on a journey-pinned OFF-SCRIPT OBJECTION, route navigation to the GROUNDED
+  // PROOF screen that answers the concern — the "buyer signals re-rank the next grounded proof". We reuse free-roam's
+  // full breadcrumb/self-heal/honest-degrade path by injecting the proof node as the navHint (driveTo prefers a
+  // navHint that's a navigable candidate). No grounded NODE proof (knowledge-only concern / off-topic) → plain
+  // free-roam (honest, never fabricated). The committee+ROI answer already rides this turn (Wave C #9). This is an
+  // off-script interjection: it consumes NO journey step and leaves the walk cursor untouched. OFF → plain free-roam.
+  if (facilitatorEnabled() && state.journeyId && state.interpretation?.kind === 'objection') {
+    const concern = (state.interpretation?.intent || state.utterance || '').trim();
+    const proofLabel = await proofNodeFor(state.journeyId, concern);
+    if (proofLabel) {
+      // FORCE the proof node (targetLabel → all navigable nodes, no role-workflow filter) so the interjection
+      // actually pins the grounded proof the buyer asked about (a navHint could be silently filtered out by the
+      // active stakeholder's workflow). The trace claim is CONDITIONAL on actually landing, so the operator beat
+      // never falsely reports an interjection that degraded to a different node / nothing.
+      const out = await navigateFreeRoam(state, { targetLabel: proofLabel });
+      const landed = !!out.navAction || !!out.navigation?.ok;
+      return { ...out, trace: [...(out.trace ?? []), landed
+        ? `facilitator: off-script objection → interjected the grounded proof "${proofLabel}" (re-rank to the proof the buyer cares about)`
+        : `facilitator: off-script objection → grounded proof "${proofLabel}" did not resolve on the live product — answered off-script (honest degrade)`] };
+    }
+  }
+  // (P3: an off-script objection's concern is also CAPTURED in retrieve() — which always runs, before the gate — so
+  // a gated-and-non-navigable objection that never reaches navigate() still records its concern for the operator.)
   return await navigateFreeRoam(state);
 }
 
