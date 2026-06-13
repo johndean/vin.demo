@@ -10,6 +10,7 @@ import { db } from './db.js';
 import { rp } from './prompts.js';
 import { currentModel, fastModel, providerForModel } from './settings.js';
 import { GeminiProvider } from './llm-gemini.js';
+import { CompletionStatus, completionFromStopReason } from './speech-driver.js'; // P1: report how a streamed spoken line finished
 import type { ExecutionMode } from './safety.js';
 
 loadEnv();
@@ -80,6 +81,9 @@ export interface AnswerContext {
   // as it arrives, so the voice channel can start TTS on sentence 1 instead of waiting for the whole reply.
   // Omitted (interactive/reel/CLI) → the existing blocking call. Claude only; Gemini answers blocking.
   onDelta?: (sentence: string) => void;
+  // P1 (runtime): report how the streamed line FINISHED (complete/partial/failed) so the speech driver can repair
+  // a cut-off thought instead of leaving half a sentence into silence. Optional → absent reverts to today exactly.
+  onComplete?: (status: CompletionStatus) => void;
 }
 
 export interface DiscoverResult {
@@ -120,6 +124,8 @@ export interface NarrateContext {
   // RC-03 (streaming voice): the voice-led WALK is the primary demo path — stream each completed sentence
   // here so its narration starts speaking on sentence 1 too (not after the whole line). Omitted → blocking.
   onDelta?: (sentence: string) => void;
+  // P1 (runtime): report how the streamed narration FINISHED so the speech driver can repair a cut-off beat. Optional.
+  onComplete?: (status: CompletionStatus) => void;
 }
 
 export interface AgentStepContext {
@@ -177,6 +183,9 @@ export interface LlmProvider {
   /** Compose ONE warm, conversational spoken line for a journey step — what the specialist SAYS while the
    *  screen is shown. Natural human speech (no labels, markdown, or JSON). Falls back to a clean caption line. */
   narrate(ctx: NarrateContext): Promise<string>;
+  /** P1 (runtime): a streamed spoken line was cut off mid-thought (PARTIAL/FAILED) — compose ONE short natural
+   *  continuation so the buyer hears a finished thought, not a half-sentence into silence. Best-effort: '' on failure. */
+  repairStreaming(partial: string, kind: 'narration' | 'answer'): Promise<string>;
   /** Recon-harvest (fact-rooted KB generator): extract knowledge statements STRICTLY grounded in captured screen text. */
   harvestChunks(ctx: { product: string; screen: string; capturedText: string }): Promise<string[]>;
   /** Faithfulness gate (zero-hallucination): is every claim in `statement` explicitly supported by `source`? */
@@ -602,6 +611,7 @@ class ClaudeProvider implements LlmProvider {
       void this.logAiCall(params, msg); // the create()-wrapper doesn't see stream() — log this call explicitly
       await record('llm', MODEL, { input: msg.usage?.input_tokens, output: msg.usage?.output_tokens }, { node: 'answerAs' });
       flushSentences(acc, cursor, ctx.onDelta, true); // speak any trailing partial sentence
+      ctx.onComplete?.(completionFromStopReason(msg.stop_reason)); // P1: tell the speech driver if this was cut off (partial/failed) so it can repair
       if (msg.stop_reason === 'refusal') return REFUSAL;
       const b = msg.content.find((x) => x.type === 'text');
       const text = b && 'text' in b ? b.text.trim() : '';
@@ -612,6 +622,7 @@ class ClaudeProvider implements LlmProvider {
     const params = { ...baseParams, thinking: { type: 'adaptive' as const } };
     const res = await this.client.messages.create(params);
     await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'answerAs' });
+    ctx.onComplete?.(completionFromStopReason(res.stop_reason)); // P1 (harmless no-op on the non-voice blocking path)
     if (res.stop_reason === 'refusal') return REFUSAL;
     const b = res.content.find((x) => x.type === 'text');
     const text = b && 'text' in b ? b.text.trim() : '';
@@ -640,6 +651,7 @@ class ClaudeProvider implements LlmProvider {
         void this.logAiCall(params, msg); // stream() bypasses the create()-wrapper — log explicitly
         await record('llm', MODEL, { input: msg.usage?.input_tokens, output: msg.usage?.output_tokens }, { node: 'narrate' });
         flushSentences(acc, cursor, ctx.onDelta, true);
+        ctx.onComplete?.(completionFromStopReason(msg.stop_reason)); // P1: report a cut-off narration beat for repair
         if (msg.stop_reason === 'refusal') return fallback;
         const b = msg.content.find((x) => x.type === 'text');
         const text = b && 'text' in b ? b.text.trim() : '';
@@ -647,11 +659,33 @@ class ClaudeProvider implements LlmProvider {
       }
       const res = await this.client.messages.create(params);
       await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'narrate' });
+      ctx.onComplete?.(completionFromStopReason(res.stop_reason));
       if (res.stop_reason === 'refusal') return fallback;
       const b = res.content.find((x) => x.type === 'text');
       const text = b && 'text' in b ? b.text.trim() : '';
       return text || fallback;
-    } catch { return fallback; }
+    } catch {
+      // P1: a thrown/failed narration stream must report FAILED so the speech driver repairs or degrades — NOT
+      // swallow it and leave the driver thinking the beat completed (the live eval caught this gap).
+      ctx.onComplete?.(CompletionStatus.Failed);
+      return fallback;
+    }
+  }
+
+  async repairStreaming(partial: string, kind: 'narration' | 'answer'): Promise<string> {
+    // P1: a streamed spoken line was cut off mid-thought. Compose ONE short natural continuation so the buyer
+    // hears a finished thought, not a half-sentence into silence. INLINE system prompt (a utility, NOT a tuned demo
+    // prompt → outside the prompt registry / golden). thinking disabled + a final-answer-only instruction keeps the
+    // reasoning out of the spoken text. Best-effort: '' on any failure (the caller degrades — it never blocks audio).
+    const MODEL = currentModel();
+    const sys = `You are a sales engineer speaking live; your last spoken ${kind} was cut off mid-thought. Continue it in ONE short, natural spoken sentence that completes the thought. Do NOT repeat what was already said, do NOT start a new topic, no preamble, no markdown — output ONLY the continuation. If the line already reads complete, output a single period.`;
+    try {
+      const res = await this.client.messages.create({ model: MODEL, max_tokens: 120, thinking: { type: 'disabled' as const }, system: sys, messages: [{ role: 'user' as const, content: `So far: "${partial}"\nContinue:` }] });
+      await record('llm', MODEL, { input: res.usage?.input_tokens, output: res.usage?.output_tokens }, { node: 'repair' });
+      const b = res.content.find((x) => x.type === 'text');
+      const t = b && 'text' in b ? b.text.trim() : '';
+      return t === '.' ? '' : t;
+    } catch { return ''; }
   }
 
   async discover(ctx: DiscoverContext): Promise<DiscoverResult> {

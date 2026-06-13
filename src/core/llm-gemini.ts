@@ -16,6 +16,7 @@
 import { record, currentSession } from './cost.js';
 import { db } from './db.js';
 import { currentModel } from './settings.js';
+import { completionFromStopReason } from './speech-driver.js'; // P1: report streamed-line completion (provider parity)
 import {
   detectFn, flushSentences,
   sysInterpret, sysPickNode, sysExplainWhy, sysAgentStep, sysAnswerAs, answerUserContent, sysNarrate, narrateUserContent, narrateFallback, sysDiscover,
@@ -27,7 +28,7 @@ import {
 
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 
-interface GeminiResult { text: string; blocked: boolean; }
+interface GeminiResult { text: string; blocked: boolean; finishReason?: string; } // P1: finishReason surfaced for onComplete
 
 /** Convert a JSON-Schema (the shape ClaudeProvider passes to output_config) into Gemini's responseSchema:
  *  UPPER-CASE type names, keep enum/description/required/properties/items, drop additionalProperties, and add
@@ -80,7 +81,7 @@ async function geminiGenerate(system: string, user: string, maxTokens: number, n
   const declined = fr === 'SAFETY' || fr === 'PROHIBITED_CONTENT' || fr === 'BLOCKLIST' || fr === 'RECITATION' || fr === 'SPII';
   const blocked = !!j?.promptFeedback?.blockReason || declined || (!!fr && fr !== 'STOP' && !text.trim());
   await recordGeminiCall(system, user, text, j?.usageMetadata, node);
-  return { text, blocked };
+  return { text, blocked, finishReason: fr };
 }
 
 /** Cost event + ai_calls log for ONE Gemini call — shared by the blocking and streaming paths so they meter and
@@ -157,7 +158,7 @@ async function geminiGenerateStream(system: string, user: string, maxTokens: num
     // Partial already spoken → keep it (chat matches audio), don't double-speak via a fallback call. Nothing
     // spoken yet → rethrow so the caller makes ONE blocking call (spoken via the message path); but if the stream
     // already reported usage before dying, meter that billed input so a failed stream isn't a cost blind spot (L-2).
-    if (acc.trim()) { flushSentences(acc, cursor, onDelta, true); await recordGeminiCall(system, user, acc, usage, node).catch(() => {}); return { text: acc, blocked: false }; }
+    if (acc.trim()) { flushSentences(acc, cursor, onDelta, true); await recordGeminiCall(system, user, acc, usage, node).catch(() => {}); return { text: acc, blocked: false, finishReason: finishReason || 'OTHER' }; } // partial-after-error → OTHER → Failed (repairable)
     if (usage && Object.keys(usage).length) await recordGeminiCall(system, user, '', usage, node).catch(() => {});
     throw e;
   }
@@ -165,7 +166,7 @@ async function geminiGenerateStream(system: string, user: string, maxTokens: num
   const declined = finishReason === 'SAFETY' || finishReason === 'PROHIBITED_CONTENT' || finishReason === 'BLOCKLIST' || finishReason === 'RECITATION' || finishReason === 'SPII';
   const blocked = !!blockReason || declined || (!!finishReason && finishReason !== 'STOP' && !acc.trim());
   await recordGeminiCall(system, user, acc, usage, node);
-  return { text: acc, blocked };
+  return { text: acc, blocked, finishReason };
 }
 
 // Schemas mirror ClaudeProvider's output_config schemas (plain JSON-Schema; converted to Gemini's shape above).
@@ -252,11 +253,13 @@ export class GeminiProvider implements LlmProvider {
     if (ctx.onDelta) {
       try {
         const r = await geminiGenerateStream(sys, user, 900, 'answerAs', ctx.onDelta);
+        ctx.onComplete?.(completionFromStopReason(r.finishReason)); // P1: report cut-off for repair (parity with Claude)
         const txt = r.text.trim();
         return txt || (r.blocked ? REFUSAL : EMPTY);
       } catch { /* stream failed before any audio → fall through to a single blocking call */ }
     }
     const r = await geminiGenerate(sys, user, 900, 'answerAs');
+    ctx.onComplete?.(completionFromStopReason(r.finishReason));
     if (r.blocked) return REFUSAL;
     return r.text.trim() || EMPTY;
   }
@@ -272,14 +275,26 @@ export class GeminiProvider implements LlmProvider {
     if (ctx.onDelta) {
       try {
         const r = await geminiGenerateStream(sys, user, 160, 'narrate', ctx.onDelta);
+        ctx.onComplete?.(completionFromStopReason(r.finishReason)); // P1: report cut-off narration for repair
         return r.text.trim() || fallback;
       } catch { /* fall through to the blocking narrate */ }
     }
     try {
       const r = await geminiGenerate(sys, user, 160, 'narrate');
+      ctx.onComplete?.(completionFromStopReason(r.finishReason));
       if (r.blocked) return fallback;
       return r.text.trim() || fallback;
     } catch { return fallback; }
+  }
+
+  async repairStreaming(partial: string, kind: 'narration' | 'answer'): Promise<string> {
+    // P1 parity: continue a cut-off spoken line in ONE short natural sentence. INLINE prompt (utility, golden-free).
+    const sys = `You are a sales engineer speaking live; your last spoken ${kind} was cut off mid-thought. Continue it in ONE short, natural spoken sentence that completes the thought. Do NOT repeat what was already said, do NOT start a new topic, no preamble, no markdown — output ONLY the continuation. If the line already reads complete, output a single period.`;
+    try {
+      const r = await geminiGenerate(sys, `So far: "${partial}"\nContinue:`, 120, 'repair');
+      const t = r.text.trim();
+      return r.blocked || t === '.' ? '' : t;
+    } catch { return ''; }
   }
 
   async discover(ctx: DiscoverContext): Promise<DiscoverResult> {
