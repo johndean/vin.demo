@@ -88,3 +88,28 @@ export class SpeechDriver {
     return p && now - p.at < ttlMs ? p.text : null;
   }
 }
+
+// ── P1 orchestration DECISIONS — PURE module functions so the runtime CALLS them directly (no orphan) and the
+// mock-audio eval (phase29) tests the EXACT shipped logic. (The SpeechDriver class above is the coherence
+// consolidation TARGET the staging full-ownership migration adopts — see the smoke checklist; until that migration
+// voice-session keeps its own utterance/barge state, so these decisions take explicit terms, not driver fields.) ──
+
+/** Did the just-finished beat need repair? A PARTIAL (cut off mid-thought) or FAILED (refused/errored) stream is
+ *  repairable — the runtime composes a short continuation (llm repairStreaming) instead of leaving half a sentence
+ *  into silence. PURE: takes the beat's CompletionStatus. (The repair-into-TTS wiring is staging-gated; this is the
+ *  decision it will use.) */
+export function needsRepair(status: CompletionStatus): boolean {
+  return status === CompletionStatus.Partial || status === CompletionStatus.Failed;
+}
+
+/** Should the runtime-owned CONTINUOUS WALK auto-advance to the next beat? The EXACT shipped decision
+ *  voice-session.ts runWalkStep calls behind the SPEECH_DRIVER flag — true only when ALL hold:
+ *   - stepOk: the step COMPLETED cleanly AND was NOT the final beat (a failed/errored or last step never advances);
+ *   - advanced: the graph position moved strictly FORWARD this step (guards a no-progress graph reply from a tight
+ *     re-fire loop — the runtime has no operator brake when the flag is on);
+ *   - !interrupted: a barge-in did not supersede this beat (yield to the buyer, don't steamroll);
+ *   - !replayed: no stashed question is being answered (answer the buyer before moving on).
+ *  OFF (flag) → never consulted; the walk stays operator/client-paced exactly as today. */
+export function shouldContinueWalk(opts: { stepOk: boolean; advanced: boolean; interrupted: boolean; replayed: boolean }): boolean {
+  return opts.stepOk && opts.advanced && !opts.interrupted && !opts.replayed;
+}

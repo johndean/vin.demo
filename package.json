@@ -64,6 +64,7 @@
     "eval:phase26": "tsx src/core/eval-phase26.ts",
     "eval:phase27": "tsx src/core/eval-phase27.ts",
     "eval:phase28": "tsx src/core/eval-phase28.ts",
+    "eval:phase29": "tsx src/core/eval-phase29.ts",
     "graph:autogen": "tsx src/core/graph-autogen.ts",
     "graph:verify": "tsx src/core/graph-verify.ts",
     "graph:show": "tsx src/core/graph-show.ts",

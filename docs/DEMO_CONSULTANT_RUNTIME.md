@@ -373,3 +373,32 @@ The fragile collapsedFor latch is deleted; full-bleed is now a pure function of 
 - FLAG-MATRIX BLOWUP — runtimeMode × execution-mode × clientNav × stream × barge-in is a large surface. DE-RISK: default OFF per journey (mig 0030), enable on ONE assembled PO.vin journey first, demo it, then widen; every increment reversible by flipping the column
 - CHECKPOINTER DESYNC — adding facilitationState as an append vs REPLACE channel could double on RC-30 rehydrate (the contextStack/trace lesson, live-session.ts:148). DE-RISK: facilitationState MUST be a REPLACE reducer; only REPLACE channels are re-seeded (live-session.ts:152-157); phase25 round-trips it through save/loadSessionState like phase24:106-115
 - OFF-SCRIPT RE-PLAN — the machine must resume the SAME state after an interrupt without re-narrating done beats (the repetition tell). DE-RISK: facilitationState carries done-flags + recentNarrations (already threaded, graph.ts:252); phase25 asserts no repeated opener across an interleaved off-script turn
+
+---
+
+## P1-VOICE-DARK — STAGING-SMOKE CHECKLIST (the real-audio un-gate)
+
+**Why a checklist, not an eval:** the continuous-speech ON path (real audio out, mic in, the Anthropic SDK `.stream()` sentence transport) CANNOT run under local Node 26 — `.stream()` crashes with an uncatchable socket error there (NOT a prod bug; the deployed engine pins an older Node), and there is no audio device / Google STT-TTS creds locally. So the orchestration BRAIN is unit-proven here and the live AUDIO behavior is gated by this manual staging smoke.
+
+**Already SHIPPED + verified (dark / flag-OFF byte-identical):**
+- `SpeechDriver` (src/core/speech-driver.ts) — utterance coherence + barge stash + beat completion marker (the coherence consolidation target the staging migration adopts) + the PURE shipped decisions `shouldContinueWalk(...)` (the auto-advance guard the runtime calls) and `needsRepair(status)`. Unit: `eval:phase25` 24/24, `eval:phase29` 21/21 (needsRepair provider-parity; shouldContinueWalk every term incl. final-beat termination + the no-progress guard; barge/stash/TTL coherence; a faithful shipped-lifecycle continuous-walk sim).
+- Repair BRAIN — `llm.repairStreaming()` + `onComplete(CompletionStatus)` on both providers. LIVE-verified by `eval:repair` 8/8 (real Anthropic API).
+- AUTO-ADVANCE wiring — `voice-session.ts runWalkStep` finally: behind `SPEECH_DRIVER`, it calls `shouldContinueWalk({ stepOk, advanced, interrupted, replayed })` — auto-advancing only on a clean, NON-FINAL step that moved the position strictly FORWARD, with no barge-in and no replay (continuous walk). OFF (default) = operator/client-paced exactly as today (the branch never runs).
+
+**Flags:** `SPEECH_DRIVER` (truthy = on; OFF/`0`/`false` = today). Interacts with `ELEVENLABS_WS` (word-level TTS) — test each independently first.
+
+**Un-gate procedure (staging engine + a mic + an assembled PO.vin journey):**
+1. **Baseline (flag OFF):** confirm the journey voice-walk runs exactly as today — operator/client `journey_next` per step. (Proves OFF is untouched.)
+2. **Turn `SPEECH_DRIVER` on** for the staging engine. **CRITICAL:** turn the desktop's client-side `autoWalk` OFF first (runtime.tsx) — server-owned auto-advance + client auto-`journey_next` would double-advance/race.
+3. **Auto-advance:** launch the journey; the walk should self-advance beat→beat with NO `journey_next` from the client. ✅ each beat plays once, in order; ✅ the walk reaches `journey_complete`; ✅ NO step skipped or doubled.
+4. **First-word latency:** time launch → first audible word. Target ≲1.2s (cold-start bridge + parallel boot + concurrent `onDelta` streaming). ✅ no long dead-air before sentence 1.
+5. **Continuous speech:** ✅ no two-burst stutter (bridge→silence→narration); audio is continuous across beats.
+6. **Repair (forced cut-off):** force a `max_tokens`/truncated narration. ✅ the runtime speaks a short continuation (`repairStreaming`) instead of leaving half a sentence into silence. (Requires the repair-into-TTS wiring below.)
+7. **Barge-in mid-beat:** speak over a beat (mic_start). ✅ TTS stops immediately; ✅ the question is answered (off-script, consumes no journey step); ✅ the walk RESUMES at the right step afterward; ✅ no stale audio from the superseded beat.
+8. **No double-speech:** ✅ a streamed (`say_chunk`) line is never re-spoken as the full `message`.
+9. **No leaked audio:** ✅ no audio frames arrive after `turn_done` / after a barge-in flush.
+10. **Trust/cost intact:** ✅ the trust panel still cites sources; ✅ cost events still record STT/TTS. (The runtime routes every spoken fact through the same `graph.invoke`→retrieve→answerAs/narrate — no new prompt text; `eval-prompts` golden stays 24/24.)
+
+**Remaining wiring to ACTIVATE before step 6 (repair-into-TTS — staging-gated, brain already shipped):** thread `onComplete(CompletionStatus)` from `narrate`/`answerAs` (llm.ts, already accepts it) through the per-invoke `GraphRunConfig` (graph.ts) into `voice-session.ts`, where on `needsRepair(status)` the runtime calls `llm.repairStreaming(partialText, kind)` and feeds the continuation into the SAME `ttsChain` (after the cut-off sentence, before the next beat). Additive + flag-gated like the auto-advance branch; it could not be unit-verified locally (needs the live `.stream()` transport), so it is specified here rather than shipped blind. The DECISION (`needsRepair`) and the brain (`repairStreaming`) are both already verified — only the stream-injection plumbing remains, to be landed + smoked together on staging.
+
+**Rollback:** flip `SPEECH_DRIVER` off — instant return to operator/client-paced behavior (byte-identical). Every step above is reversible by the flag.

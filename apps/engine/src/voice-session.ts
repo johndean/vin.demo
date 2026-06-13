@@ -16,6 +16,7 @@ import { googleTTS } from './voice/tts-google.js';
 import { elevenLabsTTS } from './voice/tts-elevenlabs.js';
 import { openElevenWs, type ElevenWsHandle } from './voice/tts-elevenlabs-ws.js'; // RC-31: word-level WS streaming (gated)
 import { shouldReplayPendingBargein } from './voice/barge-in.js'; // #19/L-2: pure TTL guard (deterministically tested)
+import { speechDriverEnabled, shouldContinueWalk } from '../../../src/core/speech-driver.js'; // P1: runtime-owned continuous walk (flag, OFF default; the auto-advance DECISION is the unit-tested shouldContinueWalk)
 import { splitSentences } from './voice/segmenter.js';
 import type { TTSProvider } from './voice/providers.js';
 import { profileById, defaultProfile, voiceCatalog } from './voice/profiles.js';
@@ -184,6 +185,8 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
       // #19/L-2: if a stashed barge-in is now being answered, DON'T emit this turn's turn_done — the replay's own
       // finally emits the real idle turn_done (M-1: keep turn_done ⟹ mutex-free so a journey_next can't be dropped).
       if (!replayPendingBargein()) send({ type: 'turn_done' });
+      // P1: runVoiceTurn (off-script Q&A) intentionally does NOT auto-advance the walk — an off-script turn consumes
+      // NO journey step. Only runWalkStep auto-advances when SPEECH_DRIVER is on (see its finally). Do not unify.
     }
   };
 
@@ -225,6 +228,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
     if (walkStep >= walkPlan.length) { send({ type: 'journey_complete', steps: walkPlan.length }); return; }
     const idx = walkStep;
     answering = true; interrupted = false; streamedThisTurn = false;
+    let stepOk = false; // P1: a clean, NON-FINAL step completed → eligible for runtime-owned auto-advance (never on error/complete)
     wsReady = openTurnWs(); // #14: open the word-level WS CONCURRENTLY with the walk step (don't block ~6s on it)
     try {
       // #19: the journey_step emit + advance turn + RC-02 position sync now live in the SHARED stepper (so the
@@ -235,6 +239,7 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
       await closeTurnWs(); // RC-31: EOS + drain the WS (no-op if it wasn't open)
       walkStep = res.journeyStep ?? idx + 1; // RC-02: mirror the graph-owned position the stepper returned
       if (res.isComplete) { if (walkRun) await completeJourneyRun(walkRun.runId, 'completed').catch(() => {}); send({ type: 'journey_complete', steps: walkPlan.length }); }
+      stepOk = !res.isComplete; // a clean, non-final step → may auto-advance (a failed step / the final step does not)
     } catch (e: any) {
       send({ type: 'error', message: String(e?.message ?? e) });
     } finally {
@@ -243,7 +248,19 @@ export async function startVoiceSession(ws: WebSocket, target: SessionTarget = {
       answering = false;
       // #19/L-2: a question barged in DURING this walk step → answer it now; suppress THIS step's turn_done so the
       // client doesn't try to advance (journey_next) into the busy mutex — the replay's finally sends turn_done (M-1).
-      if (!replayPendingBargein()) send({ type: 'turn_done' });
+      const replayed = replayPendingBargein();
+      if (!replayed) send({ type: 'turn_done' });
+      // P1 (SPEECH_DRIVER flag; default OFF — DARK / staging-gated): runtime-owned CONTINUOUS WALK. After a clean,
+      // non-final step that moved the position FORWARD, with NO barge-in and NO stashed question being replayed,
+      // auto-advance to the next beat instead of waiting for the client's journey_next (the root-cause "speaks one
+      // beat then stops" was the buyer having no way to advance). The decision is the unit-tested shouldContinueWalk
+      // (eval:phase29) — `advanced` (strict forward progress) guards a no-progress graph reply from a tight re-fire
+      // loop, since there is no operator brake when the flag is on. OFF (default) → operator/client-paced EXACTLY as
+      // today (never consulted). When ON: the desktop's client-side autoWalk MUST be off to avoid double-advance —
+      // see the staging-smoke checklist in docs/DEMO_CONSULTANT_RUNTIME.md (the ON audio path is staging-only:
+      // Node-26 .stream() + mic can't run locally).
+      const advanced = walkStep > idx; // strict forward progress this step (not just non-regression)
+      if (speechDriverEnabled() && shouldContinueWalk({ stepOk, advanced, interrupted, replayed })) void runWalkStep();
     }
   };
 
